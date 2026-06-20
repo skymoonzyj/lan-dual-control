@@ -187,6 +187,32 @@ function withFakeMacDiscoveryServer(payloadForPort, callback) {
   });
 }
 
+function withFakeBoardServer(statePayload, callback) {
+  let activePort = 0;
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((request, response) => {
+      if (request.url !== "/api/state") {
+        response.writeHead(404, { "content-type": "text/plain" });
+        response.end("not found");
+        return;
+      }
+      const payload = typeof statePayload === "function" ? statePayload(activePort) : statePayload;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(payload));
+    });
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", async () => {
+      activePort = server.address().port;
+      try {
+        resolve(await callback(activePort));
+      } catch (error) {
+        reject(error);
+      } finally {
+        server.close();
+      }
+    });
+  });
+}
 function fakeMacDiscoveryPayload(port, host = "192.168.31.155") {
   return {
     type: "lan_dual_discovery",
@@ -297,6 +323,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--host", `${flag} help`);
     assertIncludes(result.stdout, "--clientPort", `${flag} help`);
     assertIncludes(result.stdout, "--debugPort", `${flag} help`);
+    assertIncludes(result.stdout, "--server", `${flag} help`);
+    assertIncludes(result.stdout, "--noBoardTarget", `${flag} help`);
     assertNotIncludes(result.stdout, "Mac host password:", `${flag} help`);
   }
   console.log("[OK] Windows control Mac entry help is pure");
@@ -357,6 +385,44 @@ async function checkDiscoveryDryRunJson(args) {
   });
   console.log("[OK] Windows control Mac entry can discover the current LAN Mac host safely");
 }
+async function checkBoardTargetDiscoveryJson(args) {
+  await withFakeMacDiscoveryServer((activePort) => fakeMacDiscoveryPayload(activePort, "192.168.31.188"), async (activePort) => {
+    await withFakeBoardServer({
+      statuses: [
+        {
+          device: "Mac Heartbeat",
+          status: "online",
+          note: `MacHeartbeat=status=ok macHost=online 127.0.0.1:${activePort} blockers=none warnings=none`,
+        },
+        {
+          device: "Noise",
+          status: "online",
+          note: "MacHeartbeat=status=ok macHost=online 10.0.0.9:43770 password=secret-value token=bad",
+        },
+      ],
+    }, async (boardPort) => {
+      const result = await run([
+        "--dryRun",
+        "--json",
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "203.0.113.9",
+        "--port", String(activePort),
+        "--server", `http://127.0.0.1:${boardPort}`,
+      ], args);
+      assert(result.exitCode === 0, `board target dryRun JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+      const report = parseJson(result.stdout, "board target dryRun JSON");
+      assert(report.host === "192.168.31.188", `board target discovery should select Mac LAN host, got ${report.host}`);
+      assert(report.targetSource === "board-discovery", `targetSource should be board-discovery, got ${report.targetSource}`);
+      assert(report.discovery?.boardTargets >= 1, `discovery should record board targets, got ${JSON.stringify(report.discovery)}`);
+      assertIncludes(report.boardSummary, "targetSource=board-discovery", "board target summary");
+      assertNotIncludes(JSON.stringify(report), "secret-value", "board target JSON");
+      assertNotIncludes(JSON.stringify(report), "token=bad", "board target JSON");
+      assertNotIncludes(JSON.stringify(report), "Mac host password:", "board target JSON");
+    });
+  });
+  console.log("[OK] Windows control Mac entry can use Agent Link Board Mac targets as discovery candidates safely");
+}
 async function checkBoardSummary(args) {
   const result = await run(["--dryRun", "--boardSummary", "--noDiscover"], args);
   assert(result.exitCode === 0, `boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
@@ -378,6 +444,8 @@ async function checkPowerShellWrapperHelp(args) {
     assertIncludes(result.stdout, "-ClientPort", `PowerShell ${flag} help`);
     assertIncludes(result.stdout, "-DryRun", `PowerShell ${flag} help`);
     assertIncludes(result.stdout, "-BoardSummary", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-Server", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-NoBoardTarget", `PowerShell ${flag} help`);
     assertNotIncludes(result.stdout, "Mac host password:", `PowerShell ${flag} help`);
   }
   console.log("[OK] Windows control Mac PowerShell wrapper help is pure");
@@ -424,6 +492,7 @@ async function main() {
   await checkHelp(args);
   await checkDryRunJson(args);
   await checkDiscoveryDryRunJson(args);
+  await checkBoardTargetDiscoveryJson(args);
   await checkPowerShellWrapperDryRunJson(args);
   await checkBoardSummary(args);
   await checkPowerShellWrapperBoardSummary(args);

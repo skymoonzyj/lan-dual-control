@@ -10,6 +10,9 @@ param(
   [string[]] $DiscoverHost = @(),
   [switch] $DiscoverNoLocalSubnets,
   [int] $DiscoverTimeoutMs = 650,
+  [string] $Server = "http://192.168.31.68:17888",
+  [switch] $NoBoardTarget,
+  [int] $BoardTimeoutMs = 650,
   [switch] $NoOpen,
   [switch] $DryRun,
   [switch] $Json,
@@ -52,6 +55,9 @@ Options:
   -DiscoverHost <ip[]>       Direct host(s) to probe during discovery.
   -DiscoverNoLocalSubnets    Only probe 127.0.0.1 and DiscoverHost targets.
   -DiscoverTimeoutMs <ms>    Per-host discovery timeout. Default: 650.
+  -Server <url>              Agent Link Board URL for Mac target hints. Default: http://192.168.31.68:17888.
+  -NoBoardTarget             Do not read Agent Link Board for extra Mac discovery candidates.
+  -BoardTimeoutMs <ms>       Agent Link Board read timeout. Default: 650.
   -NoOpen                    Start/reuse the page server but do not open a browser.
   -DryRun                    Print the URL and plan without starting services or opening a browser.
   -Json                      Print one machine-readable JSON object.
@@ -60,7 +66,8 @@ Options:
 
 Safety:
   This wrapper does not include a password parameter. Discovery only reads
-  /discovery metadata; it does not authenticate, open a WebSocket, or send
+  /discovery metadata. Agent Link Board target hints only add candidates for
+  the same read-only discovery probe; they do not authenticate, open a WebSocket, or send
   input/inject events. The opened page clears the demo password and waits for
   the user to type the current Mac temporary password locally. The dry-run/help
   paths do not start services, open browsers, authenticate, or send input/inject
@@ -81,13 +88,16 @@ $nodeArgs = @(
   "--clientPort", [string] $ClientPort,
   "--debugPort", [string] $DebugPort,
   "--timeoutMs", [string] $TimeoutMs,
-  "--discoverTimeoutMs", [string] $DiscoverTimeoutMs
+  "--discoverTimeoutMs", [string] $DiscoverTimeoutMs,
+  "--server", [string] $Server,
+  "--boardTimeoutMs", [string] $BoardTimeoutMs
 )
 
 if ($PSBoundParameters.ContainsKey("HostName")) { $nodeArgs += @("--host", $HostName) }
 if ($Discover) { $nodeArgs += "--discover" }
 if ($NoDiscover) { $nodeArgs += "--noDiscover" }
 if ($DiscoverNoLocalSubnets) { $nodeArgs += "--discoverNoLocalSubnets" }
+if ($NoBoardTarget) { $nodeArgs += "--noBoardTarget" }
 foreach ($item in $DiscoverHost) {
   if ($item) { $nodeArgs += @("--discoverHost", [string] $item) }
 }

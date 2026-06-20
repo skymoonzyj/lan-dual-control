@@ -22,6 +22,9 @@
 - `check-mac-heartbeat --json/--boardSummary` 现在也会输出同一组 `commands.macClientDiscoverWindowsCallCommand` / `MacClientDiscoverWindowsCall=`。最新 `Mac Heartbeat` 行因此可以直接给出刷新 Windows host readiness call 的复制入口；原 `MacClientDiscoverWindows=` 仍保持只读不带 `--sendCall`，heartbeat 默认不发 call、不连接 Windows、不认证、不请求或发送密码、不发 input_event/inject。
 - `discover-windows-hosts` 的 Agent Link Board POST 现在会对一次连接重置/Socket 断开做短重试，避免 discovery 已经给出安全摘要后因为 `/api/status` 偶发 `ECONNRESET` 而无法继续发送 message/call。重试仍只用于显式 `--sendStatus` / `--sendMessage` / `--sendCall` 上板路径，不改变默认只读行为，也不认证、不请求密码、不发送输入。
 
+## 2026-06-20 Windows 一键入口通讯板候选
+- Windows 控 Mac 一键入口现在会只读读取 Agent Link Board `/api/state`，从 Mac 相关状态里提取可能的 Mac LAN host/port，作为现有 `/discovery` 探测候选；只有候选地址真实返回 `platform=macos` / `role=host` 的 discovery 时才会选中，摘要显示 `targetSource=board-discovery`。LAN discovery 和固定回退仍保留；`--server` / `-Server` 可指定通讯板，`--noBoardTarget` / `-NoBoardTarget` 可关闭该候选来源。该入口不认证、不请求或发送密码、不打开 WebSocket、不发 input/inject，疑似 `password=...`、token/secret 或 `--password` 的通讯板文本不会进入候选或输出。
+
 ## 2026-06-20 Mac client 密码输入位置
 - Mac 控 Windows 页面现在在密码框下固定显示“在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断”。复制/导出诊断新增 `密码输入位置` 行，同步带出同一条无密说明；自测覆盖页面提示、诊断复制和连接密码不泄漏。该改动不改协议、不认证、不请求或发送密码、不发 input/inject。- Windows 恢复总览和 Windows 控制端现在会消费 Mac 侧无密 `MacClientPasswordLocation=`：`check-windows-resume-status --checkBoard` 在 JSON、普通输出和 `--boardSummary` 中显示 Mac client 页面密码框位置；Windows 控制页 Mac 提醒区、值守证据和复制/导出诊断也会显示“Mac client 页面密码框填写 Windows 临时密码 / 终端隐藏输入只用于 formal/browser runner / 不要把密码发到通讯板”。解析拒绝 `password=...`、token/secret、`input_event`、`inject` 或自动发送伪造候选；Windows 不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 - Mac 常用开工入口现在也会稳定输出同一条 `MacClientPasswordLocation=`：`check-mac-client-readiness`、`check-mac-resume-status` 和 `check-mac-heartbeat` 的 JSON commands 与 `--boardSummary` 都带“Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断”。这只是无密位置提示，不代表已连接、认证或发送输入。

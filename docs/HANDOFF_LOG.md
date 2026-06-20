@@ -324,6 +324,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 一键入口消费 Agent Link Board Mac 目标候选
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 最短入口在 LAN 扫描以外，也能利用通讯板里最新 Mac 状态提供的 LAN 目标候选，减少 Mac IP 变化或扫描遗漏时的手动输入。
+完成内容：
+- `start-windows-control-mac.mjs` 新增 `--server`、`--noBoardTarget`、`--boardTimeoutMs`，默认只读读取 Agent Link Board `/api/state`，从 Mac 相关状态里提取 host/port 加入现有 `/discovery` 候选。
+- 候选必须真实返回 `platform=macos` / `role=host` 的 `/discovery` 才会选中；选中时 `targetSource=board-discovery`，否则继续 LAN discovery 或固定回退地址。
+- PowerShell 7 wrapper 同步支持 `-Server`、`-NoBoardTarget`、`-BoardTimeoutMs`；帮助说明通讯板只提供候选，不认证、不打开 WebSocket、不发 input/inject。
+- 解析会忽略疑似 `password=...`、token/secret 或 `--password` 的通讯板文本；报告只输出候选数量和脱敏 board 状态，不回显原始通讯板文本。
+修改文件：
+- `scripts/windows/start-windows-control-mac.mjs`
+- `scripts/windows/start-windows-control-mac.ps1`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 20000` 先失败于 `Unknown argument: --server`。
+- 绿灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 20000`，新增 fake board + fake Mac discovery 覆盖 `targetSource=board-discovery` 和 secret/token 不泄漏。
+遗留问题：
+- 通讯板候选只是辅助发现；真实连接仍需要用户在 Windows 页面输入当前 Mac 临时密码。
+下一步建议：
+- 白天手工体验前可直接用 `Start-Windows-Control-Mac.cmd` 或 `scripts/windows/start-windows-control-mac.ps1`；如果通讯板迁移，传 `-Server <url>` 即可。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端继续正常上板 MacHeartbeat/MacManualUx 等状态即可。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 端消费 MacClientPasswordLocation
 开发端：Windows Codex
 本轮目标：让 Windows 恢复总览和 Windows 控制页能读懂 Mac 侧上板的 Mac client 密码输入位置提示，减少 Mac 控 Windows 时“密码填哪”的现场混淆。

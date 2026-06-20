@@ -86,7 +86,7 @@
 Start-Windows-Control-Mac.cmd
 ```
 
-它会调用同一个安全入口，先只读探测 LAN `/discovery`，发现 Mac host 时预填最新 LAN 目标；发现失败才回退 `192.168.31.122:43770`。如果需要从终端运行，使用下面的命令。
+它会调用同一个安全入口，先只读读取 Agent Link Board 里的 Mac 目标候选并做 LAN `/discovery` 探测；候选必须真实返回 macOS host discovery 才会被选中，发现 Mac host 时预填最新 LAN 目标，发现失败才回退 `192.168.31.122:43770`。如果需要从终端运行，使用下面的命令。
 
 ### 命令入口：打开当前 Mac 控制页
 
@@ -94,7 +94,7 @@ Start-Windows-Control-Mac.cmd
 node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs
 ```
 
-该入口会先只读探测 LAN `/discovery`，发现 Mac host 时打开 `http://127.0.0.1:5200/` 并把目标预填为最新 LAN Mac；发现失败才回退 `192.168.31.122:43770`、`WebSocket 局域网`。页面会清空演示密码、聚焦连接密码框，并在密码框下提示“网页手动连接填当前密码框，终端隐藏输入只输黑色终端”；在页面里输入 Mac 端当前临时密码后点“连接”。入口不打印密码、不认证、不发送 input/inject。需要固定回退目标时加 `--noDiscover`；只想把无密摘要发到通讯板时可运行：
+该入口会先只读读取 Agent Link Board `/api/state` 里的 Mac 目标候选，再对候选、显式 `--discoverHost` 和局域网 `/discovery` 做探测；只有真实返回 macOS host discovery 的地址才会被选中并标记 `targetSource=board-discovery` 或 `discovery`。发现 Mac host 时打开 `http://127.0.0.1:5200/` 并把目标预填为最新 LAN Mac；发现失败才回退 `192.168.31.122:43770`、`WebSocket 局域网`。页面会清空演示密码、聚焦连接密码框，并在密码框下提示“网页手动连接填当前密码框，终端隐藏输入只输黑色终端”；在页面里输入 Mac 端当前临时密码后点“连接”。入口不打印密码、不认证、不发送 input/inject；疑似 `password=...`、token/secret 或 `--password` 的通讯板文本不会进入候选。需要固定回退目标时加 `--noDiscover`，需要关闭通讯板候选时加 `--noBoardTarget`；只想把无密摘要发到通讯板时可运行：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs --dryRun --boardSummary

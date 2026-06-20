@@ -12,6 +12,9 @@ const defaults = {
   discover: true,
   discoverTimeoutMs: 650,
   discoverConcurrency: 64,
+  boardTarget: true,
+  boardTimeoutMs: 650,
+  server: process.env.CODEX_LINK_SERVER || "http://192.168.31.68:17888",
 };
 
 function printHelp() {
@@ -29,6 +32,9 @@ Options:
   --discoverHost <ip>         Direct host to probe during discovery. Can be repeated.
   --discoverNoLocalSubnets    Only probe --host and --discoverHost targets.
   --discoverTimeoutMs <ms>    Per-host discovery timeout, 100-5000. Default: ${defaults.discoverTimeoutMs}
+  --server <url>              Agent Link Board URL for Mac target hints. Default: ${defaults.server}
+  --noBoardTarget             Do not read Agent Link Board for extra Mac discovery candidates.
+  --boardTimeoutMs <ms>       Agent Link Board read timeout, 100-5000. Default: ${defaults.boardTimeoutMs}
   --noOpen                    Start/reuse the page server but do not open a browser.
   --dryRun                    Print the URL and plan without starting services or opening a browser.
   --boardSummary              Print one secret-free Agent Link Board summary line.
@@ -47,6 +53,7 @@ Examples:
   node scripts/windows/start-windows-control-mac.mjs
   node scripts/windows/start-windows-control-mac.mjs --dryRun --boardSummary
   node scripts/windows/start-windows-control-mac.mjs --dryRun --json --discoverHost 192.168.31.122
+  node scripts/windows/start-windows-control-mac.mjs --dryRun --json --server http://192.168.31.68:17888
   node scripts/windows/start-windows-control-mac.mjs --dryRun --boardSummary --noDiscover
 `);
 }
@@ -149,9 +156,24 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next.trim();
+      index += 1;
+      continue;
+    }
+    if (token === "--noBoardTarget") {
+      args.boardTarget = false;
+      continue;
+    }
+    if (token === "--boardTimeoutMs" && next && !next.startsWith("--")) {
+      args.boardTimeoutMs = clampInteger(next, 100, 5000, defaults.boardTimeoutMs);
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
   args.discoverHosts = [...new Set(args.discoverHosts.filter(Boolean))];
+  args.server = normalizeBoardServer(args.server || defaults.server);
   return args;
 }
 
@@ -284,20 +306,126 @@ function isUsableDiscoveredHost(host) {
   if (!value || value === "0.0.0.0" || value === "::") return false;
   return !isLoopbackHost(value);
 }
+function normalizeBoardServer(value) {
+  const server = String(value || "").trim() || defaults.server;
+  return server.replace(/\/+$/, "");
+}
 
-function makeDiscoveryCandidates(args) {
-  const hostSet = new Set([args.host, ...args.discoverHosts].filter(Boolean));
+function collectStringValues(value, output = []) {
+  if (typeof value === "string") {
+    output.push(value);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, output);
+    return output;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStringValues(item, output);
+  }
+  return output;
+}
+
+function hasSecretLikeAssignment(text) {
+  const value = String(text || "");
+  return /(?:^|[\s;])(?:password|token|secret)\s*[:=]\s*\S+/i.test(value) || /--password\b/i.test(value);
+}
+
+function isMacRelatedBoardText(text) {
+  const value = String(text || "");
+  return /\bMac(?:Heartbeat|Host|ManualUx|Unattended|Formal|Client)?\b/i.test(value) || /macHost\s*=/i.test(value);
+}
+
+function extractHostPortCandidates(text) {
+  const value = String(text || "");
+  if (!isMacRelatedBoardText(value) || hasSecretLikeAssignment(value)) return [];
+  const candidates = [];
+  const patterns = [
+    /\bmacHost\s*=\s*(?:online|ok|ready)?\s*((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi,
+    /\bTarget\s*=\s*((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi,
+    /\bhost\s*=\s*((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi,
+    /\b((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})\b/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of value.matchAll(pattern)) {
+      const host = match[1];
+      const port = clampPort(match[2], defaults.port);
+      if (ipv4ToInt(host) === null) continue;
+      candidates.push({ host, port });
+    }
+  }
+  return candidates;
+}
+
+function uniqueBoardTargets(targets) {
+  const seen = new Set();
+  const unique = [];
+  for (const target of targets) {
+    const host = String(target.host || "").trim();
+    const port = clampPort(target.port, defaults.port);
+    const key = `${host}:${port}`;
+    if (!host || seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ host, port });
+  }
+  return unique;
+}
+
+async function fetchBoardState(server, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${server}/api/state`, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) return { ok: false, reason: `http-${response.status}`, state: null };
+    return { ok: true, reason: "ok", state: await response.json() };
+  } catch (error) {
+    return { ok: false, reason: error?.name === "AbortError" ? "timeout" : "unavailable", state: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchBoardDiscoveryTargets(args) {
+  const server = normalizeBoardServer(args.server || defaults.server);
+  const result = await fetchBoardState(server, args.boardTimeoutMs);
+  if (!result.ok) return { attempted: true, ok: false, server, reason: result.reason, targets: [] };
+  const texts = collectStringValues(result.state);
+  const targets = uniqueBoardTargets(texts.flatMap(extractHostPortCandidates));
+  return { attempted: true, ok: true, server, reason: targets.length ? "ok" : "no-mac-targets", textCount: texts.length, targets };
+}
+
+function sanitizeBoardDiscoveryReport(board = {}) {
+  return {
+    attempted: Boolean(board.attempted),
+    ok: Boolean(board.ok),
+    server: board.server || "",
+    reason: board.reason || "",
+    targets: board.targets?.length || 0,
+  };
+}
+
+function addDiscoveryCandidate(candidateMap, host, port, source = "argument") {
+  const cleanHost = String(host || "").trim();
+  if (!cleanHost || cleanHost === "0.0.0.0" || cleanHost === "::") return;
+  const cleanPort = clampPort(port, defaults.port);
+  const key = `${cleanHost}:${cleanPort}`;
+  if (!candidateMap.has(key)) candidateMap.set(key, { host: cleanHost, port: cleanPort, source });
+}
+
+function makeDiscoveryCandidates(args, boardTargets = []) {
+  const candidateMap = new Map();
+  addDiscoveryCandidate(candidateMap, args.host, args.port, args.hostProvided ? "explicit" : "default");
+  for (const host of args.discoverHosts) addDiscoveryCandidate(candidateMap, host, args.port, "argument");
+  for (const target of boardTargets) addDiscoveryCandidate(candidateMap, target.host, target.port || args.port, "board");
   if (!args.discoverNoLocalSubnets) {
     for (const entries of Object.values(os.networkInterfaces())) {
       for (const entry of entries || []) {
         if (!entry || entry.family !== "IPv4" || entry.internal || String(entry.address).startsWith("169.254.")) continue;
-        for (const host of hostsForInterface(entry)) hostSet.add(host);
+        for (const host of hostsForInterface(entry)) addDiscoveryCandidate(candidateMap, host, args.port, "subnet");
       }
     }
   }
-  return [...hostSet]
-    .filter((host) => host && host !== "0.0.0.0" && host !== "::")
-    .map((host) => ({ host, port: args.port }));
+  return [...candidateMap.values()];
 }
 
 function normalizeDiscoveryPayload(payload, candidate, latencyMs) {
@@ -315,6 +443,7 @@ function normalizeDiscoveryPayload(payload, candidate, latencyMs) {
     role: payload.role || "",
     runtime: payload.runtime || null,
     capabilities: payload.capabilities || {},
+    candidateSource: candidate.source || "argument",
   };
 }
 
@@ -366,6 +495,7 @@ function normalizeDiscoveredMacTarget(candidate) {
     targetHost,
     targetPort: clampPort(candidate.port, defaults.port),
     sourceHost: host ? "payload-host" : "probe-host",
+    targetSource: candidate.candidateSource === "board" ? "board-discovery" : "discovery",
   };
 }
 
@@ -378,9 +508,10 @@ function pickDiscoveredMacHost(macHosts) {
 }
 
 async function runDiscovery(args) {
-  const candidates = makeDiscoveryCandidates(args);
+  const board = args.boardTarget ? await fetchBoardDiscoveryTargets(args) : { attempted: false, ok: false, targets: [], reason: "disabled" };
+  const candidates = makeDiscoveryCandidates(args, board.targets || []);
   if (candidates.length === 0) {
-    return { ok: false, error: "no-candidates", candidates: 0, found: [], macHosts: [] };
+    return { ok: false, error: "no-candidates", candidates: 0, found: [], macHosts: [], board };
   }
   const raw = await mapWithConcurrency(candidates, defaults.discoverConcurrency, (candidate) => fetchDiscoveryCandidate(candidate, args.discoverTimeoutMs));
   const found = raw.filter(Boolean);
@@ -390,6 +521,8 @@ async function runDiscovery(args) {
     ok: Boolean(bestMacHost),
     error: bestMacHost ? "" : `no usable Mac host found after probing ${candidates.length} candidate(s)`,
     candidates: candidates.length,
+    boardTargets: board.targets?.length || 0,
+    board,
     found,
     macHosts,
     bestMacHost,
@@ -413,11 +546,13 @@ async function resolveTarget(args) {
       ...args,
       host: String(selected.targetHost),
       port: clampPort(selected.targetPort, args.port),
-      targetSource: "discovery",
+      targetSource: selected.targetSource || "discovery",
       discovery: {
         attempted: true,
         selected: true,
         scanned: discovery.candidates,
+        boardTargets: discovery.boardTargets || 0,
+        board: sanitizeBoardDiscoveryReport(discovery.board),
         found: discovery.found.length,
         macHosts: discovery.macHosts.length,
         selectedHost: String(selected.targetHost),
@@ -437,6 +572,8 @@ async function resolveTarget(args) {
       attempted: true,
       selected: false,
       scanned: discovery.candidates || 0,
+      boardTargets: discovery.boardTargets || 0,
+      board: sanitizeBoardDiscoveryReport(discovery.board),
       found: discovery.found?.length || 0,
       macHosts: discovery.macHosts?.length || 0,
       reason: discovery.error || "no-usable-mac-host",

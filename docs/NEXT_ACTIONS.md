@@ -16,6 +16,7 @@
   - Windows 控制端现在也会消费 `MacInputSafetyPlan=` / `Mac input safety plan:` 文本：Mac 提醒区、Mac 值守快速摘要和复制/导出诊断会把它显示为“Mac 真实输入安全方案已提供 / 默认输入模式保持安全日志 / 真实输入需用户正在看 Mac 屏幕 / 真实输入需 --confirmUserWatching / 先用 safe 输入事件集 / 不发送输入事件或执行注入”。看到这条时先按“真实输入仍被安全阻止”理解，不要把它当作已经切到 inject。
   - Windows 恢复总览现在也会消费同一条 `MacInputSafetyPlan=` / `Mac input safety plan:`：开工第一屏、JSON 和 `--boardSummary` 都会显示 `MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary` 以及 `MacInputSafety=status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject`。看到这条时仍按“只读安全边界”理解，不能当作真实 inject 已开启。
 - 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
+- Windows 控 Mac 一键入口现在除 LAN `/discovery` 扫描外，还会只读读取 Agent Link Board `/api/state` 里的 Mac 相关状态，把非敏感 Mac LAN host/port 当作 discovery 候选；只有候选真实返回 macOS host discovery 时才会选中并显示 `targetSource=board-discovery`。需要指定通讯板用 `--server` / `-Server`，需要关闭通讯板候选用 `--noBoardTarget` / `-NoBoardTarget`；疑似 `password=...`、token/secret 或 `--password` 的通讯板文本会被忽略，不认证、不请求密码、不发 input/inject。
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
 - 双端脚本若需要结构化读取 Agent Link Board，优先用 `node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 state --json`；该命令现在输出纯 `/api/state` JSON，适合自动化解析。人工快速查看仍可用默认 `state` 文本输出，`watch --once` 保持事件流文本。
 - 巡检或需要上报 DAILY_ITEM 时，优先跑 `node scripts/codex-link-daily-items.mjs --preset wmc-current --boardSummary`；确认一行里有 `DAILY_ITEM W1 PASS`、`W2 PASS`、`W3 PASS`、`M1 PASS`、`M2 PASS`、`C1 PASS`，且每项带旧编号 `alias=` 后，再按需要显式加 `--sendStatus --sendMessage --server http://192.168.31.68:17888` 上板。`--preset night-unattended` 仅作兼容别名，也会输出新 W/M/C 编号。默认只读、不上板、不认证、不请求密码、不发 input/inject。
@@ -36,13 +37,13 @@
 
 最新分工：Windows 端记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误 `node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`；这不推翻 PASS。Mac 端保持 host/client/heartbeat 在线，等待下一轮手工体验测试：画面、声音、剪贴板、文件、小窗、全屏/原画、复制诊断。除非用户明确确认正在看 Mac 屏幕，不做 true input inject。
 
-当前 Windows 首选入口：在仓库根目录双击 `Start-Windows-Control-Mac.cmd`；PowerShell 7 等价入口是 `scripts/windows/start-windows-control-mac.ps1`；Node 等价命令是 `node scripts/windows/start-windows-control-mac.mjs`。入口默认先只读探测 LAN `/discovery`，能发现 Mac host 时摘要显示 `targetSource=discovery`；发现失败才回退默认地址。等浏览器打开后，页面会清空演示密码并聚焦左侧“连接密码”框，只在这个框里输入 Mac 当前临时密码并点连接；终端隐藏输入提示只用于 formal/browser runner。需要无密上板时跑 `scripts/windows/start-windows-control-mac.ps1 -DryRun -BoardSummary`。
+当前 Windows 首选入口：在仓库根目录双击 `Start-Windows-Control-Mac.cmd`；PowerShell 7 等价入口是 `scripts/windows/start-windows-control-mac.ps1`；Node 等价命令是 `node scripts/windows/start-windows-control-mac.mjs`。入口默认先只读读取 Agent Link Board Mac 候选并探测 LAN `/discovery`，能发现 Mac host 时摘要显示 `targetSource=board-discovery` 或 `targetSource=discovery`；发现失败才回退默认地址。等浏览器打开后，页面会清空演示密码并聚焦左侧“连接密码”框，只在这个框里输入 Mac 当前临时密码并点连接；终端隐藏输入提示只用于 formal/browser runner。需要无密上板时跑 `scripts/windows/start-windows-control-mac.ps1 -DryRun -BoardSummary`。
 
 当前 Mac 控 Windows 首选入口：在 Mac 仓库根目录双击 `Start-Mac-Control-Windows.command`；它只会启动/复用本地 Mac 控制端页面并打开浏览器，之后再由用户在页面里发现 Windows host、输入临时密码并点连接。终端等价命令是 `node scripts/mac/start-mac-client.mjs --allowExisting --open`。
 
 当前 Mac client 状态摘要入口：`node scripts/mac/start-mac-client.mjs --status --boardSummary` 会输出 `MacUsableEntry=... Entry=./Start-Mac-Control-Windows.command`。如果白天开工只看到 `MacClientPage=` 或页面离线，先用这个入口打开本地页面，再继续 Windows discovery / formal checklist。
 
-当前 Windows 最短入口：用户在 Windows 上优先运行 `scripts/windows/start-windows-control-mac.ps1`，或 Node 等价 `node scripts/windows/start-windows-control-mac.mjs`；脚本会先只读探测 LAN `/discovery` 并自动预填发现到的 Mac host，失败才回退 `192.168.31.122:43770` / WebSocket，用户只需在页面里输入 Mac 当前临时密码后点连接。不要让用户再记旧的 `5197/9337` 诊断端口；本入口固定可用口径为 `clientPort=5200 debugPort=9340`，不认证、不发 input/inject；需要锁死旧地址时加 `-NoDiscover` 或 `--noDiscover`。
+当前 Windows 最短入口：用户在 Windows 上优先运行 `scripts/windows/start-windows-control-mac.ps1`，或 Node 等价 `node scripts/windows/start-windows-control-mac.mjs`；脚本会先只读读取 Agent Link Board Mac 候选并探测 LAN `/discovery`，自动预填发现到的 Mac host，失败才回退 `192.168.31.122:43770` / WebSocket，用户只需在页面里输入 Mac 当前临时密码后点连接。不要让用户再记旧的 `5197/9337` 诊断端口；本入口固定可用口径为 `clientPort=5200 debugPort=9340`，不认证、不发 input/inject；需要锁死旧地址时加 `-NoDiscover` 或 `--noDiscover`。
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
 
