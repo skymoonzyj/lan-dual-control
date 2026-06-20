@@ -3255,15 +3255,37 @@ function pruneScheduledAudioSources(now) {
   }
 }
 
+function trimFutureScheduledAudioSources(now) {
+  const scheduled = getScheduledAudioSources();
+  let dropped = 0;
+  let activeEndAt = Number(now) || 0;
+  for (let index = scheduled.length - 1; index >= 0; index -= 1) {
+    const entry = scheduled[index];
+    const playAt = Number(entry?.playAt);
+    const duration = Number(entry?.duration) || 0;
+    const endAt = Number.isFinite(playAt) ? playAt + duration : 0;
+    if (Number.isFinite(playAt) && playAt > now) {
+      scheduled.splice(index, 1);
+      stopScheduledAudioSource(entry);
+      dropped += 1;
+      continue;
+    }
+    if (Number.isFinite(endAt) && endAt > activeEndAt) {
+      activeEndAt = endAt;
+    }
+  }
+  return { dropped, activeEndAt };
+}
+
 function resyncAudioQueue(reason, now) {
-  const flushed = stopScheduledAudioSources();
-  state.audioDroppedFrames += Math.max(1, flushed);
+  const { dropped, activeEndAt } = trimFutureScheduledAudioSources(now);
+  state.audioDroppedFrames += Math.max(1, dropped);
   state.audioResyncCount = (Number(state.audioResyncCount) || 0) + 1;
   state.audioLastDropReason = reason;
   state.audioLastBufferReason = reason;
   state.audioLastUnderrunAt = 0;
-  state.audioNextPlayTime = now + audioResyncBufferSeconds;
-  return flushed;
+  state.audioNextPlayTime = Math.max(now + audioResyncBufferSeconds, activeEndAt);
+  return dropped;
 }
 
 function primeAudioPlayback() {
@@ -3379,7 +3401,7 @@ async function playPcmAudioFrame(frame) {
   pruneScheduledAudioSources(now);
   const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
   if (queuedSeconds > audioMaximumQueuedSeconds) {
-    resyncAudioQueue("queue-overflow-flush-old", now);
+    resyncAudioQueue("queue-overflow-trim-future", now);
   }
   if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
     const lastUnderrunAt = Number(state.audioLastUnderrunAt);

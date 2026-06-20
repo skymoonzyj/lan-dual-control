@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W3 Windows WebAudio 高水位只修剪未来队列
+开发端：Windows Codex
+本轮目标：在 Mac 端 60Hz/PCM 供流稳定的证据下，减少 Windows 本地 WebAudio 高水位治理造成的断音。
+完成内容：队列超过 450ms 时不再停止当前正在播放的 source，只停止尚未开始播放的未来 source；`audioNextPlayTime` 接到当前片段结束时间或 120ms 重同步预缓冲之后，诊断原因改为 `queue-overflow-trim-future`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于旧逻辑同时停止当前 0.10s 和两个未来 0.12s source；绿灯 node --check app/test、test-windows-client-browser --diagnosticsOnly --timeoutMs 45000 通过，输出 Audio buffer guards ... overflowDropped=2 resync=1。
+遗留问题：这改善 Windows 本地音频 queue-overflow 的听感，但仍需真实 60Hz/H.264 页面复测确认声音是否还断、视频是否还卡。
+下一步建议：用 5200 页面真实连接后复制“现场视频/现场声音”两行；若仍卡，继续查 Windows H.264 WebCodecs 解码输出耗时和主线程压力。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线并继续提供 fresh 60Hz/H.264/PCM 基线；不在通讯板发送密码。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 关键帧等待保持 H.264
 开发端：Windows Codex
 本轮目标：修复真实测试中关键帧等待把 Mac 拉到 background-jpeg，导致 2-3 FPS 和高延迟的 blocker A。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W3 Windows WebAudio 高水位只修剪未来队列
+- Mac 侧 60Hz H.264+PCM 基线显示音频供流稳定后，Windows 控制端把 WebAudio 高水位治理从“停止全部已排队 source”改成“只停止尚未开始播放的未来 source”，当前正在播放的片段会保留；随后 `audioNextPlayTime` 接到当前片段结束时间或 120ms 重同步预缓冲之后，现场诊断原因改为 `queue-overflow-trim-future`。页面自测红灯先证明旧逻辑会把正在播放的 0.10s 片段也停掉，绿灯确认只停止两个未来 0.12s source、`overflowDropped=2`、`resync=1`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-21 W2 Windows H.264 关键帧等待保持 H.264
 - Windows 控制端不再在 H.264 背压重同步后因为关键帧等待超时直接请求 MJPEG/JPEG；等待阈值会按当前协商刷新率放宽，60Hz 至少等待 180 个 delta，超时后通过现有 `display_settings` 继续请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 来重启 H.264 视频流。现场诊断会留下 `原因 keyframe-wait-h264-recovery` 和 `解码 recovering`，不会因为这一类关键帧等待显示 `解码 JPEG 回退`。页面自测红灯先证明旧逻辑在第 90 个 delta 发送 `mjpeg/data-url`，绿灯确认 `keyGrace=yes h264Recovery=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 
@@ -116,7 +119,7 @@
 - Windows 控制端复制/导出诊断“现场视频”现在会在相邻视频帧间隔达到 120ms 以上时输出 `卡顿 <n>` 和 `最大卡顿 <ms> ms`，与既有 `实收 FPS`、`平均间隔`、`最大间隔`、本机解码队列和本地过期丢帧并列。这样用户反馈“不像 60Hz / 卡”时，可以区分整体 FPS 偏低、偶发长间隔卡顿、本机解码队列堆积或 H.264 过期帧丢弃。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯导出缺少 `卡顿 2 / 最大卡顿 184 ms`，绿灯确认同一诊断输出。本轮只改 Windows 控制端本地统计和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 W3 Windows 控制端音频重同步预缓冲
-- Windows 控制端 WebAudio 队列溢出清理后，现在使用 120ms 重同步短预缓冲；普通 underrun/正常低延迟路径仍保持 80ms 初始预缓冲、70ms 低水位和 450ms 高水位。这样在 `queue-overflow-flush-old` 后不会立刻贴边播放最新 PCM 帧，减少突发堆积后的连续断续感。复制/导出诊断“现场声音”同步显示 `缓冲 80/70/450/120 ms`、`重同步 <n>` 和最近原因；`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 20.08s 失败和绿灯 120ms 重同步路径。本轮只改 Windows 控制端本地播放和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
+- Windows 控制端 WebAudio 队列超过高水位后，现在只修剪未来音源并使用 120ms 重同步短预缓冲；普通 underrun/正常低延迟路径仍保持 80ms 初始预缓冲、70ms 低水位和 450ms 高水位。这样在 `queue-overflow-trim-future` 后不会立刻贴边播放最新 PCM 帧，减少突发堆积后的连续断续感。复制/导出诊断“现场声音”同步显示 `缓冲 80/70/450/120 ms`、`重同步 <n>` 和最近原因；`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 20.08s 失败和绿灯 120ms 重同步路径。本轮只改 Windows 控制端本地播放和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 Windows 反控临时授权 userPresence gate
 - `allow-windows-reverse-control` 现在支持 `--checkBoard --server <Agent Link Board>`：打开一次性反控授权前会只读读取 `/api/state.userPresence`。`present` 时继续允许本机 loopback 打开约 30 秒一次性授权，并在 JSON/普通输出/`--boardSummary` 显示 `UserPresence=present` / `UserPresenceAction=explain-before-grant`；`away` 时不调用 `/reverse-control/grant`，非零退出并输出 `BLOCKED_BY_USER_AWAY` / `UserPresenceAction=no-auth-only`。PowerShell 入口同步支持 `-CheckBoard -Server <url>`。默认不加 `--checkBoard` 的旧本机授权行为保持兼容；本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
@@ -223,7 +226,7 @@
 - Windows 新增根目录双击入口 `Start-Windows-Control-Mac.cmd`：双击即可调用 `start-windows-control-mac`，启动/复用 `127.0.0.1:5200` 并预填 `192.168.31.122:43770`；支持透传 `--dryRun --boardSummary` 方便无密验证，不包含密码、认证或 input/inject 参数。
 - Mac 新增根目录双击入口 `Start-Mac-Control-Windows.command`：双击即可调用 `start-mac-client --allowExisting --open`，启动/复用本地 Mac 控制端页面 `127.0.0.1:5188` 并打开浏览器；支持透传参数方便检查或换端口，只打开页面，不连接 Windows host、不认证、不请求或发送密码、不发 input/inject。
 - Mac client 页面状态摘要现在也会暴露同一入口：`start-mac-client --status --boardSummary` 输出 `MacUsableEntry=status=ready USABLE_NEXT=open_mac_client Entry=./Start-Mac-Control-Windows.command Safety=no-password,no-input-inject`，JSON `commands.macControlWindowsEntryCommand` 同步给出该双击入口；这仍只打开本地页面，不代表已连接 Windows host。
-- Windows 真实体验 blocker 已做第一轮修复：页面上下抖动根因是底部状态栏里的连接/输入/声音/剪贴板文字随实时帧状态变长后换行，`grid` 中间远程画面被重新分配高度；现在 statusbar 固定 36px、单行省略，浏览器诊断确认长状态文字下 `statusbar=36px` 且远程画面高度稳定。声音丢包第一轮根因定位在控制端 WebAudio 播放调度缺少低水位预缓冲和高水位背压，突发时会从 `currentTime+15ms` 直接起播或继续堆队列；现在低水位补到 80ms 预缓冲，高水位超过 450ms 时会 flush 旧队列并播放最新帧，记录 `resyncCount/dropReason`，声音状态 DOM 刷新限频。验证见 `test-windows-client-browser --diagnosticsOnly` 的 `Audio buffer guards` 和 `Live status layout stability`。
+- Windows 真实体验 blocker 已做第一轮修复：页面上下抖动根因是底部状态栏里的连接/输入/声音/剪贴板文字随实时帧状态变长后换行，`grid` 中间远程画面被重新分配高度；现在 statusbar 固定 36px、单行省略，浏览器诊断确认长状态文字下 `statusbar=36px` 且远程画面高度稳定。声音丢包第一轮根因定位在控制端 WebAudio 播放调度缺少低水位预缓冲和高水位背压，突发时会从 `currentTime+15ms` 直接起播或继续堆队列；现在低水位补到 80ms 预缓冲，高水位超过 450ms 时会修剪未来队列并接上最新帧，记录 `resyncCount/dropReason`，声音状态 DOM 刷新限频。验证见 `test-windows-client-browser --diagnosticsOnly` 的 `Audio buffer guards` 和 `Live status layout stability`。
 - Windows 控制端复制诊断已新增“现场视频 / 现场声音”统计：视频导出实收 FPS、请求/协商 Hz、平均/最大帧间隔、卡顿次数、最大卡顿间隔、总帧数、远端丢帧、解码队列、本机队列毫秒、解码延迟、本地过期丢帧和最近原因；声音导出 WebAudio 当前队列毫秒、80/70/450/120 ms 缓冲阈值、接收/播放/丢弃计数、重同步次数和最近原因。下一次真实体验反馈“卡、不像 60Hz、声音断续”时，优先让用户点复制诊断并粘贴这两行给两端定位。
 - Windows N1 视频低延迟治理已推进：H.264 本机解码队列超过 8 帧或最旧帧超过 450ms 时会关闭旧 decoder、清空旧队列并等待下一关键帧，delta 帧不再继续加深延迟；复制诊断会输出 `videoDroppedStaleFrames` 对应的“本地过期丢帧”和 `videoLastDropReason=queue-overflow-wait-keyframe`。本轮只做 Windows 控制端本地队列治理和 diagnostics-only 浏览器回归，不改协议、不认证、不请求或发送密码、不发 input/inject。
 - Mac remote-only audio 已完成安全评估入口：当前 Mac host 的 ScreenCaptureKit `system-pcm` 链路只捕获并发送系统 PCM，不会自动静音本机扬声器，也不会切换输出设备或改系统音量。新增 `node scripts/mac/plan-mac-remote-audio.mjs --boardSummary`，输出 `capture=system-pcm-does-not-mute-local`、三条路线 `manual-mute-restore/virtual-output-device/product-toggle` 和 `safety=no-volume-change,no password/input/inject`；`check-mac-host-readiness --json/--boardSummary` 同屏新增 `MacRemoteAudioPlan=`。真正 remote-only 后续必须做用户显式同意、状态可见和断开恢复，不要擅自改系统音量。

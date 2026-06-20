@@ -6067,7 +6067,7 @@ async function verifyReconnectControls(session) {
         state.audioContext = { currentTime: 10.12, state: "running" };
         state.audioNextPlayTime = 10.24;
         state.audioResyncCount = 1;
-        state.audioLastDropReason = "queue-overflow-flush-old";
+        state.audioLastDropReason = "queue-overflow-trim-future";
         state.videoFrames = 90;
         state.videoFrameTimes = [1000, 1033, 1066, 1099, 1199];
         state.actualVideoFps = 20.1;
@@ -6162,7 +6162,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("缓冲 80/70/450/120 ms") &&
             exportText.includes("接收 24") &&
             exportText.includes("重同步 1") &&
-            exportText.includes("原因 queue-overflow-flush-old") &&
+            exportText.includes("原因 queue-overflow-trim-future") &&
             exportText.includes("丢 2"),
           quickSummaryInput: exportText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）"),
           quickSummaryFloating:
@@ -6347,7 +6347,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("队列 120 ms") &&
             exportText.includes("缓冲 80/70/450/120 ms") &&
             exportText.includes("重同步 1") &&
-            exportText.includes("原因 queue-overflow-flush-old"),
+            exportText.includes("原因 queue-overflow-trim-future"),
           audioLevel: exportText.includes("- 声音电平：37%"),
           audioError: exportText.includes("- 声音错误：-"),
           clipboardStatus:
@@ -6477,7 +6477,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 现场声音：") &&
           copiedText.includes("队列 120 ms") &&
           copiedText.includes("重同步 1") &&
-          copiedText.includes("原因 queue-overflow-flush-old") &&
+          copiedText.includes("原因 queue-overflow-trim-future") &&
           copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 现场视频统计：") &&
           copiedText.includes("- 现场声音统计：") &&
@@ -6869,6 +6869,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioUnderrunCount = 0;
         state.audioLastBufferReason = "";
         state.audioScheduledSources = [
+          { source: { stop() { stops.push(0.10); }, disconnect() {} }, playAt: 19.96, duration: 0.10 },
           { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.2, duration: 0.12 },
           { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.32, duration: 0.12 },
         ];
@@ -6876,17 +6877,18 @@ async function verifyAudioPlaybackBufferGuards(session) {
         stops.length = 0;
         const overflowPlayed = await playPcmAudioFrame(makeFrame());
         const resyncPrebuffered = starts[0] >= 20.115 && starts[0] < 20.2;
-        const flushedOldQueue =
+        const trimmedFutureQueue =
           overflowPlayed &&
           starts.length === 1 &&
           stops.length === 2 &&
+          stops.every((duration) => Math.abs(duration - 0.12) < 0.001) &&
           resyncPrebuffered &&
           state.audioDroppedFrames === 2 &&
           state.audioResyncCount === 1 &&
-          state.audioLastDropReason === "queue-overflow-flush-old";
+          state.audioLastDropReason === "queue-overflow-trim-future";
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -6911,9 +6913,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
           adaptiveUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,
           overflowPlayed,
+          trimmedFutureQueue,
           overflowStarts: starts.length,
           overflowDropped: state.audioDroppedFrames,
           overflowStops: stops.length,
+          overflowStopDurations: stops.slice(),
           overflowStart: starts[0] || 0,
           resyncPrebuffered,
           overflowResyncCount: state.audioResyncCount,
