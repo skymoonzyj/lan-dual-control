@@ -3,6 +3,8 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+## 2026-06-20 W3/M1 Windows 控制端消费 MacRemoteAudioStatus
+- Windows 控制端现在能从 Mac 提醒/值守文本中识别 `MacRemoteAudioStatus=` 或 `MacRemoteAudio=` 的只读远程声音状态；当看到 `status=local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 或 `local-output-audible` 时，会在 Mac 值守风险里显示“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。这只是把双路声音风险翻成中文提示，不会静音 Mac、不切输出设备、不认证、不请求或发送密码、不发 input/inject。页面自测先红于缺少 `Mac 本机仍会出声` 风险，再绿于 `test-windows-client-browser --diagnosticsOnly`。
 ## 2026-06-20 W2 Windows H.264 等关键帧超时恢复
 - Windows 控制端 H.264 背压重同步后，如果连续跳过 90 个 delta 仍没有等到关键帧，会触发已有 JPEG/MJPEG fallback 请求，避免画面长时间停在“等待关键帧”。fallback 会通过 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，并在现场视频诊断里留下 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `keyFrameWaitFallback=false`，绿灯确认 `keyFallback=yes`。本轮只改 Windows 控制端本地 H.264 恢复逻辑和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-20 W3 Windows 音频连续低水位稳定预缓冲

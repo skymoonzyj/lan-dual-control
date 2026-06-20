@@ -270,6 +270,11 @@ const macUnattendedRiskLabels = {
   "power-blocked": "电源设置阻塞值守",
   "mac-power-plan-command": "Mac 电源预案命令已提供",
   "mac-power-apply-command": "Mac 电源授权执行命令已提供",
+  "mac-remote-audio-local-output": "Mac 本机仍会出声",
+  "local-output-audible": "Mac 本机仍会出声",
+  "mac-remote-audio-not-active": "远端独占声音未开启",
+  "mac-remote-audio-user-consent": "远端独占声音需用户明确同意",
+  "mac-remote-audio-read-only": "不会自动改 Mac 音量",
   "system-sleep-enabled": "系统睡眠未关闭",
   "display-sleep-enabled": "显示器睡眠未关闭",
   "network-wake-disabled": "网络唤醒未开启",
@@ -3658,6 +3663,30 @@ function parseMacRemoteAudioPlanEvidenceLabels(text) {
   }
   return [...new Set(labels)];
 }
+function extractMacRemoteAudioStatusRisks(text) {
+  const source = String(text || "");
+  if (!/\b(?:MacRemoteAudioStatus|MacRemoteAudio)\s*[:=]|\bMac remote audio status\b/i.test(source)) return [];
+  const statusSource = source.replace(/\bMacRemoteAudioPlan\s*=\s*[^;\r\n]*/gi, "");
+  if (!/\b(?:status|reason|capture|localOutput|remoteOnly|blockers|Next|Safety)\s*=/i.test(statusSource)) return [];
+  if (/\b(?:password|passwd|pwd|token|secret)\s*[:=]\s*\S+/i.test(statusSource)) return [];
+  if (/(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(statusSource)) return [];
+
+  const risks = [];
+  if (/\bstatus\s*=\s*local-playback-active\b|\breason\s*=\s*local-output-audible\b|\blocalOutput\s*=\s*audible\b|\bblockers?\s*=\s*[^;\r\n]*\blocal-output-audible\b/i.test(statusSource)) {
+    risks.push("mac-remote-audio-local-output");
+  }
+  if (/\bremoteOnly\s*=\s*not-active\b|\bstatus\s*=\s*local-playback-active\b/i.test(statusSource)) {
+    risks.push("mac-remote-audio-not-active");
+  }
+  if (/\bNext\s*=\s*ask-user-consent-before-mute-or-route\b|explicit-consent|明确同意/i.test(statusSource)) {
+    risks.push("mac-remote-audio-user-consent");
+  }
+  if (/\bSafety\s*=\s*[^;\r\n]*\b(?:read-only|no-volume-change)\b|\b(?:read-only|no-volume-change)\b/i.test(statusSource)) {
+    risks.push("mac-remote-audio-read-only");
+  }
+  return [...new Set(risks)];
+}
+
 function parseMacInputSafetyPlanEvidenceLabels(text) {
   const source = String(text || "");
   const hasInputSafetyPlan =
@@ -3854,7 +3883,8 @@ function parseMacUnattendedAttention(text) {
   const blockers = extractMacUnattendedValues(source, "blockers");
   const windowsLanRisks = extractWindowsLanRiskValues(source);
   const heartbeatHealthRisks = extractMacHeartbeatHealthRisks(source);
-  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks])];
+  const remoteAudioStatusRisks = extractMacRemoteAudioStatusRisks(source);
+  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();

@@ -52,6 +52,31 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W3/M1 Windows 控制端消费 MacRemoteAudioStatus
+开发端：Windows Codex
+本轮目标：把 Mac 只读远程声音状态转成 Windows 控制端中文风险，帮助现场判断双路声音。
+完成内容：
+- 新增 Windows 控制端 `MacRemoteAudioStatus=` / `MacRemoteAudio=` 风险解析。
+- `local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 会显示为“Mac 本机仍会出声 / 远端独占声音未开启”。
+- `Next=ask-user-consent-before-mute-or-route` 和 `Safety=read-only,no-volume-change` 会提示“远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于缺少 `Mac 本机仍会出声` 风险。
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：这只是只读提示，不会自动静音 Mac 或切换输出设备；远端独占声音仍需用户明确同意后另行执行安全路线。
+下一步建议：真实体验时若仍双路声音，先看 Windows Mac 值守风险和 Mac `check-mac-remote-audio-status` 输出，再决定手动静音/虚拟输出/product toggle。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；若要真正 remote-only，需要用户和 Mac 端明确同意后再做。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows H.264 等关键帧超时恢复
 开发端：Windows Codex
 本轮目标：避免 H.264 背压重同步后长时间等不到关键帧导致远控画面像卡死。

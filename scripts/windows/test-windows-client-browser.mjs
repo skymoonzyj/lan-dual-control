@@ -1606,6 +1606,24 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
+      const macRemoteAudioStatusText = "MacRemoteAudioStatus=status=local-playback-active localOutput=audible remoteOnly=not-active Next=ask-user-consent-before-mute-or-route Safety=read-only,no-volume-change.";
+      const macRemoteAudioStatusAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(macRemoteAudioStatusText)
+          : null;
+      const macRemoteAudioStatusView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2473],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 02:32:00", title: "Mac remote audio status", message: macRemoteAudioStatusText }],
+              lastAlert: { at: "2026-06-20 02:32:00", title: "Mac remote audio status", message: macRemoteAudioStatusText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
       const macInputSafetyPlanText = [
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
@@ -2632,6 +2650,15 @@ async function verifyDesktopOnlyHostPanel(session) {
           macRemoteAudioPlanView.statusText.includes("远端独占声音需用户明确同意") &&
           macRemoteAudioPlanView.statusText.includes("不自动改系统音量") &&
           !macRemoteAudioPlanView.statusText.includes("风险：") &&
+          macRemoteAudioStatusAttention?.summary.includes("Mac 本机仍会出声") &&
+          macRemoteAudioStatusAttention?.summary.includes("远端独占声音未开启") &&
+          macRemoteAudioStatusAttention?.summary.includes("远端独占声音需用户明确同意") &&
+          Array.isArray(macRemoteAudioStatusAttention?.labels) &&
+          macRemoteAudioStatusAttention.labels.length >= 3 &&
+          macRemoteAudioStatusView.statusText.includes("风险：") &&
+          macRemoteAudioStatusView.statusText.includes("Mac 本机仍会出声") &&
+          macRemoteAudioStatusView.statusText.includes("远端独占声音未开启") &&
+          macRemoteAudioStatusView.statusText.includes("远端独占声音需用户明确同意") &&
           macInputSafetyPlanAttention?.summary === "" &&
           macInputSafetyPlanAttention?.evidenceSummary.includes("Mac 真实输入安全方案已提供") &&
           macInputSafetyPlanAttention?.evidenceSummary.includes("默认输入模式保持安全日志") &&
