@@ -3023,6 +3023,14 @@ function recordAudioFrameTime() {
   }
 }
 
+function formatVideoFrameGapStatusText() {
+  const { sampleCount, maxGapMs, stutterCount } = getVideoFrameGapStats();
+  if (sampleCount < 2) return "";
+  const parts = [`最大间隔 ${maxGapMs} ms`];
+  if (stutterCount > 0) parts.push(`卡顿 ${stutterCount}`);
+  return parts.join(" · ");
+}
+
 function updateFpsMetric() {
   const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
   const negotiated = state.negotiatedFps || requested;
@@ -3035,6 +3043,10 @@ function updateFpsMetric() {
   const fpsLimitText = formatRemoteFpsLimitText();
   if (fpsLimitText) {
     parts.push(fpsLimitText);
+  }
+  const frameGapText = formatVideoFrameGapStatusText();
+  if (frameGapText) {
+    parts.push(frameGapText);
   }
   elements.metricFps.textContent = parts.join(" · ");
   syncFloatingControlStatus();

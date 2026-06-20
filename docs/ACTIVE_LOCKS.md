@@ -15,7 +15,6 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
-| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频断流可见性：远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 ## 高冲突区域
 
 - `shared/protocol`
@@ -31,6 +30,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频状态实时可见化：页面 FPS 状态显示最大视频帧间隔和卡顿次数；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-heartbeat.mjs`, `scripts/mac/test-mac-heartbeat.mjs`, `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `scripts/mac/check-mac-unattended-status.mjs`, `scripts/mac/test-mac-unattended-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac Manual UX first-screen sendStatus command：Mac heartbeat/resume/unattended 第一屏新增 `MacManualUxSendStatus=`，可复制刷新 `Mac Manual UX` 通讯板状态；只读上板，只发状态，不发消息/call，不认证、不请求密码、不发 input_event/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频断流可见性：远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频首帧等待可见性：远程画面状态行和复制/导出诊断显示 `等待视频首帧` / `已等待 <秒>s`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |

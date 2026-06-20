@@ -4960,7 +4960,11 @@ async function verifyVideoStutterDiagnostics(session) {
   const result = await evaluate(
     session,
     `(() => {
-      if (typeof getVideoPerformanceExportStatus !== "function" || typeof state !== "object") {
+      if (
+        typeof getVideoPerformanceExportStatus !== "function" ||
+        typeof updateFpsMetric !== "function" ||
+        typeof state !== "object"
+      ) {
         return { ok: false, reason: "missing video stutter diagnostics helpers" };
       }
 
@@ -4980,6 +4984,7 @@ async function verifyVideoStutterDiagnostics(session) {
         videoWaitingSince: state.videoWaitingSince,
         videoLastFrameAt: state.videoLastFrameAt,
         remoteStatusText: document.querySelector("#remoteStatusText")?.textContent || "",
+        metricFpsText: document.querySelector("#metricFps")?.textContent || "",
       };
 
       try {
@@ -4995,6 +5000,11 @@ async function verifyVideoStutterDiagnostics(session) {
         state.videoDroppedStaleFrames = 0;
         state.videoLastDropReason = "";
         const exportText = getVideoPerformanceExportStatus();
+        updateFpsMetric();
+        const fpsStatusText = document.querySelector("#metricFps")?.textContent || "";
+        const videoStutterStatusVisible =
+          fpsStatusText.includes("最大间隔 184 ms") &&
+          fpsStatusText.includes("卡顿 2");
         const firstFrameWaitNow = 9000;
         state.connected = true;
         state.videoFrames = 0;
@@ -5036,9 +5046,12 @@ async function verifyVideoStutterDiagnostics(session) {
             exportText.includes("最大间隔 184 ms") &&
             exportText.includes("卡顿 2") &&
             exportText.includes("最大卡顿 184 ms") &&
+            videoStutterStatusVisible &&
             videoFirstFrameWaitVisible &&
             videoStreamStallVisible,
           exportText,
+          videoStutterStatusVisible,
+          fpsStatusText,
           videoFirstFrameWaitVisible,
           firstFrameWaitRendered,
           firstFrameWaitStatusText,
@@ -5073,6 +5086,8 @@ async function verifyVideoStutterDiagnostics(session) {
         }
         const remoteStatus = document.querySelector("#remoteStatusText");
         if (remoteStatus) remoteStatus.textContent = original.remoteStatusText;
+        const metricFps = document.querySelector("#metricFps");
+        if (metricFps) metricFps.textContent = original.metricFpsText;
       }
     })()`,
   );

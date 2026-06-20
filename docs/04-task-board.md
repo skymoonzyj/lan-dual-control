@@ -8,6 +8,8 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W2 Windows 视频状态实时可见化：页面 FPS 状态直接显示最近最大视频帧间隔和视频卡顿次数；复制/导出诊断继续保留完整平均/最大/卡顿明细。页面自测先红于 `videoStutterStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 - [x] W2 Windows 视频断流可见性：连接中且已经收到过视频帧后，超过 2.5 秒没有新视频帧时，远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`，用于区分首帧未到和收到画面后的冻结/断流。页面自测先红于 `videoStreamStallVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W2 Windows 视频首帧等待可见性：连接进入 streaming 后，超过 3 秒仍未收到首个视频帧时，远程画面状态行和复制/导出诊断显示 `等待视频首帧` / `已等待 <秒>s`，用于区分认证/连接已通但首帧未到，和收到画面后的帧率/卡顿问题。页面自测先红于 `videoFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Mac Manual UX first-screen sendStatus command：`check-mac-heartbeat`、`check-mac-resume-status` 和 `check-mac-unattended-status` 的 JSON/普通输出/`--boardSummary` 新增 `MacManualUxSendStatus=`，可直接复制 `check-mac-manual-ux-status --server <Agent Link Board> --sendStatus --boardSummary` 刷新 `Mac Manual UX` 状态。只读上板，只发状态，不发消息/call，不请求密码、不认证、不发送 input_event/inject。

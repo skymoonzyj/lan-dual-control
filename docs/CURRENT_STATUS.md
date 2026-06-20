@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 W2 Windows 视频状态实时可见化
+- Windows 控制端页面 FPS 状态现在会在视频帧样本足够时追加 `最大间隔 <ms> ms`，如果最近窗口内出现 >=120ms 长间隔，会追加 `卡顿 <n>`；复制/导出诊断仍保留 `平均间隔`、`最大间隔`、`卡顿`、`最大卡顿`、帧数等完整字段。页面自测先红于 `videoStutterStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W2 Windows 视频断流可见性
 - Windows 控制端现在会记录最后一个视频帧到达时间；连接中且已经收到过视频帧后，如果超过 2.5 秒没有新视频帧，远程画面状态行会显示 `视频断流` 和 `最后收到 <秒>s 前`，复制/导出诊断“现场视频”也会追加同样字段。这样可区分“已连接但首帧没到”和“画面曾经正常、后来冻结/断流”。页面自测先红于 `videoStreamStallVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

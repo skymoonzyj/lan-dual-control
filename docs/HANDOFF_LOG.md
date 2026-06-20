@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W2 Windows 视频状态实时可见化
+开发端：Windows Codex
+本轮目标：让用户不复制诊断也能在 Windows 控制端页面 FPS 状态里看到视频帧节奏是否明显卡顿。
+完成内容：新增页面 FPS 状态扩展；当最近视频帧样本足够时显示 `最大间隔 <ms> ms`，出现 >=120ms 长间隔时显示 `卡顿 <n>`；复制/导出诊断仍保留平均间隔、最大间隔、卡顿、最大卡顿和帧数完整字段。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `videoStutterStatusVisible=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 端页面可见性，不改变 Mac 采集、H.264 编码、网络传输或输入控制。
+下一步建议：真实观感复测时，先看 FPS 行的 `最大间隔` / `卡顿`；若卡顿高但本机队列不高，优先查 Mac 采集/网络供流；若本机队列或恢复暂停也增长，再查 Windows WebCodecs/H.264 本地队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实观感仍需要用户现场确认。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac Manual UX first-screen sendStatus command
