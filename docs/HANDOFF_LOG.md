@@ -18,6 +18,38 @@
 ```
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 M1 Mac remote audio consent/restore guard
+开发端：Mac Codex
+本轮目标：把远端独占声音的用户同意前说明和恢复复查路径结构化，避免把 plan-only 误解为已经 remote-only。
+完成内容：
+- `plan-mac-remote-audio --json` 新增 `consentChecklist[]`：说明当前 `system-pcm` 不会自动静音 Mac、执行前必须选择唯一路线，并先确认恢复路径。
+- `plan-mac-remote-audio --json` 新增 `restoreChecklist[]`：恢复用户选择的输出/静音状态后，复跑 `check-mac-remote-audio-status`。
+- `plan-mac-remote-audio --boardSummary` 保持原有 Windows 可解析字段不变，并追加 `Consent=explicit-before-change` / `RestorePath=required-before-apply`。
+修改文件：
+- `scripts/mac/plan-mac-remote-audio.mjs`
+- `scripts/mac/test-mac-remote-audio-plan.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-remote-audio-plan.mjs` 先失败于缺少 `consentChecklist`
+- 绿灯：`node --check scripts/mac/plan-mac-remote-audio.mjs`
+- 绿灯：`node --check scripts/mac/test-mac-remote-audio-plan.mjs`
+- 绿灯：`node scripts/mac/test-mac-remote-audio-plan.mjs`
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真板只读抽样：上板新版 `Mac remote audio plan:` 后，`node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary` 仍输出旧兼容 `MacRemoteAudio=status=plan-only ... safety=no-volume-change,no password/input/inject`
+- 收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" <本轮文件>` 无冲突标记
+- 未跑通：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 因当前 Mac 环境缺少 `powershell.exe` 直接 `ENOENT`，不是业务断言失败。
+遗留问题：仍未自动静音或切换输出设备；当前真机 `MacRemoteAudioStatus` 仍需先确认是否 `local-playback-active`，真正 remote-only 必须另行得到用户明确同意。
+下一步建议：如果用户明确要做 remote-only，可以先按 `Consent=explicit-before-change` 说明路线和恢复方式，再选择手动静音/虚拟输出/产品开关中的一条做单独实现。
+是否改了协议：否；只增强 Mac 侧 plan-only 输出和测试。
+是否需要另一端配合：暂不需要；Windows 端旧 `MacRemoteAudio=` 摘要字段保持不变。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 M1 Mac remote audio first-screen follow-up
 开发端：Mac Codex
 本轮目标：让远端独占声音只读状态门禁不只出现在 resume，也能在 heartbeat/unattended 第一屏直接看到。

@@ -7,6 +7,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] M1 Mac remote audio consent/restore guard：`plan-mac-remote-audio --json/--boardSummary` 新增 `consentChecklist[]`、`restoreChecklist[]`、`Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，明确远端独占声音任何真实静音/切输出/产品开关前必须先说明当前本机会出声风险、唯一路线和恢复复查路径。保持 plan-only，只读，不改系统音量/输出设备、不认证、不请求或发送密码、不发 input/inject。
 - [x] W3/M1 Windows 控制端消费 `MacRemoteAudioStatus=`：Mac 提醒/值守文本里的 `local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 会被翻译成“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”风险；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W2 Windows H.264 等关键帧超时恢复：H.264 背压重同步后连续跳过 90 个 delta 仍未等到关键帧时，Windows 控制端会请求 MJPEG/JPEG fallback，诊断保留 `keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`；页面自测先红于 `keyFrameWaitFallback=false`，再绿于 `keyFallback=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W3 Windows 音频连续低水位稳定预缓冲：Windows 控制端首次低水位仍用 80ms；2 秒内再次低于 70ms 时改用 120ms 稳定预缓冲，并在复制诊断“现场声音”输出 `稳缓冲 <n>` / `queue-underrun-stable-prebuffer`。页面自测先红于第二次仍 80ms，再绿于 `Audio buffer guards ... stable=1`；不改协议、不认证、不请求或发送密码、不发 input/inject。

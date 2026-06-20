@@ -85,6 +85,20 @@ function checkJsonPlan() {
   assert(payload.safety?.noInput === true, "JSON should mark input-free");
   assert(payload.safety?.noInject === true, "JSON should mark inject-free");
   assert(payload.safety?.noVolumeChange === true, "JSON should mark volume-change-free");
+  assert(Array.isArray(payload.consentChecklist), "JSON should include a consent checklist");
+  assert(
+    payload.consentChecklist.some((item) => item.id === "explain-current-local-output"),
+    "JSON should require explaining that current Mac output may still be audible",
+  );
+  assert(
+    payload.consentChecklist.some((item) => item.id === "confirm-restore-path-before-change"),
+    "JSON should require confirming a restore path before any change",
+  );
+  assert(Array.isArray(payload.restoreChecklist), "JSON should include a restore checklist");
+  assert(
+    payload.restoreChecklist.some((item) => item.id === "rerun-remote-audio-status"),
+    "JSON should require rerunning remote audio status after restore",
+  );
   const optionIds = new Set((payload.remoteOnlyOptions || []).map((option) => option.id));
   for (const id of ["manual-mute-restore", "virtual-output-device", "product-toggle"]) {
     assert(optionIds.has(id), `JSON should include ${id} option`);
@@ -105,6 +119,8 @@ function checkBoardSummary() {
   assert(line.includes("RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle"), "boardSummary should include remote-only options");
   assert(line.includes("no-volume-change"), "boardSummary should promise no volume change");
   assert(line.includes("no password/input/inject"), "boardSummary should include safety boundary");
+  assert(line.includes("Consent=explicit-before-change"), "boardSummary should include explicit consent gate");
+  assert(line.includes("RestorePath=required-before-apply"), "boardSummary should include restore path gate");
   assertSafeOutput(outputOf(result), "remote audio plan boardSummary");
   print("OK", "Mac remote audio plan boardSummary is one-line and safe");
 }

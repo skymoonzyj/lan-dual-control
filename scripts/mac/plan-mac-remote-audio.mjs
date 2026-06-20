@@ -81,6 +81,35 @@ function buildPlan() {
         tradeoff: "Safest product behavior if it snapshots current output state, asks consent, and restores on disconnect.",
       },
     ],
+    consentChecklist: [
+      {
+        id: "explain-current-local-output",
+        action: "Explain that system-pcm capture does not mute the Mac speaker path.",
+        requiredBefore: "any-volume-or-output-change",
+      },
+      {
+        id: "choose-single-route",
+        action: "Choose exactly one route: manual mute, virtual output device, or product toggle.",
+        requiredBefore: "any-volume-or-output-change",
+      },
+      {
+        id: "confirm-restore-path-before-change",
+        action: "Confirm how local Mac audio will be restored before applying a change.",
+        requiredBefore: "any-volume-or-output-change",
+      },
+    ],
+    restoreChecklist: [
+      {
+        id: "restore-user-selected-output-state",
+        action: "Restore the user-selected mute/output route or disable the product remote-only toggle.",
+        requiredAfter: "remote-only-audio-session",
+      },
+      {
+        id: "rerun-remote-audio-status",
+        action: "Rerun check-mac-remote-audio-status to confirm local output is back in the expected state.",
+        requiredAfter: "restore",
+      },
+    ],
     recommendedNext:
       "Keep current capture behavior unchanged for this round; implement product-toggle only with explicit user consent, visible state, and restore handling.",
     safety: {
@@ -102,6 +131,8 @@ function makeBoardSummary(plan) {
     `RemoteOnlyOptions=${optionIds};`,
     "recommended=product-toggle-with-explicit-consent;",
     "safety=no-volume-change,no password/input/inject.",
+    "Consent=explicit-before-change;",
+    "RestorePath=required-before-apply.",
   ].join(" ");
 }
 
@@ -111,6 +142,8 @@ function printPlain(plan) {
   console.log("Current capture: system-pcm capture is active-capable, but local playback is not controlled by Mac host.");
   console.log("Current behavior: the host does not mute local output or switch output devices.");
   console.log("Recommended next: add a visible remote-only toggle only with explicit consent and restore handling.");
+  console.log("Consent gate: explain local output, choose one route, and confirm restore before any change.");
+  console.log("Restore gate: restore selected output state, then rerun check-mac-remote-audio-status.");
   console.log(`Agent Link Board summary: ${makeBoardSummary(plan)}`);
 }
 
