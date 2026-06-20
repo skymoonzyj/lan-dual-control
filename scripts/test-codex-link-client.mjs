@@ -230,7 +230,9 @@ async function checkPresenceUnsupportedHint(args) {
     assert(result.status === 1, `unsupported presence should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
     assertIncludes(result.stderr, "当前通讯板服务不支持 presence", "unsupported presence stderr");
     assertIncludes(result.stderr, "send --from", "unsupported presence fallback");
+    assertIncludes(result.stderr, "以 state 输出的 userPresence 为准", "unsupported presence authoritative state hint");
     assertIncludes(result.stderr, "等待通讯板服务重启", "unsupported presence restart hint");
+    assertNotIncludes(result.stderr, "用户已在当前线程确认在场", "unsupported presence stderr");
     assertNotIncludes(result.stderr, "password", "unsupported presence stderr");
     assertNotIncludes(result.stderr, "input_event", "unsupported presence stderr");
     const presencePost = requests.find((request) => request.method === "POST" && request.url === "/api/presence");

@@ -106,8 +106,8 @@ function formatClientError(error, commandName, options) {
   return [
     message,
     "当前通讯板服务不支持 presence，可能还没有重启到新版。",
-    "请先用普通消息同步用户在场，或等待通讯板服务重启后重试。",
-    `降级消息示例：node scripts/codex-link-client.mjs --server ${options.server} send --from "${from}" --text "用户已在当前线程确认在场；presence 接口暂不可用，等待通讯板服务重启。"`,
+    "请以 state 输出的 userPresence 为准；普通消息只能说明 presence 接口暂不可用，不能当作用户在场或授权依据。",
+    `降级消息示例：node scripts/codex-link-client.mjs --server ${options.server} send --from "${from}" --text "presence 接口暂不可用；请以 state 输出的 userPresence 为准，等待通讯板服务重启后再刷新结构化状态。"`,
   ].join("\n");
 }
 
