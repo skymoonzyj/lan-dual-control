@@ -2141,15 +2141,64 @@ function clearReconnectTimers() {
   updateReconnectControls(false);
 }
 
+function formatReconnectActionState(visible = Boolean(state.reconnectTimer)) {
+  const isVisible = Boolean(visible);
+  if (!isVisible || !state.reconnectDueAt) {
+    return { label: "立即重连", title: "" };
+  }
+
+  const seconds = Math.max(0, Math.ceil((state.reconnectDueAt - Date.now()) / 1000));
+  const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+  const label = seconds > 0 ? `立即重连（${seconds} 秒）` : "立即重连（现在）";
+  const details = ["立即重连", `第 ${attemptText} 次`];
+  if (seconds > 0) {
+    details.push(`约 ${seconds} 秒后自动重连`);
+  } else {
+    details.push("正在自动重连");
+  }
+  if (state.reconnectReason) details.push(`原因：${state.reconnectReason}`);
+  if (state.activeHost && state.activePort) details.push(`目标：${state.activeHost}:${state.activePort}`);
+  return { label, title: details.join("；") };
+}
+
+function setReconnectButtonLabel(button, label, title) {
+  if (!button) return;
+  const icon = button.querySelector?.("[aria-hidden='true']");
+  if (icon) {
+    const textNodeType = window.Node?.TEXT_NODE ?? 3;
+    let labelNode = Array.from(button.childNodes).find(
+      (node) => node.nodeType === textNodeType && node.textContent.trim(),
+    );
+    if (!labelNode) {
+      labelNode = document.createTextNode("");
+      button.appendChild(labelNode);
+    }
+    labelNode.textContent = ` ${label}`;
+  } else {
+    button.textContent = label;
+  }
+
+  if (title) {
+    button.title = title;
+    button.setAttribute("aria-label", title);
+  } else {
+    button.removeAttribute("title");
+    button.removeAttribute("aria-label");
+  }
+}
+
 function updateReconnectControls(visible = Boolean(state.reconnectTimer)) {
   const isVisible = Boolean(visible);
+  const actionState = formatReconnectActionState(isVisible);
   if (elements.reconnectNowButton) {
     elements.reconnectNowButton.hidden = !isVisible;
     elements.reconnectNowButton.disabled = !isVisible || state.connecting;
+    setReconnectButtonLabel(elements.reconnectNowButton, actionState.label, actionState.title);
   }
   if (elements.floatingReconnectButton) {
     elements.floatingReconnectButton.hidden = !isVisible;
     elements.floatingReconnectButton.disabled = !isVisible || state.connecting;
+    setReconnectButtonLabel(elements.floatingReconnectButton, actionState.label, actionState.title);
   }
   if (elements.connectionActions) {
     elements.connectionActions.classList.toggle("has-reconnect", isVisible);

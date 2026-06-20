@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 重连按钮倒计时可见化
+- Windows 控制端断线进入自动重连后，普通“立即重连”和全屏浮层“立即重连”按钮会直接显示剩余秒数，例如 `立即重连（2 秒）`；按钮悬停提示同步显示第几次重连、剩余时间、断线原因和目标地址。点击立即重连或清除重连计时后，按钮恢复普通 `立即重连` 且清空 title，避免旧倒计时误导。页面自测先红于按钮仍只有 `立即重连` 且 title 为空，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows 长状态悬停完整可读
 - Windows 控制端现在会把 FPS 指标、码率、帧延迟、底部连接/输入/声音/剪贴板状态、远程画面状态和 host 诊断的完整文本同步到 `title`。状态栏仍保持 36px 单行省略，不会撑动画面；用户把鼠标停在长状态上即可看完整内容。页面自测先红于 `videoLocalQueueTitleVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

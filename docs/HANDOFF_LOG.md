@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 重连按钮倒计时可见化
+开发端：Windows Codex
+本轮目标：让断线自动重连等待时间直接出现在“立即重连”按钮上，减少用户只盯状态栏才能判断的情况。
+完成内容：`updateReconnectControls()` 现在会为普通连接区按钮和全屏浮层按钮同步 `立即重连（<秒> 秒）` 文案；按钮 title / aria-label 包含第几次重连、剩余时间、断线原因和目标地址；立即重连或清除计时后恢复普通按钮并清空 title。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于按钮仍只有 `立即重连` 且 title 为空；绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 控制端重连可见性，不改变重连间隔、协议、Mac host、音频/视频采集或输入控制。
+下一步建议：后续手工体验断线重连时，观察按钮倒计时和状态栏是否同步；真实网络断线仍需用户现场确认。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 长状态悬停完整可读
 开发端：Windows Codex
 本轮目标：让 Windows 控制端长状态保持单行稳定，同时用户能看到完整文本。

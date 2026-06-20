@@ -5761,8 +5761,12 @@ async function verifyReconnectControls(session) {
       const originalActionsClass = actions.className;
       const originalReconnectHidden = reconnectButton.hidden;
       const originalReconnectDisabled = reconnectButton.disabled;
+      const originalReconnectHtml = reconnectButton.innerHTML;
+      const originalReconnectTitle = reconnectButton.getAttribute("title");
       const originalFloatingReconnectHidden = floatingReconnectButton.hidden;
       const originalFloatingReconnectDisabled = floatingReconnectButton.disabled;
+      const originalFloatingReconnectHtml = floatingReconnectButton.innerHTML;
+      const originalFloatingReconnectTitle = floatingReconnectButton.getAttribute("title");
       const originalConnectDisabled = connectButton.disabled;
       const originalDisconnectDisabled = disconnectButton.disabled;
       const originalStatus = status.textContent;
@@ -6428,6 +6432,14 @@ async function verifyReconnectControls(session) {
           !reconnectButton.disabled &&
           !floatingReconnectButton.hidden &&
           !floatingReconnectButton.disabled &&
+          reconnectButton.textContent.includes("立即重连（") &&
+          reconnectButton.textContent.includes("秒") &&
+          reconnectButton.title.includes("第 1/3 次") &&
+          reconnectButton.title.includes("测试断线") &&
+          floatingReconnectButton.textContent.includes("立即重连（") &&
+          floatingReconnectButton.textContent.includes("秒") &&
+          floatingReconnectButton.title.includes("第 1/3 次") &&
+          floatingReconnectButton.title.includes("测试断线") &&
           actions.classList.contains("has-reconnect") &&
           !disconnectButton.disabled &&
           status.textContent.includes("秒后自动重连") &&
@@ -6443,6 +6455,11 @@ async function verifyReconnectControls(session) {
           state.reconnectCountdownTimer === null &&
           reconnectButton.hidden &&
           floatingReconnectButton.hidden &&
+          reconnectButton.textContent.includes("立即重连") &&
+          !reconnectButton.textContent.includes("秒") &&
+          !reconnectButton.title &&
+          floatingReconnectButton.textContent === "立即重连" &&
+          !floatingReconnectButton.title &&
           !actions.classList.contains("has-reconnect");
 
         return {
@@ -6450,6 +6467,10 @@ async function verifyReconnectControls(session) {
           scheduled,
           immediate,
           copied,
+          reconnectButtonText: reconnectButton.textContent,
+          reconnectButtonTitle: reconnectButton.title,
+          floatingReconnectButtonText: floatingReconnectButton.textContent,
+          floatingReconnectButtonTitle: floatingReconnectButton.title,
           status: status.textContent,
           remote: remote.textContent,
           exportHasReconnectStatus: exportText.includes("- 重连状态："),
@@ -6548,8 +6569,14 @@ async function verifyReconnectControls(session) {
         actions.className = originalActionsClass;
         reconnectButton.hidden = originalReconnectHidden;
         reconnectButton.disabled = originalReconnectDisabled;
+        reconnectButton.innerHTML = originalReconnectHtml;
+        if (originalReconnectTitle === null) reconnectButton.removeAttribute("title");
+        else reconnectButton.setAttribute("title", originalReconnectTitle);
         floatingReconnectButton.hidden = originalFloatingReconnectHidden;
         floatingReconnectButton.disabled = originalFloatingReconnectDisabled;
+        floatingReconnectButton.innerHTML = originalFloatingReconnectHtml;
+        if (originalFloatingReconnectTitle === null) floatingReconnectButton.removeAttribute("title");
+        else floatingReconnectButton.setAttribute("title", originalFloatingReconnectTitle);
         connectButton.disabled = originalConnectDisabled;
         disconnectButton.disabled = originalDisconnectDisabled;
         status.textContent = originalStatus;
