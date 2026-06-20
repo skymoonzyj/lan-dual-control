@@ -7,6 +7,9 @@
 ## 2026-06-20 Windows host 旧诊断端点非阻塞提示
 - `start-windows-host --status --boardSummary` 在线时现在还会输出 `WindowsHostDiagnostics=available|unavailable`。运行中的旧 Windows host 若还没有 `/diagnostics`，摘要会显示 `WindowsHostDiagnostics=unavailable restart=only-if-session-debug-needed reason=<...>`；这只表示新会话诊断端点未生效，不代表远控画面、音频或控制不可用。只有需要用 `WindowsHostSession=` 定位 Mac browser smoke / 会话超时时，才安排 Windows 用户本机重启 host 到新 build；否则可继续按现有 discovery/连接流程推进。
 
+## 2026-06-20 Mac formal 消费 WindowsHostSession
+- `check-mac-client-formal-status --json/--boardSummary` 现在会在 Windows host 在线时只读请求 `http://<Windows host>:<port>/diagnostics`，把 Windows 端会话诊断安全转成 `windowsHostSession` JSON 和 `WindowsHostSession=stage:<...> auth=<ok|failed|pending> videoFrames=<n> audioFrames=<n> session=<WxH@Hz> closed=<true|false>` 摘要。该字段只提取白名单状态/帧数/会话参数，不回显原始 auth 消息或密码；端点缺失或旧 host 未重启时显示 `WindowsHostSession=diagnostics-unavailable`，只作为定位线索，不改变 ready/blocker 判定，不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-20 Windows host 会话诊断
 - Windows host 新增只读 `/diagnostics` JSON 端点：记录最近 WebSocket 会话的 `connected/hello/authenticated/session/streaming/closed` 阶段、认证是否通过、协商分辨率/刷新率/编码/传输、视频/音频帧计数和关闭时间；不保存连接密码、不回显 `auth_request` 原始消息、不发送 input/inject。
 - `start-windows-host --status --boardSummary` 在线时现在会读 `/diagnostics` 并输出 `WindowsHostSession=stage:<...> auth=<...> videoFrames=<n> audioFrames=<n> session=<WxH@Hz> closed=<true|false>`。Mac browser smoke 超时时，若这里已经是 `stage:streaming` 且 `videoFrames>0`，说明 Windows host 已完成认证、会话和首帧，下一步应查 Mac client/browser 等待条件或浏览器日志；若停在 `hello/auth-failed/session`，再按对应层排查。

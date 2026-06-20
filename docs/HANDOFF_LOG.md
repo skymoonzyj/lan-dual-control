@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac formal 消费 WindowsHostSession
+开发端：Mac Codex
+本轮目标：把 Windows host 新增的无密 `/diagnostics` 会话证据接入 Mac formal/status 第一屏，帮助定位 Mac 控 Windows smoke 超时层。
+完成内容：
+- `check-mac-client-formal-status` 在线 Windows host 时只读请求 `/diagnostics`，输出 JSON `windowsHostSession`。
+- `--boardSummary` 新增 `WindowsHostSession=stage:<...> auth=<ok|failed|pending> videoFrames=<n> audioFrames=<n> session=<WxH@Hz> closed=<...>`。
+- 旧 host、未重启或端点不可用时显示 `WindowsHostSession=diagnostics-unavailable`，不阻塞 ready，不新增认证或输入动作。
+- 自测 mock Windows host 增加 `/diagnostics`，覆盖 JSON 和 boardSummary 的 session 摘要；help 也标明该字段为 advisory。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 20000` 先失败于 `ready JSON should include Windows host diagnostics stage`，再失败于 help 缺少 `windowsHostSession`。
+- 绿灯：同一测试通过；真机旧 Windows host 只读 boardSummary 显示 `WindowsHostSession=diagnostics-unavailable` 且只因本地 WIP 标 repo dirty。
+遗留问题：
+- 当前真实 Windows host 运行态仍是旧 build，只有 Windows 用户本机重启到新 build 后，真机摘要才会出现具体 stage/videoFrames。
+下一步建议：
+- Windows host 重启到新 build 后，Mac 端 rerun `check-mac-client-formal-status --host 192.168.31.68 --port 43770 --boardSummary`，确认 `WindowsHostSession=` 从 unavailable 变为 stage 摘要；若后续 smoke 超时，先按该 stage 分层排查。
+是否改了协议：否。只读消费 HTTP `/diagnostics`，不改 WebSocket。
+是否需要另一端配合：稍后需要 Windows 用户/Windows Codex 重启 host 到新 build 才能看到真机 session 详情；本轮代码不要求立即配合。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac client safe formal smoke
 开发端：Mac Codex
 本轮目标：让 Mac 控 Windows 真机 smoke 在 Windows host 真实输入模式下也能先安全验证连接/媒体，不误发鼠标键盘输入。

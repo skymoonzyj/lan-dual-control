@@ -177,6 +177,11 @@ JSON output:
                                   command. It checks host readiness and board
                                   hints without passwords, authentication,
                                   input events, or inject.
+  windowsHostSession
+                                  Optional secret-free Windows host
+                                  /diagnostics summary. It reports session
+                                  stage/auth/frame counts when the endpoint is
+                                  available, and remains advisory only.
   runPlan.commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command that inspects the one-time reverse-
@@ -523,6 +528,146 @@ function getBoardMacUnattendedFreshness(args, stateResult = null, nowMs = Date.n
   const result = stateResult || readBoardState(args);
   if (!result.ok) return null;
   return collectMacUnattendedFreshnessFromBoardState(result.state, nowMs);
+}
+
+function safeSessionToken(value, fallback = "unknown") {
+  const text = normalizedText(value).replace(/[^A-Za-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
+  return text ? text.slice(0, 80) : fallback;
+}
+
+function latestWindowsHostSession(diagnostics = {}) {
+  return diagnostics?.sessionDiagnostics?.latestSession
+    || diagnostics?.sessionDiagnostics?.recentSessions?.[0]
+    || diagnostics?.session
+    || null;
+}
+
+function normalizeWindowsHostSession(diagnostics = {}, source = "diagnostics") {
+  const session = latestWindowsHostSession(diagnostics);
+  if (!session) {
+    return {
+      checked: true,
+      ok: true,
+      available: true,
+      hasSession: false,
+      source,
+    };
+  }
+  const sessionDetails = session.session || session.negotiated || {};
+  return {
+    checked: true,
+    ok: true,
+    available: true,
+    hasSession: true,
+    source,
+    stage: safeSessionToken(session.stage, "unknown"),
+    authenticated: Boolean(session.authenticated),
+    failedAuthAttempts: Math.max(0, Number(session.failedAuthAttempts) || 0),
+    closed: Boolean(session.closedAt || session.closed),
+    videoFrames: Math.max(0, Number(session.videoFramesSent ?? session.videoFrames) || 0),
+    audioFrames: Math.max(0, Number(session.audioFramesSent ?? session.audioFrames) || 0),
+    session: {
+      width: Math.max(0, Number(sessionDetails.width ?? sessionDetails.screenWidth) || 0),
+      height: Math.max(0, Number(sessionDetails.height ?? sessionDetails.screenHeight) || 0),
+      fps: Math.max(0, Number(sessionDetails.fps ?? sessionDetails.refreshHz ?? sessionDetails.refreshRate) || 0),
+      codec: safeSessionToken(sessionDetails.codec || sessionDetails.codecString || session.codec || session.codecString || "", ""),
+      transport: safeSessionToken(sessionDetails.transport || sessionDetails.videoTransport || session.videoTransport || "", ""),
+    },
+  };
+}
+
+function readWindowsHostDiagnostics(args, readiness) {
+  const hostInfo = readiness?.windowsHost || {};
+  const probeHost = hostInfo.probe?.host || args.windowsHost || "";
+  const probePort = hostInfo.probe?.port || args.windowsPort || defaults.windowsPort;
+  if (!hostInfo.online || !probeHost || !probePort) {
+    return {
+      checked: false,
+      ok: false,
+      available: false,
+      source: "not-checked",
+      host: probeHost,
+      port: probePort,
+      error: "",
+    };
+  }
+  const diagnosticsReader = `
+const host = process.argv[1];
+const port = Number(process.argv[2] || 0);
+const timeoutMs = Number(process.argv[3] || 2500);
+const wrappedHost = host.includes(":") && !host.startsWith("[") ? \`[\${host}]\` : host;
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), timeoutMs);
+try {
+  const response = await fetch(new URL("/diagnostics", \`http://\${wrappedHost}:\${port}/\`), {
+    cache: "no-store",
+    signal: controller.signal,
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(String(response.status));
+  console.log(text || "{}");
+} finally {
+  clearTimeout(timer);
+}
+`;
+  const timeoutMs = Math.max(1200, Math.min(Number(args.timeoutMs) || defaults.timeoutMs, 5000));
+  const result = spawnSync(process.execPath, [
+    "-e",
+    diagnosticsReader,
+    probeHost,
+    String(probePort),
+    String(timeoutMs),
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: timeoutMs + 750,
+    maxBuffer: 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  if (result.status !== 0) {
+    return {
+      checked: true,
+      ok: false,
+      available: false,
+      source: "http-diagnostics",
+      host: probeHost,
+      port: probePort,
+      error: "diagnostics unavailable",
+    };
+  }
+  try {
+    return {
+      ...normalizeWindowsHostSession(JSON.parse(String(result.stdout || "{}")), "http-diagnostics"),
+      host: probeHost,
+      port: probePort,
+    };
+  } catch {
+    return {
+      checked: true,
+      ok: false,
+      available: false,
+      source: "http-diagnostics",
+      host: probeHost,
+      port: probePort,
+      error: "diagnostics invalid-json",
+    };
+  }
+}
+
+function formatWindowsHostSessionSummary(sessionInfo = null) {
+  if (!sessionInfo?.checked) return "";
+  if (!sessionInfo.available) return "WindowsHostSession=diagnostics-unavailable";
+  if (!sessionInfo.hasSession) return "WindowsHostSession=none";
+  const auth = sessionInfo.authenticated ? "ok" : sessionInfo.failedAuthAttempts > 0 ? "failed" : "pending";
+  const session = sessionInfo.session || {};
+  const negotiated = session.width && session.height
+    ? ` session=${session.width}x${session.height}@${session.fps || 0}Hz`
+    : "";
+  const closed = ` closed=${sessionInfo.closed ? "true" : "false"}`;
+  return `WindowsHostSession=stage:${sessionInfo.stage || "unknown"} auth=${auth} videoFrames=${sessionInfo.videoFrames || 0} audioFrames=${sessionInfo.audioFrames || 0}${negotiated}${closed}`;
 }
 
 function collectMacUnattendedFreshnessFromBoardState(state, nowMs = Date.now()) {
@@ -1290,6 +1435,7 @@ function makeRunPlan(report, args) {
       online: Boolean(host.online),
       runtimeBuild: host.runtime?.buildId || "",
       inputMode: host.capabilities?.input?.mode || "",
+      windowsHostSession: report.windowsHostSession || null,
     },
     localClient: {
       url: clientServer.url || `http://${args.clientHost}:${args.clientPort}/`,
@@ -1414,6 +1560,8 @@ function makeBoardSummary(report) {
   const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args || {});
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
   const macUnattendedFreshnessLine = macUnattendedFreshnessSummary ? `${macUnattendedFreshnessSummary}.` : "";
+  const windowsHostSessionSummary = formatWindowsHostSessionSummary(report.windowsHostSession);
+  const windowsHostSessionLine = windowsHostSessionSummary ? `${windowsHostSessionSummary}.` : "";
   const discoveryPart = report.discovery?.best
     ? `Discovery=${report.discovery.best.host || report.discovery.best.probeHost}:${report.discovery.best.probePort || report.discovery.best.port || report.args?.windowsPort || defaults.windowsPort}.`
     : "";
@@ -1425,6 +1573,7 @@ function makeBoardSummary(report) {
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     `WindowsHostStatus=${report.runPlan?.commands?.windowsHostStatus || makeWindowsHostStatusCommand(host, report.args || {})}.`,
     `WindowsHostReadiness=${report.runPlan?.commands?.windowsHostReadiness || makeWindowsHostReadinessCommand(host, report.args || {})}.`,
+    windowsHostSessionLine,
     `MacClientDiscoverWindows=${report.runPlan?.commands?.discoverWindowsHost || "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary"}.`,
     `MacClientFormalChecklist=${report.runPlan?.commands?.macClientFormalChecklist || makeChecklistCommand(report.args || {})}.`,
     `MacClientPromptPasswordSmoke=${report.runPlan?.commands?.macClientPromptPasswordSmoke || makePromptPasswordSmokeCommand(report, report.args || {})}.`,
@@ -1673,6 +1822,7 @@ function buildReport(args) {
   const discovery = runWindowsDiscovery(args);
   const effectiveArgs = applyDiscoveredWindowsHost(args, discovery);
   const readiness = runReadiness(effectiveArgs);
+  const windowsHostSession = readWindowsHostDiagnostics(effectiveArgs, readiness);
   const boardState = readBoardState(effectiveArgs);
   const boardSecureAuthPath = getBoardSecureAuthPath(effectiveArgs, boardState);
   const macUnattendedFreshness = getBoardMacUnattendedFreshness(effectiveArgs, boardState);
@@ -1707,6 +1857,7 @@ function buildReport(args) {
     counts,
     checklist,
     readiness,
+    windowsHostSession,
     discovery,
     boardSecureAuthPath,
     macUnattendedFreshness,

@@ -379,6 +379,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.macScriptHelp", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsHostStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsHostReadiness", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsHostSession", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -749,7 +750,29 @@ async function withWindowsDiscoveryServer(callback) {
 import { createServer } from "node:http";
 const port = Number(process.argv[1]);
 const server = createServer((request, response) => {
-  if ((request.url || "").split("?")[0] !== "/discovery") {
+  const path = (request.url || "").split("?")[0];
+  if (path === "/diagnostics") {
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      ok: true,
+      session: {
+        stage: "streaming",
+        authenticated: true,
+        closed: false,
+        videoFrames: 12,
+        audioFrames: 5,
+        negotiated: {
+          width: 1920,
+          height: 1080,
+          refreshHz: 60,
+          codec: "h264",
+          transport: "binary-h264"
+        }
+      }
+    }));
+    return;
+  }
+  if (path !== "/discovery") {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("not found\\n");
     return;
@@ -936,6 +959,10 @@ async function checkReadyShape(args) {
       assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "inject should be skipped");
       assert(payload.runPlan?.target?.host === "127.0.0.1", "ready runPlan should include target host");
       assert(payload.runPlan?.target?.runtimeBuild === "mock-formal-win-build", "ready runPlan should include runtime build");
+      assert(payload.windowsHostSession?.stage === "streaming", "ready JSON should include Windows host diagnostics stage");
+      assert(payload.windowsHostSession?.authenticated === true, "ready JSON should include Windows host auth state");
+      assert(payload.windowsHostSession?.videoFrames === 12, "ready JSON should include Windows host video frame count");
+      assert(payload.windowsHostSession?.audioFrames === 5, "ready JSON should include Windows host audio frame count");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("run-mac-client-formal-smoke.mjs"), "ready runPlan should include Mac browser smoke wrapper");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--host 127.0.0.1"), "ready runPlan should include target host");
       assert(payload.runPlan?.commands?.browserSmoke?.includes(`--port ${windowsPort}`), "ready runPlan should include target port");
@@ -1003,6 +1030,7 @@ async function checkReadyShape(args) {
       assertManualChecklist(payload.runPlan?.manualChecklist, "ready manual checklist");
       assert(JSON.stringify(payload.runPlan?.manualChecklist || []).includes(`127.0.0.1:${windowsPort}`), "ready manual checklist should include target address");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
+      assertIncludes(payload.boardSummary || "", "WindowsHostSession=stage:streaming auth=ok videoFrames=12 audioFrames=5 session=1920x1080@60Hz closed=false", "ready board summary");
       assertIncludes(payload.boardSummary || "", "blockers=none", "ready board summary");
       assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "ready board summary warnings");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
