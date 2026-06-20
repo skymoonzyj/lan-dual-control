@@ -247,6 +247,21 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assertNotIncludes(command || "", "--inputMode inject", label);
 }
 
+function assertMacSafeInjectRehearsalCommand(command, label) {
+  assertIncludes(command || "", "plan-mac-safe-inject-rehearsal.mjs", label);
+  assertIncludes(command || "", "--host", label);
+  assertIncludes(command || "", "--port", label);
+  assertIncludes(command || "", "--checkBoard", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--server", label);
+  assertNotIncludes(command || "", "--json", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "--inputMode inject", label);
+}
+
 function assertMacManualUxStatusCommand(command, label) {
   assertIncludes(command || "", "check-mac-manual-ux-status.mjs", label);
   assertIncludes(command || "", "--boardSummary", label);
@@ -440,6 +455,7 @@ function assertCommandSet(commands, label) {
   assertMacRemoteAudioPlanCommand(commands?.macRemoteAudioPlanCommand || "", label);
   assertMacInputSafetyPlanCommand(commands?.macInputSafetyPlanCommand || "", label);
   assertMacInputSafetyStatusCommand(commands?.macInputSafetyStatusCommand || "", label);
+  assertMacSafeInjectRehearsalCommand(commands?.macSafeInjectRehearsalCommand || "", label);
   assertMacManualUxStatusCommand(commands?.macManualUxStatusCommand || "", label);
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
@@ -553,6 +569,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macRemoteAudioPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macInputSafetyStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macSafeInjectRehearsalCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macManualUxStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientDiscoverWindowsCallCommand", `${script} ${flag}`);
@@ -619,6 +636,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacInputSafetyStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "check-mac-input-safety-status.mjs", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "check-mac-manual-ux-status.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
@@ -738,6 +757,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacInputSafetyStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "check-mac-input-safety-status.mjs", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "check-mac-manual-ux-status.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");

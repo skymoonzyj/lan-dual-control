@@ -183,6 +183,7 @@ Machine-readable JSON fields:
                               macRemoteAudioPlanCommand,
                               macInputSafetyPlanCommand,
                               macInputSafetyStatusCommand,
+                              macSafeInjectRehearsalCommand,
                               macManualUxStatusCommand, and
                               macLaunchAgentPlanCommand for dry-run
                               power/audio/input/manual UX/LaunchAgent plans,
@@ -891,6 +892,7 @@ function buildCommands(args) {
     macRemoteAudioPlanCommand: "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
     macInputSafetyPlanCommand: "node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
     macInputSafetyStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macSafeInjectRehearsalCommand: `node scripts/mac/plan-mac-safe-inject-rehearsal.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macManualUxStatusCommand: "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary",
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
@@ -1182,6 +1184,7 @@ function makeBoardSummary(report) {
     `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
     `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
+    `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
     `MacManualUxStatus=${report.commands.macManualUxStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,

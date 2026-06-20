@@ -216,6 +216,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacInputSafetyPlan=.*plan-mac-input-safety\.mjs/.test(text), `${label} should include the Mac input safety planner command`);
   assert(/MacInputSafetyStatus=/.test(text), `${label} should include Mac input safety status guidance`);
   assert(/MacInputSafetyStatus=.*check-mac-input-safety-status\.mjs/.test(text), `${label} should include the Mac input safety status command`);
+  assert(/MacSafeInjectRehearsal=/.test(text), `${label} should include Mac safe inject rehearsal guidance`);
+  assert(/MacSafeInjectRehearsal=.*plan-mac-safe-inject-rehearsal\.mjs/.test(text), `${label} should include the Mac safe inject rehearsal command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
   assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should include the formal max-FPS gate`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include Mac LaunchAgent dry-run guidance`);
@@ -495,6 +497,21 @@ function assertMacInputSafetyPlanCommand(command, label) {
 
 function assertMacInputSafetyStatusCommand(command, label) {
   assert(/check-mac-input-safety-status\.mjs/.test(command), `${label} should use check-mac-input-safety-status`);
+  assert(command.includes("--host"), `${label} should preserve the Mac host`);
+  assert(command.includes("--port"), `${label} should preserve the Mac port`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board userPresence`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("--inputMode inject"), `${label} should not instruct injection startup`);
+}
+
+function assertMacSafeInjectRehearsalCommand(command, label) {
+  assert(/plan-mac-safe-inject-rehearsal\.mjs/.test(command), `${label} should use plan-mac-safe-inject-rehearsal`);
   assert(command.includes("--host"), `${label} should preserve the Mac host`);
   assert(command.includes("--port"), `${label} should preserve the Mac port`);
   assert(command.includes("--checkBoard"), `${label} should read Agent Link Board userPresence`);
@@ -846,6 +863,7 @@ function checkHelp(args) {
     assert(/commands\.macRemoteAudioPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac remote-only audio plan JSON field`);
     assert(/commands\.macInputSafetyPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac input safety plan JSON field`);
     assert(/commands\.macInputSafetyStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac input safety status JSON field`);
+    assert(/commands\.macSafeInjectRehearsalCommand/.test(result.stdout), `${script} ${flag} should document Mac safe inject rehearsal JSON field`);
     assert(/commands\.macManualUxStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac manual UX status JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
@@ -901,6 +919,7 @@ function checkOfflineJson(args) {
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "offline JSON Mac remote-only audio planner command");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "offline JSON Mac input safety planner command");
   assertMacInputSafetyStatusCommand(payload.commands?.macInputSafetyStatusCommand || "", "offline JSON Mac input safety status command");
+  assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsalCommand || "", "offline JSON Mac safe inject rehearsal command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "offline JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "offline JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
@@ -1107,6 +1126,7 @@ function checkOnlineJson(args) {
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "online JSON Mac remote-only audio planner command");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "online JSON Mac input safety planner command");
   assertMacInputSafetyStatusCommand(payload.commands?.macInputSafetyStatusCommand || "", "online JSON Mac input safety status command");
+  assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsalCommand || "", "online JSON Mac safe inject rehearsal command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "online JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "online JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");

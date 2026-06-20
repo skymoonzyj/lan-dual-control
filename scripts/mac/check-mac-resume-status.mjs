@@ -234,6 +234,10 @@ Machine-readable JSON fields:
                              Secret-free read-only Mac input safety status
                              gate; it probes /discovery only and keeps real
                              input blocked until the user is watching.
+  commands.macSafeInjectRehearsalCommand
+                             Secret-free read-only Mac safe inject rehearsal
+                             planner; it checks userPresence and prints copy-
+                             only steps without starting inject.
   commands.macLaunchAgentPlanCommand
                              Secret-free Mac host LaunchAgent dry-run planner;
                              it prints a plist plan and manual load commands
@@ -1675,6 +1679,18 @@ function makeMacInputSafetyStatusCommand(args) {
   ].join(" ");
 }
 
+function makeMacSafeInjectRehearsalCommand(args) {
+  return [
+    "node scripts/mac/plan-mac-safe-inject-rehearsal.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacLaunchAgentPlanCommand(args) {
   return [
     "node scripts/mac/install-mac-host-launch-agent.mjs",
@@ -2290,6 +2306,7 @@ function formatBoardSummary(report) {
       `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
       `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
       `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
+      `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -2352,6 +2369,7 @@ function formatBoardSummary(report) {
     `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
     `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
+    `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -2483,6 +2501,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac remote-only audio dry-run plan: ${report.commands.macRemoteAudioPlanCommand}`);
   console.log(`[NEXT] Mac input safety plan: ${report.commands.macInputSafetyPlanCommand}`);
   console.log(`[NEXT] Mac input safety status: ${report.commands.macInputSafetyStatusCommand}`);
+  console.log(`[NEXT] Mac safe inject rehearsal plan: ${report.commands.macSafeInjectRehearsalCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
   console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
@@ -2572,6 +2591,7 @@ async function main() {
       macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macInputSafetyStatusCommand: makeMacInputSafetyStatusCommand(args),
+      macSafeInjectRehearsalCommand: makeMacSafeInjectRehearsalCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
