@@ -3,6 +3,8 @@
 最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- 最新现场校正：cc8da2aa 后真实复测为 NOT-PASS，关键帧等待循环和 canvas 黑屏不是当前主因；下一步不要继续只围绕 `needsKeyframe` / `queue-overflow-wait-keyframe` 打补丁。Windows 控制端本轮新增远端媒体间隔 vs 本地到达间隔诊断；下一次真实复测或复制诊断时，先看“现场视频”的 `远端媒体平均/最大间隔` 与本地 `平均/最大间隔` 是否分离，再判断是 Mac 产帧/发送节奏、Windows 接收/浏览器后台节流，还是单纯系统时钟导致原始 arrival 偏大。音频同理先看 `远端音频平均/最大间隔` 与本地音频最大间隔/补缓冲。
+- 复测门槛：在没有新实质修复前，不要要求用户反复跑完整真实复测；如果需要复测，本轮目标是定位节奏瓶颈而不是宣称已修复。Mac 侧保持 host 在线即可，除非新诊断显示远端媒体间隔本身异常或 Windows `recv/key/sps/pps/idr` / PCM 帧缺失。
 - 最新 W2 视频修复已推进到恢复状态机和追实时诊断：Windows 控制端现在区分 H.264 恢复“已请求关键帧 / 已收到关键帧未绘制 / 已绘制完成”，并把恢复关键帧触发的丢旧队列标记为 `recovery-keyframe-jump-live`。下一步仍是用户真实运行 `Run-WinClientRetest-And-Post.cmd`，连接后最小化/切 app/切回；观察 `W2W3Retest h264=` 和复制诊断里是否还出现反复 `needsKeyframe=yes` / `reason=queue-overflow-wait-keyframe`，是否出现“恢复关键帧已收到”后长时间不绘制，或 `recovery-keyframe-jump-live` 后 FPS/arrival 仍低。Mac 侧保持 host 在线即可，除非 Windows 侧 `recv/key/sps/pps/idr` 缺失。
 - Windows 开工第一屏最新口径：`check-windows-resume-status --checkBoard --boardSummary` 会直接显示 `W2W4BackgroundRetest=... action=minimize-switch-app-and-return evidence=keyframe-wait-h264-recovery,audio-visibility-recovery watch=video-latency,audio-dropped-resync next=Run-WinClientRetest-And-Post.cmd`。看到这条时，不要只按旧 W2 可见性修复复测；应运行 `Run-WinClientRetest-And-Post.cmd`，连接后真实最小化/切 app/切回，同时观察视频延迟和声音 dropped/resync。密码只在本机隐藏终端输入，不上通讯板，不发 input/inject。
 

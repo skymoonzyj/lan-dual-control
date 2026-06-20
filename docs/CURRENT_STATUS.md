@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W6 远端媒体间隔与本地到达间隔分离诊断
+- cc8da2aa 后通讯板真实复测结果为 NOT-PASS：H.264 canvas / decode / keyframe loop 均未复发，`localQueue=30-37ms`、`decode=38ms`，但仍只有约 `40.9/60 FPS`，原始 `arrival≈930ms`；音频 dropped=0 但仍有 `queue=109ms`、`maxInterval=274ms`、`audioStutter=1`、`refill=3`。因此本轮不再继续围绕 `needsKeyframe` / `queue-overflow-wait-keyframe` 打补丁，而是把诊断改成能区分“Mac 远端媒体时间间隔”和“Windows 本地收到间隔”。Windows 控制端现在会用视频/音频帧的 `timestampUs` 或远端时间戳记录 `videoFrameTimingSamples` / `audioFrameTimingSamples`，复制诊断的“现场视频”会显示 `远端媒体平均间隔` / `远端媒体最大间隔`，“现场声音”会显示 `远端音频平均间隔` / `远端音频最大间隔`。下一次真实复测时，如果远端媒体间隔接近 16-17ms 但本地平均/最大间隔偏大，优先查 Windows 接收/浏览器后台/绘制节流；如果远端媒体间隔本身偏大，优先让 Mac 端查 ScreenCaptureKit / PCM 产帧或发送节奏。该改动不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W2 H.264 恢复关键帧追实时诊断
 - Windows 控制端在 recovery-in-flight 期间收到恢复关键帧且本机 H.264/WebCodecs 队列已过高时，会沿用原有“丢旧队列、改用当前关键帧”的追实时路径，但原因现在标记为 `recovery-keyframe-jump-live`，不再和普通 `queue-overflow-wait-keyframe` 混在一起。这样下一次真实最小化/切 app/切回复测时，如果关键帧到了且客户端主动跳到最新帧，现场/复制诊断能直接看出；若仍卡，则可区分是没收到关键帧、收到后没绘制，还是已跳 live 但 FPS/arrival 仍低。页面回归新增 `jumpLive=yes`，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W4 音频恢复后 underrun 稳定缓冲

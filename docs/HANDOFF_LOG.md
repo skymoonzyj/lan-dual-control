@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2/W6 远端媒体间隔与本地到达间隔分离诊断
+开发端：Windows Codex
+本轮目标：响应 cc8da2aa 后真实复测 NOT-PASS，把下一轮定位从 keyframe wait-loop 转向采集/发送/到达节奏证据。
+完成内容：Windows 控制端新增视频/音频帧 timing samples，记录本地收到时间和远端 `timestampUs` / 时间戳；复制诊断“现场视频”新增 `远端媒体平均间隔` / `远端媒体最大间隔`，“现场声音”新增 `远端音频平均间隔` / `远端音频最大间隔`。这样下一次真实复测可以直接对比远端媒体节奏和 Windows 本地到达节奏，避免把系统时钟偏差下的原始 arrival 当成唯一证据。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5203 --debugPort 9343 --timeoutMs 45000` 先失败于缺少 `远端媒体平均间隔` / `远端媒体最大间隔`；绿灯后同命令通过。另跑 `node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs`。
+遗留问题：该轮是定位补强，不宣称已修复 40fps/音频 refill；下一次真实复测若远端媒体间隔正常但本地间隔异常，查 Windows/浏览器后台节流；若远端媒体间隔异常，交给 Mac 端查 ScreenCaptureKit/PCM 产帧或发送节奏。
+下一步建议：双方拉最新；Mac 保持 host 在线；需要用户复测时只跑一次带新诊断的 `Run-WinClientRetest-And-Post.cmd`，不要重复旧 keyframe 循环排查。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续根据新诊断决定是否让 Mac 查 host 产帧/PCM。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 H.264 恢复关键帧追实时诊断
 开发端：Windows Codex
 本轮目标：继续收口后台/最小化恢复后的 W2 低 FPS/arrival 残留，让下一次真实复测能看清恢复关键帧是否已经触发追实时。

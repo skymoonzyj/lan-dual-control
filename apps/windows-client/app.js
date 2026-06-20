@@ -563,6 +563,7 @@ const state = {
   videoWaitingSince: 0,
   videoLastFrameAt: 0,
   videoFrameTimes: [],
+  videoFrameTimingSamples: [],
   lastVideoFrameAgeMs: null,
   lastVideoFrameTimestamp: "",
   videoFrameClockSkewed: false,
@@ -613,6 +614,7 @@ const state = {
   h264FallbackRecoveryTimestamps: [],
   audioFrames: 0,
   audioFrameTimes: [],
+  audioFrameTimingSamples: [],
   audioLastFrameAt: 0,
   audioWaitingSince: 0,
   audioLevel: 0,
@@ -1176,6 +1178,72 @@ function parseFrameTimestampMs(value) {
   return Date.parse(normalized);
 }
 
+function parseFrameTimestampUsMs(value) {
+  if (value === null || value === undefined || value === "") return NaN;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric / 1000 : NaN;
+}
+
+function getFrameRemoteMediaTimestampMs(frame) {
+  const timestampUs = parseFrameTimestampUsMs(
+    frame?.timestampUs ?? frame?.mediaTimestampUs ?? frame?.presentationTimestampUs ?? frame?.audioTimestampUs,
+  );
+  if (Number.isFinite(timestampUs)) return timestampUs;
+
+  const rawTimestamp = frame?.mediaTimestamp ?? frame?.timestamp ?? frame?.captureTimestamp ?? frame?.capturedAt ?? "";
+  return parseFrameTimestampMs(rawTimestamp);
+}
+
+function recordFrameTimingSample(sampleKey, receivedAt, remoteMediaAtMs, cutoff) {
+  if (!Array.isArray(state[sampleKey])) state[sampleKey] = [];
+  if (Number.isFinite(Number(remoteMediaAtMs))) {
+    state[sampleKey].push({
+      receivedAt,
+      remoteMediaAtMs: Number(remoteMediaAtMs),
+    });
+  }
+  state[sampleKey] = state[sampleKey]
+    .filter((sample) => Number.isFinite(Number(sample?.receivedAt)) && Number(sample.receivedAt) >= cutoff)
+    .slice(-240);
+}
+
+function getFrameTimingGapStats(samples, valueKey, stutterThresholdMs = videoStutterGapThresholdMs) {
+  const values = Array.isArray(samples)
+    ? samples
+        .map((sample) => Number(sample?.[valueKey]))
+        .filter((value) => Number.isFinite(value))
+    : [];
+  if (values.length < 2) {
+    return { sampleCount: values.length, averageGapMs: 0, maxGapMs: 0, stutterCount: 0, maxStutterGapMs: 0 };
+  }
+
+  const gaps = [];
+  for (let index = 1; index < values.length; index += 1) {
+    const gap = values[index] - values[index - 1];
+    if (Number.isFinite(gap) && gap >= 0) gaps.push(gap);
+  }
+  if (!gaps.length) {
+    return { sampleCount: values.length, averageGapMs: 0, maxGapMs: 0, stutterCount: 0, maxStutterGapMs: 0 };
+  }
+
+  const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  const stutterGaps = gaps.filter((gap) => gap >= stutterThresholdMs);
+  return {
+    sampleCount: values.length,
+    averageGapMs: Math.round(total / gaps.length),
+    maxGapMs: Math.round(Math.max(...gaps)),
+    stutterCount: stutterGaps.length,
+    maxStutterGapMs: stutterGaps.length ? Math.round(Math.max(...stutterGaps)) : 0,
+  };
+}
+
+function getVideoRemoteMediaGapStats() {
+  return getFrameTimingGapStats(state.videoFrameTimingSamples, "remoteMediaAtMs");
+}
+
+function getAudioRemoteMediaGapStats() {
+  return getFrameTimingGapStats(state.audioFrameTimingSamples, "remoteMediaAtMs", audioStutterGapThresholdMs);
+}
 function getVideoFrameAgeDiagnostics(frame) {
   const rawTimestamp = frame?.timestamp ?? frame?.captureTimestamp ?? frame?.capturedAt ?? "";
   const parsedTimestampMs = parseFrameTimestampMs(rawTimestamp);
@@ -2329,6 +2397,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
   state.audioFrameTimes = [];
+  state.audioFrameTimingSamples = [];
   state.audioLevel = 0;
   resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
@@ -2362,6 +2431,7 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
   state.audioFrameTimes = [];
+  state.audioFrameTimingSamples = [];
   state.audioLevel = 0;
   resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
@@ -3110,6 +3180,7 @@ function resetVideoFrameStats() {
   state.videoWaitingSince = 0;
   state.videoLastFrameAt = 0;
   state.videoFrameTimes = [];
+  state.videoFrameTimingSamples = [];
   state.actualVideoFps = 0;
   state.lastVideoFrameAgeMs = null;
   state.lastVideoFrameTimestamp = "";
@@ -3174,15 +3245,17 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   }
 }
 
-function recordVideoFrameTime() {
+function recordVideoFrameTime(frame = null) {
   state.videoWaitingSince = 0;
   const now = performance.now();
   state.videoLastFrameAt = now;
+  if (!Array.isArray(state.videoFrameTimes)) state.videoFrameTimes = [];
   state.videoFrameTimes.push(now);
   const cutoff = now - 2000;
   while (state.videoFrameTimes.length > 0 && state.videoFrameTimes[0] < cutoff) {
     state.videoFrameTimes.shift();
   }
+  recordFrameTimingSample("videoFrameTimingSamples", now, getFrameRemoteMediaTimestampMs(frame), cutoff);
 
   if (state.videoFrameTimes.length < 2) {
     state.actualVideoFps = 0;
@@ -3196,7 +3269,7 @@ function recordVideoFrameTime() {
   return state.actualVideoFps;
 }
 
-function recordAudioFrameTime() {
+function recordAudioFrameTime(frame = null) {
   const now = performance.now();
   state.audioLastFrameAt = now;
   state.audioWaitingSince = 0;
@@ -3206,6 +3279,7 @@ function recordAudioFrameTime() {
   while (state.audioFrameTimes.length > 0 && state.audioFrameTimes[0] < cutoff) {
     state.audioFrameTimes.shift();
   }
+  recordFrameTimingSample("audioFrameTimingSamples", now, getFrameRemoteMediaTimestampMs(frame), cutoff);
 }
 
 function formatVideoFrameGapStatusText() {
@@ -3795,7 +3869,7 @@ function renderAudioStatusFromFrame(frame, options = {}) {
 
 function updateAudioStatusFromFrame(frame) {
   state.audioFrames += 1;
-  recordAudioFrameTime();
+  recordAudioFrameTime(frame);
   state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
   renderAudioStatusFromFrame(frame, { force: state.audioFrames === 1 });
 }
@@ -5274,6 +5348,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const receivedIdr = Number(state.h264ReceivedIdr || state.hostDiagnostics?.h264ReceivedIdr) || 0;
   const lastNalTypes = String(state.h264LastNalTypes || state.hostDiagnostics?.h264LastNalTypes || "").trim();
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
+  const remoteMediaGapStats = getVideoRemoteMediaGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
   const streamStallStatus = firstFrameWaitStatus.waiting ? { stalled: false } : getVideoStreamStallStatus(now);
   const parts = [];
@@ -5290,6 +5365,14 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
     parts.push(`最大间隔 ${maxGapMs} ms`);
+    if (remoteMediaGapStats.sampleCount >= 2) {
+      parts.push(`远端媒体平均间隔 ${remoteMediaGapStats.averageGapMs} ms`);
+      parts.push(`远端媒体最大间隔 ${remoteMediaGapStats.maxGapMs} ms`);
+      if (remoteMediaGapStats.stutterCount > 0) {
+        parts.push(`远端媒体卡顿 ${remoteMediaGapStats.stutterCount}`);
+        parts.push(`远端媒体最大卡顿 ${remoteMediaGapStats.maxStutterGapMs} ms`);
+      }
+    }
     if (stutterCount > 0) {
       parts.push(`卡顿 ${stutterCount}`);
       parts.push(`最大卡顿 ${maxStutterGapMs} ms`);
@@ -5345,6 +5428,7 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   const visibilityRecoveryCount = Number(state.audioVisibilityRecoveryCount) || 0;
   const dropReason = String(state.audioLastDropReason || state.audioLastBufferReason || "").trim();
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getAudioFrameGapStats();
+  const remoteMediaGapStats = getAudioRemoteMediaGapStats();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
   const firstFrameWaitStatus = getAudioFirstFrameWaitStatus(now);
@@ -5361,6 +5445,14 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
     parts.push(`最大间隔 ${maxGapMs} ms`);
+    if (remoteMediaGapStats.sampleCount >= 2) {
+      parts.push(`远端音频平均间隔 ${remoteMediaGapStats.averageGapMs} ms`);
+      parts.push(`远端音频最大间隔 ${remoteMediaGapStats.maxGapMs} ms`);
+      if (remoteMediaGapStats.stutterCount > 0) {
+        parts.push(`远端音频卡顿 ${remoteMediaGapStats.stutterCount}`);
+        parts.push(`远端音频最大卡顿 ${remoteMediaGapStats.maxStutterGapMs} ms`);
+      }
+    }
     if (stutterCount > 0) {
       parts.push(`音频卡顿 ${stutterCount}`);
       parts.push(`最大音频卡顿 ${maxStutterGapMs} ms`);
@@ -8949,7 +9041,7 @@ function renderVideoFrame(frame) {
   }
 
   state.videoFrames += 1;
-  recordVideoFrameTime();
+  recordVideoFrameTime(frame);
   updateFpsMetric();
   const frameAgeDiagnostics = getVideoFrameAgeDiagnostics(frame);
   updateVideoFrameAgeMetric(frameAgeDiagnostics);
@@ -9645,7 +9737,7 @@ async function renderH264VideoFrame(frame) {
   }
 
   state.videoFrames += 1;
-  recordVideoFrameTime();
+  recordVideoFrameTime(frame);
   updateFpsMetric();
   const frameAgeDiagnostics = getVideoFrameAgeDiagnostics(frame);
   updateVideoFrameAgeMetric(frameAgeDiagnostics);

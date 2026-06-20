@@ -5407,6 +5407,9 @@ async function verifyVideoStutterDiagnostics(session) {
 
       const original = {
         videoFrameTimes: Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [],
+        videoFrameTimingSamples: Array.isArray(state.videoFrameTimingSamples)
+          ? state.videoFrameTimingSamples.map((sample) => ({ ...sample }))
+          : undefined,
         videoFrames: state.videoFrames,
         actualVideoFps: state.actualVideoFps,
         requestedFps: state.requestedFps,
@@ -5430,6 +5433,14 @@ async function verifyVideoStutterDiagnostics(session) {
 
       try {
         state.videoFrameTimes = [1000, 1016, 1032, 1200, 1216, 1400];
+        state.videoFrameTimingSamples = [
+          { receivedAt: 1000, remoteMediaAtMs: 0 },
+          { receivedAt: 1016, remoteMediaAtMs: 17 },
+          { receivedAt: 1032, remoteMediaAtMs: 34 },
+          { receivedAt: 1200, remoteMediaAtMs: 51 },
+          { receivedAt: 1216, remoteMediaAtMs: 68 },
+          { receivedAt: 1400, remoteMediaAtMs: 85 },
+        ];
         state.videoFrames = 6;
         state.actualVideoFps = 12.5;
         state.requestedFps = 60;
@@ -5503,6 +5514,8 @@ async function verifyVideoStutterDiagnostics(session) {
           ok:
             exportText.includes("平均间隔 80 ms") &&
             exportText.includes("最大间隔 184 ms") &&
+            exportText.includes("远端媒体平均间隔 17 ms") &&
+            exportText.includes("远端媒体最大间隔 17 ms") &&
             exportText.includes("卡顿 2") &&
             exportText.includes("最大卡顿 184 ms") &&
             exportText.includes("本机队列 260 ms") &&
@@ -5531,6 +5544,11 @@ async function verifyVideoStutterDiagnostics(session) {
         };
       } finally {
         state.videoFrameTimes = original.videoFrameTimes;
+        if (original.videoFrameTimingSamples === undefined) {
+          delete state.videoFrameTimingSamples;
+        } else {
+          state.videoFrameTimingSamples = original.videoFrameTimingSamples;
+        }
         state.videoFrames = original.videoFrames;
         state.actualVideoFps = original.actualVideoFps;
         state.requestedFps = original.requestedFps;
@@ -7460,6 +7478,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
         waitingSince: state.audioWaitingSince,
         connected: state.connected,
         frameTimes: Array.isArray(state.audioFrameTimes) ? state.audioFrameTimes.slice() : undefined,
+        frameTimingSamples: Array.isArray(state.audioFrameTimingSamples)
+          ? state.audioFrameTimingSamples.map((sample) => ({ ...sample }))
+          : undefined,
       };
       const starts = [];
       const stops = [];
@@ -7541,10 +7562,19 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const adaptiveUnderrunStart = starts[0] || 0;
         const adaptiveUnderrunExportText = getAudioPerformanceExportStatus();
         state.audioFrameTimes = [0, 20, 210, 250, 470];
+        state.audioFrameTimingSamples = [
+          { receivedAt: 0, remoteMediaAtMs: 0 },
+          { receivedAt: 20, remoteMediaAtMs: 20 },
+          { receivedAt: 210, remoteMediaAtMs: 40 },
+          { receivedAt: 250, remoteMediaAtMs: 60 },
+          { receivedAt: 470, remoteMediaAtMs: 80 },
+        ];
         const arrivalGapExportText = getAudioPerformanceExportStatus();
         const arrivalGapDiagnosed =
           arrivalGapExportText.includes("平均间隔 118 ms") &&
           arrivalGapExportText.includes("最大间隔 220 ms") &&
+          arrivalGapExportText.includes("远端音频平均间隔 20 ms") &&
+          arrivalGapExportText.includes("远端音频最大间隔 20 ms") &&
           arrivalGapExportText.includes("音频卡顿 2") &&
           arrivalGapExportText.includes("最大音频卡顿 220 ms");
         renderAudioStatusFromFrame(makeFrame(), { force: true });
@@ -7826,6 +7856,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
           delete state.audioFrameTimes;
         } else {
           state.audioFrameTimes = original.frameTimes;
+        }
+        if (original.frameTimingSamples === undefined) {
+          delete state.audioFrameTimingSamples;
+        } else {
+          state.audioFrameTimingSamples = original.frameTimingSamples;
         }
       }
     })()`,
