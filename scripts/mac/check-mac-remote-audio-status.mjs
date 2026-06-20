@@ -361,6 +361,8 @@ function makeBoardSummary(report) {
     `blockers=${summarizeList(report.blockers)}`,
     `warnings=${summarizeList(report.warnings)}`,
     `Next=${safeToken(report.nextAction)}`,
+    "Consent=explicit-before-change",
+    "RestorePath=required-before-apply",
     "Safety=read-only,no-volume-change,no-password,no-input,no-inject.",
   ].join(" ");
 }

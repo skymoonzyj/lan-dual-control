@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Mac Codex
 
+日期：2026-06-21 M1 Mac remote audio status consent/restore gate
+开发端：Mac Codex
+本轮目标：让当前 `MacRemoteAudioStatus=` 状态摘要本身也明确携带用户同意与恢复路径门禁，避免只看 status 时误以为 blocked/candidate 可以直接执行静音或切输出。
+完成内容：`check-mac-remote-audio-status --boardSummary` 追加 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`；`--sendStatus` 上板的 `Mac Remote Audio` note 同步包含这两个字段。`local-playback-active` 仍是 blocker，`local-output-muted` 仍只是候选，不代表 remote-only 已启用。
+修改文件：scripts/mac/check-mac-remote-audio-status.mjs；scripts/mac/test-mac-remote-audio-status.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-mac-remote-audio-status` 先失败于 audible boardSummary 缺少 `Consent=explicit-before-change`；绿灯专项回归通过，覆盖 help、audible blocker、muted candidate、unknown volume blocker 和 sendStatus 上板。
+遗留问题：当前真实 Mac 本机输出仍 `local-playback-active`，所以 M1 remote-only 未启用；任何真实静音/切输出/产品开关都还需要用户明确同意和恢复路径。
+下一步建议：如果用户要继续 M1，先选择路线（手动静音恢复 / 虚拟输出设备 / 产品 toggle），执行前播放提示音并说明影响、用户动作、安全边界和恢复步骤；结束后复跑 `check-mac-remote-audio-status`。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 改代码；Windows/用户只需按新状态字段理解门禁。不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Mac Codex
+
 日期：2026-06-21 W2/W3 复测结果 stdin 上板入口
 开发端：Mac Codex
 本轮目标：降低 Windows 真实跑完 `Run-WinClientRetest.cmd` 后把脱敏复测结果发回通讯板的摩擦，避免只能复制长 `--text` 或先手动剪一行。

@@ -252,6 +252,8 @@ async function checkAudibleLocalOutput(args) {
       assertIncludes(payload.boardSummary, "MacRemoteAudioStatus=status=local-playback-active", "audible boardSummary");
       assertIncludes(payload.boardSummary, "localOutput=audible", "audible boardSummary");
       assertIncludes(payload.boardSummary, "remoteOnly=not-active", "audible boardSummary");
+      assertIncludes(payload.boardSummary, "Consent=explicit-before-change", "audible boardSummary");
+      assertIncludes(payload.boardSummary, "RestorePath=required-before-apply", "audible boardSummary");
       assertIncludes(payload.boardSummary, "Safety=read-only,no-volume-change,no-password,no-input,no-inject", "audible boardSummary");
       assertSafeOutput(outputOf(result), "audible remote audio JSON");
     });
@@ -272,6 +274,8 @@ async function checkMutedLocalOutput(args) {
       assertIncludes(payload.boardSummary, "MacRemoteAudioStatus=status=local-output-muted", "muted boardSummary");
       assertIncludes(payload.boardSummary, "localOutput=muted-or-zero", "muted boardSummary");
       assertIncludes(payload.boardSummary, "remoteOnly=manual-muted-pending-audio-smoke", "muted boardSummary");
+      assertIncludes(payload.boardSummary, "Consent=explicit-before-change", "muted boardSummary");
+      assertIncludes(payload.boardSummary, "RestorePath=required-before-apply", "muted boardSummary");
       assertSafeOutput(outputOf(result), "muted remote audio JSON");
     });
   });
@@ -313,6 +317,8 @@ async function checkSendStatusPostsSafeBoardSummary(args) {
         assert(post.body.status === "blocked-local-output", `status mismatch: ${JSON.stringify(post.body)}`);
         assertIncludes(post.body.note || "", "MacRemoteAudioStatus=status=local-playback-active", "sendStatus note");
         assertIncludes(post.body.note || "", "localOutput=audible", "sendStatus note");
+        assertIncludes(post.body.note || "", "Consent=explicit-before-change", "sendStatus note");
+        assertIncludes(post.body.note || "", "RestorePath=required-before-apply", "sendStatus note");
         assertIncludes(post.body.note || "", "Safety=read-only,no-volume-change,no-password,no-input,no-inject", "sendStatus note");
         assertIncludes(result.stdout, "MacRemoteAudioStatus=status=local-playback-active", "sendStatus stdout");
         assertSafeOutput(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus remote audio");
