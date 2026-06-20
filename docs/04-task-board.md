@@ -39,7 +39,7 @@
 - [x] M2 Mac input safety user notice：`check-mac-input-safety-status --checkBoard` 与 `plan-mac-safe-inject-rehearsal --checkBoard` 在用户在场且可进入说明流程时输出 `userNotice` / `UserNoticeGoal` / `UserNoticeAction` / `UserNoticeBoundary` / `UserNoticeDuration`，把真实输入 safe 事件集验收前必须告知用户的目标、用户动作、安全边界和 2-3 分钟预计耗时结构化。保持只读/plan-only，不启动 host、不请求密码、不认证、不发 input/inject。
 - [x] W2 Windows H.264 JPEG fallback 冷却恢复：`keyframe-wait-timeout-fallback` 请求 MJPEG/JPEG 保画面后，Windows 控制端会等待 2.5 秒且收到 3 帧稳定 JPEG，再用现有 `display_settings` 尝试恢复 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W3/M1 Windows 控制端消费 `MacRemoteAudioStatus=`：Mac 提醒/值守文本里的 `local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 会被翻译成“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”风险；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
-- [x] W2 Windows H.264 等关键帧超时恢复：H.264 背压重同步后连续跳过 90 个 delta 仍未等到关键帧时，Windows 控制端会请求 MJPEG/JPEG fallback，诊断保留 `keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`；页面自测先红于 `keyFrameWaitFallback=false`，再绿于 `keyFallback=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+- [x] W2 Windows H.264 关键帧等待保持 H.264：H.264 背压重同步后按协商刷新率放宽关键帧等待阈值，60Hz 至少等待 180 个 delta；超时后仍通过 `display_settings` 请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 重启 H.264 流，不再因关键帧等待切到 MJPEG/JPEG。页面自测先红于旧逻辑发送 `mjpeg/data-url`，再绿于 `keyGrace=yes h264Recovery=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W3 Windows 音频连续低水位稳定预缓冲：Windows 控制端首次低水位仍用 80ms；2 秒内再次低于 70ms 时改用 120ms 稳定预缓冲，并在复制诊断“现场声音”输出 `稳缓冲 <n>` / `queue-underrun-stable-prebuffer`。页面自测先红于第二次仍 80ms，再绿于 `Audio buffer guards ... stable=1`；不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 - [x] 建立策划书。

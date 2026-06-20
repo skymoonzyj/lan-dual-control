@@ -1,10 +1,11 @@
 # 下一步行动
 
-最后更新：2026-06-20
+最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W2 视频关键帧最新口径：Windows 控制端 H.264 背压后等待关键帧时，不再因为关键帧等待直接请求 JPEG。60Hz 会至少等 180 个 delta；真正超时后仍发 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 重启 H.264 流，诊断看 `keyframe-wait-h264-recovery`。现场如果仍看到 `background-jpeg` 或 `解码 JPEG 回退`，优先判断为 Mac host 自身降级、浏览器连续解码失败、或用户显式/其它 fallback 路径，不要再把 30Hz/60Hz 关键帧等待本身当作应切 JPEG。
 - Agent Link presence endpoint fallback 最新口径：如果 Windows 控制端 Mac 提醒/值守文本看到 `presence endpoint/API/接口 404` 或不可用，会显示“presence 接口未启用”；同段带 `state.userPresence` 为准时，会显示证据“仍以 state.userPresence 为准”。现场看到它时，按“当前联络板服务可能还没启用新版 presence endpoint / 需等服务重启或升级”处理，但用户在场权威仍先看 `/api/state.userPresence`；不要因为 404 请求密码、认证、真实 input/inject 或系统授权。
 - MacScriptHelpStatus 最新口径：Mac `test-mac-script-help --boardSummary` 现在会输出稳定 `MacScriptHelpStatus=ok|failed`；Windows 控制端已把 `ok` 显示为“Mac 脚本 help 自检已通过”证据，把 `failed` 显示为“Mac 脚本 help 自检失败”风险。现场看到 failed 时，先让 Mac 端修复/复跑 help 覆盖；不要因此请求密码、认证、真实 input/inject 或系统授权。
 - Windows 控制端 UserPresence 最新口径：如果 Mac 提醒/值守文本带 `UserPresence=away`、`UserPresenceAction=no-auth-only` 或 `BLOCKED_BY_USER_AWAY`，页面会直接显示“用户不在 / 只做无授权任务”。现场看到这条时，只允许继续代码、文档、只读检查和无密通讯板同步；不要请求远控密码、系统授权、真实 input/inject、声音输出变更或人工观感确认，直到用户明确在场并同步结构化 presence。
@@ -36,7 +37,7 @@
 - M2 真实输入最新口径：`check-mac-input-safety-status --checkBoard --boardSummary` 和 `plan-mac-safe-inject-rehearsal --checkBoard --boardSummary` 看到 `UserNoticeGoal=verify-real-mac-input-safe-event-set UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log UserNoticeDuration=2-3-minutes` 时，只表示可以向用户发起“看着 Mac 屏幕的 safe 事件集验收说明”。它不是已开启 inject，也不是可自动发 input；真正测试前仍要先当面说明目标、用户动作、安全边界和预计 2-3 分钟，并且只用 `--confirmUserWatching` + `--inputEventSet safe`。
 - W2 视频恢复最新口径补充：Windows 控制端触发 `keyframe-wait-timeout-fallback` 后会先请求 MJPEG/JPEG 保画面；如果接下来 2.5 秒冷却期已过且至少收到 3 帧稳定 JPEG，会再用同一 `display_settings` 请求恢复 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`。现场看到短暂 JPEG 回退不代表永久降级；若反复回退/恢复循环，下一步查 Mac 端关键帧/GOP、采集编码稳定性或网络丢关键帧。
 - W3/M1 远端独占声音最新口径：Windows 控制端现在会把 Mac 上板/提醒里的 `MacRemoteAudioStatus=status=local-playback-active`、`localOutput=audible` 或 `remoteOnly=not-active` 翻成 Mac 值守风险“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。看到这条时说明当前仍可能双路声音；不要把它当作已静音或已切输出设备，也不要让脚本自动改 Mac 音量，后续仍按用户明确同意后的手动静音/虚拟输出/product toggle 路线处理。
-- W2 视频最新口径补充：Windows 控制端 H.264 背压后等待关键帧时，如果连续跳过 90 个 delta 仍没有关键帧，会主动请求 MJPEG/JPEG fallback，诊断显示 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。现场若看到这条，优先理解为 Windows 为恢复画面主动兜底；下一步查 Mac H.264 关键帧恢复速度、采集端 GOP/keyframe 策略或网络导致关键帧长期不到达。
+- W2 视频最新口径补充：Windows 控制端 H.264 背压后等待关键帧时，关键帧等待本身不再主动请求 MJPEG/JPEG。按当前协商刷新率放宽等待阈值后，超时会继续请求 H.264/annexb 重启视频流，现场诊断应看到 `keyframe-wait-h264-recovery` 和 `解码 recovering`。如果仍出现 `解码 JPEG 回退`，优先查连续解码失败、显式 fallback、Mac host 自身降级到 background-jpeg，或 Mac 端 H.264 关键帧/编码链路异常。
 - W3 音频最新口径补充：Windows 控制端现在保留首次低水位 80ms 补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，并在“现场声音”里输出 `稳缓冲 <n>` 与 `原因 queue-underrun-stable-prebuffer`。现场声音若 `补缓冲` 增长但 `稳缓冲` 很少，说明只是偶发供流间歇；若 `稳缓冲` 持续增长，优先查 Mac 采集/网络音频供流抖动或下一步做更完整 jitter buffer。
 
 - W3 音频最新口径补充：Windows 控制端现在会在 WebAudio 队列低于 70ms 并补到 80ms 时输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。现场声音若主要是 `补缓冲` 增长，优先查 Mac 采集/网络供流间歇；若主要是 `重同步` 和 `queue-overflow-flush-old`，优先查 Windows 本地播放队列持续溢出或突发堆积。

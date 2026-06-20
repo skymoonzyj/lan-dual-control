@@ -8894,6 +8894,37 @@ function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "
   });
 }
 
+function getH264KeyFrameWaitSkippedDeltaLimit() {
+  const fps = Math.max(
+    1,
+    Math.min(
+      60,
+      Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value) || 30,
+    ),
+  );
+  return Math.max(h264KeyFrameWaitFallbackSkippedDeltas, Math.ceil(fps * 3));
+}
+
+function requestH264VideoRecovery(reason, { dropReason = "" } = {}) {
+  const recoveryDropReason = String(dropReason || "").trim();
+  state.h264FallbackActive = false;
+  state.h264FallbackReason = "";
+  state.h264FallbackRecoveryRequested = false;
+  resetVideoDecoder();
+  state.h264DecoderStatus = "recovering";
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264SkippedDeltaFrames = 0;
+  if (recoveryDropReason) {
+    state.videoLastDropReason = recoveryDropReason;
+  }
+  updateH264DecoderDiagnostics();
+  addLog("H.264 恢复", `${reason || "等待关键帧超时"}，已保持 H.264 并重启视频流`);
+
+  if (state.connected && typeof state.client?.sendDisplaySettings === "function") {
+    state.client.sendDisplaySettings(buildDisplaySettingsMessage());
+  }
+}
+
 function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
   if (state.h264FallbackActive) {
     return;
@@ -9156,12 +9187,13 @@ async function renderH264VideoFrame(frame) {
       if (state.h264SkippedDeltaFrames % 30 === 0) {
         addLog("H.264 等待关键帧", `跳过 delta 帧 #${frame.frameId ?? state.videoFrames}`);
       }
-      if (state.h264SkippedDeltaFrames >= h264KeyFrameWaitFallbackSkippedDeltas) {
-        requestJpegVideoFallback(
+      const skippedDeltaLimit = getH264KeyFrameWaitSkippedDeltaLimit();
+      if (state.h264SkippedDeltaFrames >= skippedDeltaLimit) {
+        requestH264VideoRecovery(
           `H.264 等待关键帧超时，已跳过 ${state.h264SkippedDeltaFrames} 帧`,
-          { dropReason: "keyframe-wait-timeout-fallback" },
+          { dropReason: "keyframe-wait-h264-recovery" },
         );
-        elements.remoteStatusText.textContent = "H.264 等待关键帧超时，正在切换 JPEG 兜底";
+        elements.remoteStatusText.textContent = "H.264 等待关键帧超时，正在重启 H.264 视频流";
       }
       return;
     }

@@ -1,8 +1,11 @@
 # 当前开发状态
 
-最后更新：2026-06-20
+最后更新：2026-06-21
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
+## 2026-06-21 W2 Windows H.264 关键帧等待保持 H.264
+- Windows 控制端不再在 H.264 背压重同步后因为关键帧等待超时直接请求 MJPEG/JPEG；等待阈值会按当前协商刷新率放宽，60Hz 至少等待 180 个 delta，超时后通过现有 `display_settings` 继续请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 来重启 H.264 视频流。现场诊断会留下 `原因 keyframe-wait-h264-recovery` 和 `解码 recovering`，不会因为这一类关键帧等待显示 `解码 JPEG 回退`。页面自测红灯先证明旧逻辑在第 90 个 delta 发送 `mjpeg/data-url`，绿灯确认 `keyGrace=yes h264Recovery=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 Windows 控制端 presence endpoint fallback 可见化
 - Windows 控制端现在会从 Mac 提醒/值守文本中识别 `presence endpoint/API/接口 404` 或不可用提示，并把它显示为“presence 接口未启用”；如果同段文本带 `state.userPresence` 为准，也会进入证据“仍以 state.userPresence 为准”。页面自测先红于这两个提示都为空，再绿于 `test-windows-client-browser --diagnosticsOnly`。只读解析，不运行联络板命令、不改协议、不认证、不请求或发送密码、不发 input/inject。
@@ -91,8 +94,8 @@
 ## 2026-06-20 W3/M1 Windows 控制端消费 MacRemoteAudioStatus
 - Windows 控制端现在能从 Mac 提醒/值守文本中识别 `MacRemoteAudioStatus=` 或 `MacRemoteAudio=` 的只读远程声音状态；当看到 `status=local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 或 `local-output-audible` 时，会在 Mac 值守风险里显示“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。这只是把双路声音风险翻成中文提示，不会静音 Mac、不切输出设备、不认证、不请求或发送密码、不发 input/inject。页面自测先红于缺少 `Mac 本机仍会出声` 风险，再绿于 `test-windows-client-browser --diagnosticsOnly`。
 
-## 2026-06-20 W2 Windows H.264 等关键帧超时恢复
-- Windows 控制端 H.264 背压重同步后，如果连续跳过 90 个 delta 仍没有等到关键帧，会触发已有 JPEG/MJPEG fallback 请求，避免画面长时间停在“等待关键帧”。fallback 会通过 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，并在现场视频诊断里留下 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `keyFrameWaitFallback=false`，绿灯确认 `keyFallback=yes`。本轮只改 Windows 控制端本地 H.264 恢复逻辑和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
+## 2026-06-20 W2 Windows H.264 等关键帧超时恢复（已被 2026-06-21 口径替代）
+- 旧口径曾在连续跳过 90 个 delta 后请求 MJPEG/JPEG fallback；真实测试证明这会把 Mac 拉到 `background-jpeg` 并造成 2-3 FPS / 高延迟。当前有效口径见 2026-06-21：关键帧等待超时先保持 H.264 并重启视频流，只有连续解码失败或显式兜底路径才请求 JPEG。
 
 ## 2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
 - Windows 控制端 WebAudio 仍保持首次低水位 80ms 低延迟补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，记录 `audioStablePrebufferCount` 和 `audioLastBufferReason=queue-underrun-stable-prebuffer`。复制/导出诊断“现场声音”会在既有 `补缓冲 <n>` 外新增 `稳缓冲 <n>`，用于判断声音断续是否已经进入连续 underrun 稳定模式。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯第二次仍为 80ms，绿灯确认 `Audio buffer guards ... stable=1`。本轮只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。

@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2 Windows H.264 关键帧等待保持 H.264
+开发端：Windows Codex
+本轮目标：修复真实测试中关键帧等待把 Mac 拉到 background-jpeg，导致 2-3 FPS 和高延迟的 blocker A。
+完成内容：Windows 控制端按协商刷新率放宽 H.264 关键帧等待阈值，60Hz 至少等待 180 个 delta；关键帧等待超时后改为继续请求 H.264/annexb 重启视频流，诊断保留 keyframe-wait-h264-recovery，不再因该路径请求 MJPEG/JPEG。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于旧逻辑第 90 个 delta 发送 mjpeg/data-url；绿灯 node --check app/test、test-windows-client-browser --diagnosticsOnly --timeoutMs 45000 通过，输出 keyGrace=yes h264Recovery=yes。
+遗留问题：这只修 Windows 端自动降 JPEG 的一条根因；Blocker B（60Hz/H.264 仍卡、音频 queue-overflow）仍需要真实 60Hz/H.264 复测矩阵和 Mac host 关键帧/音频供流状态配合。
+下一步建议：真实复测统一使用 60Hz/H.264，复制“现场视频/现场声音”诊断；如果仍出现 background-jpeg，Mac 端优先确认 host 是否实际保持 screencapturekit-h264 和稳定关键帧。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端发布 fresh discovery/status，并配合 60Hz/H.264 复测矩阵；不在通讯板发送密码。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 控制端 presence endpoint fallback 可见化
