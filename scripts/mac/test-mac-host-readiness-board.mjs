@@ -295,6 +295,7 @@ function formatMediaBoardSummaryFixture(summary) {
   const formatter = [
     functionBlock(source, "formatMediaBoardSummary"),
     functionBlock(source, "formatMediaH264BoardSummary"),
+    functionBlock(source, "formatH264TailGapBoardSummary"),
     functionBlock(source, "formatH264IntervalBoardSummary"),
     functionBlock(source, "formatH264NalTypesBoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
@@ -372,6 +373,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatMediaProbeTarget"),
     functionBlock(source, "formatMediaBoardSummary"),
     functionBlock(source, "formatMediaH264BoardSummary"),
+    functionBlock(source, "formatH264TailGapBoardSummary"),
     functionBlock(source, "formatH264IntervalBoardSummary"),
     functionBlock(source, "formatH264NalTypesBoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
@@ -608,13 +610,15 @@ function checkMediaBoardSummaryStatusFormatting() {
                 lastNalTypes: [1],
                 keyFrameIntervalFrames: { count: 1, max: 5 },
                 keyFrameIntervalMs: { count: 1, max: 167 },
+                keyFrameTailGapFrames: 1,
+                keyFrameTailGapMs: 33,
               },
             },
           },
         },
       }],
-    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2 firstKeyNal=7,8,5 lastKeyNal=7,8,5 lastNal=1 keyGapFramesMax=5 keyGapMsMax=167",
-    "media board summary should surface ok status, H.264 keyframe evidence, first/last NAL types, and keyframe gaps",
+    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2 firstKeyNal=7,8,5 lastKeyNal=7,8,5 lastNal=1 keyGapFramesMax=5 keyGapMsMax=167 keyTailFrames=1 keyTailMs=33",
+    "media board summary should surface ok status, H.264 keyframe evidence, first/last NAL types, keyframe gaps, and tail gap",
   );
   assert(
     formatMediaBoardSummaryFixture({

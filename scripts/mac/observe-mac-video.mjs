@@ -352,6 +352,8 @@ function createVideoStats(args) {
       keyFrameIntervalMs: [],
       lastKeyFrameFrameId: null,
       lastKeyFrameTimestampUs: null,
+      lastFrameFrameId: null,
+      lastFrameTimestampUs: null,
       nalTypes: new Map(),
     },
     invalidFrames: [],
@@ -577,6 +579,7 @@ function trackH264Frame(stats, h264Info, frame = {}) {
     stats.h264.firstNalTypes = h264Info.nalTypes;
   }
   stats.h264.lastNalTypes = h264Info.nalTypes;
+  trackH264LastFrame(stats.h264, frame);
   for (const nalType of h264Info.nalTypes) {
     countValue(stats.h264.nalTypes, nalType);
   }
@@ -594,6 +597,17 @@ function trackH264Frame(stats, h264Info, frame = {}) {
   if (h264Info.hasPps) stats.h264.ppsFrames += 1;
   if (h264Info.hasIdr) stats.h264.idrFrames += 1;
   if (h264Info.keyFrameWithParameterSets) stats.h264.keyFramesWithParameterSets += 1;
+}
+
+function trackH264LastFrame(h264, frame) {
+  const frameId = Number(frame.frameId);
+  if (Number.isFinite(frameId)) {
+    h264.lastFrameFrameId = frameId;
+  }
+  const timestampUs = Number(frame.timestampUs);
+  if (Number.isFinite(timestampUs)) {
+    h264.lastFrameTimestampUs = timestampUs;
+  }
 }
 
 function trackH264KeyFrameInterval(h264, frame) {
@@ -705,6 +719,8 @@ function makeObservation(stats, args) {
 function makeH264Observation(h264) {
   const keyFrameIntervalFrames = summarizeNumberList(h264.keyFrameIntervalFrames);
   const keyFrameIntervalMs = summarizeNumberList(h264.keyFrameIntervalMs);
+  const keyFrameTailGapFrames = h264TailGap(h264.lastFrameFrameId, h264.lastKeyFrameFrameId);
+  const keyFrameTailGapMs = h264TailGap(h264.lastFrameTimestampUs, h264.lastKeyFrameTimestampUs, 1000);
   return {
     frames: h264.frames,
     keyFrames: h264.keyFrames,
@@ -718,6 +734,8 @@ function makeH264Observation(h264) {
     firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
     lastNalTypes: h264.lastNalTypes,
     lastKeyFrameNalTypes: h264.lastKeyFrameNalTypes,
+    keyFrameTailGapFrames,
+    keyFrameTailGapMs,
     keyFrameIntervalFrames: {
       count: keyFrameIntervalFrames.count,
       min: Math.round(keyFrameIntervalFrames.min),
@@ -732,6 +750,13 @@ function makeH264Observation(h264) {
     },
     nalTypes: countsToObject(h264.nalTypes),
   };
+}
+
+function h264TailGap(lastValue, lastKeyValue, divisor = 1) {
+  if (!Number.isFinite(lastValue) || !Number.isFinite(lastKeyValue)) return null;
+  const gap = (lastValue - lastKeyValue) / divisor;
+  if (!Number.isFinite(gap) || gap < 0) return null;
+  return Math.round(gap);
 }
 
 function countsToObject(map) {

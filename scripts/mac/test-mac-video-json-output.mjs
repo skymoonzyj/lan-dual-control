@@ -393,6 +393,12 @@ async function assertJsonSuccess(timeoutMs) {
     if (Number(payload.observation.h264.keyFrameIntervalMs?.count) < 1 || Number(payload.observation.h264.keyFrameIntervalMs?.max) < 90) {
       throw new Error(`JSON success should report H.264 keyframe interval timing.\n${result.stdout}`);
     }
+    if (!Number.isFinite(Number(payload.observation.h264.keyFrameTailGapFrames)) || Number(payload.observation.h264.keyFrameTailGapFrames) < 0) {
+      throw new Error(`JSON success should report H.264 tail frame gap after the last keyframe.\n${result.stdout}`);
+    }
+    if (!Number.isFinite(Number(payload.observation.h264.keyFrameTailGapMs)) || Number(payload.observation.h264.keyFrameTailGapMs) < 0) {
+      throw new Error(`JSON success should report H.264 tail time gap after the last keyframe.\n${result.stdout}`);
+    }
     if (payload.observation?.activeDisplayIds?.main < 1) {
       throw new Error(`JSON success should count activeDisplayId main.\n${result.stdout}`);
     }

@@ -1169,7 +1169,15 @@ function formatMediaH264BoardSummary(details) {
     formatH264NalTypesBoardSummary("lastNal", h264.lastNalTypes),
     formatH264IntervalBoardSummary("keyGapFramesMax", h264.keyFrameIntervalFrames),
     formatH264IntervalBoardSummary("keyGapMsMax", h264.keyFrameIntervalMs),
+    formatH264TailGapBoardSummary("keyTailFrames", h264.keyFrameTailGapFrames),
+    formatH264TailGapBoardSummary("keyTailMs", h264.keyFrameTailGapMs),
   ].filter(Boolean).join(" ");
+}
+
+function formatH264TailGapBoardSummary(label, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return "";
+  return `${label}=${Math.round(numeric)}`;
 }
 
 function formatH264IntervalBoardSummary(label, value) {
