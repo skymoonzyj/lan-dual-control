@@ -287,7 +287,7 @@ function makeW2W3RetestSummary(summary) {
   const h264 = String(summary.h264 || "").trim();
   if (video) parts.push(`video=${compactBoardSummaryText(video, 180)}`);
   if (audio) parts.push(`audio=${compactBoardSummaryText(audio, 180)}`);
-  if (h264) parts.push(`h264=${compactBoardSummaryText(h264, 180)}`);
+  if (h264) parts.push(`h264=${compactBoardSummaryText(h264, 260)}`);
   if (summary.h264Errors !== "") parts.push(`h264Errors=${summary.h264Errors}`);
   return parts.length ? `W2W3Retest=${parts.join(", ")}` : "";
 }
@@ -299,6 +299,32 @@ function finiteNumber(value, fallback = 0) {
 
 function positiveInteger(value) {
   return Math.max(0, Math.round(finiteNumber(value, 0)));
+}
+
+function hasOwnValue(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key) && object[key] !== undefined && object[key] !== null;
+}
+
+function booleanText(value) {
+  return value ? "true" : "false";
+}
+
+function h264CanvasVisible(value = {}) {
+  if (hasOwnValue(value, "canvas")) {
+    return String(value.canvas).toLowerCase() === "true" || value.canvas === true;
+  }
+  return Boolean(
+    value.canvasVisible &&
+    positiveInteger(value.canvasWidth) > 0 &&
+    positiveInteger(value.canvasHeight) > 0
+  );
+}
+
+function h264ImageVisible(value = {}) {
+  if (hasOwnValue(value, "image")) {
+    return String(value.image).toLowerCase() === "true" || value.image === true;
+  }
+  return Boolean(value.imageVisible && value.imageHasSource);
 }
 
 function makeH264RetestSummary(value = {}) {
@@ -319,9 +345,13 @@ function makeH264RetestSummary(value = {}) {
   const pps = positiveInteger(value.h264ReceivedPps ?? value.pps);
   const idr = positiveInteger(value.h264ReceivedIdr ?? value.idr);
   const lastNal = String(value.h264LastNalTypes ?? value.lastNal ?? "").trim();
+  const hasCanvasSignal = ["canvas", "canvasVisible", "canvasWidth", "canvasHeight"].some((key) => hasOwnValue(value, key));
+  const hasImageSignal = ["image", "imageVisible", "imageHasSource"].some((key) => hasOwnValue(value, key));
 
   if (status) parts.push(`status=${status}`);
   if (status || decoded > 0) parts.push(`decoded=${decoded}`);
+  if (hasCanvasSignal) parts.push(`canvas=${booleanText(h264CanvasVisible(value))}`);
+  if (hasImageSignal) parts.push(`image=${booleanText(h264ImageVisible(value))}`);
   if (skippedDelta > 0) parts.push(`skippedDelta=${skippedDelta}`);
   if (needsKeyFrame === true) parts.push("needsKeyframe=yes");
   if (queue > 0) parts.push(`queue=${queue}`);
@@ -385,6 +415,11 @@ function verifyW2W3RetestH264Summary() {
     h264ReceivedPps: 1,
     h264ReceivedIdr: 1,
     h264LastNalTypes: "1",
+    canvasVisible: false,
+    canvasWidth: 0,
+    canvasHeight: 0,
+    imageVisible: false,
+    imageHasSource: false,
   });
   const text = makeBoardSummary({
     status: "passed",
@@ -408,7 +443,9 @@ function verifyW2W3RetestH264Summary() {
     text.includes("sps=1") &&
     text.includes("pps=1") &&
     text.includes("idr=1") &&
-    text.includes("lastNal=1");
+    text.includes("lastNal=1") &&
+    text.includes("canvas=false") &&
+    text.includes("image=false");
   return { ok, text, h264 };
 }
 
@@ -7587,6 +7624,11 @@ async function run() {
       h264ReceivedPps: keyFrameCheck.h264ReceivedPps,
       h264ReceivedIdr: keyFrameCheck.h264ReceivedIdr,
       h264LastNalTypes: keyFrameCheck.h264LastNalTypes,
+      canvasVisible: false,
+      canvasWidth: 0,
+      canvasHeight: 0,
+      imageVisible: false,
+      imageHasSource: false,
     });
     summary.checks.push("h264-latency-queue");
     print(

@@ -205,7 +205,7 @@ async function checkHelp(args) {
 }
 
 async function checkWindowsDecodePath(args) {
-  const windowsText = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe recv=68 key=1 sps=1 pps=1 idr=1 lastNal=1";
+  const windowsText = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe recv=68 key=1 sps=1 pps=1 idr=1 lastNal=1 canvas=false image=false";
   await withFakeBoard(makeState({ windowsText, macText: macNalEvidence }), async (serverUrl, requests) => {
     const jsonResult = await run(["--server", serverUrl, "--json"], args);
     assert(jsonResult.exitCode === 2, `decode-path JSON should exit 2 for blocked diagnosis\n${jsonResult.stdout}\n${jsonResult.stderr}`);
@@ -221,6 +221,7 @@ async function checkWindowsDecodePath(args) {
     assert(payload.mac?.keyGapFramesLast === 58, `expected Mac keyGapFramesLast: ${jsonResult.stdout}`);
     assert(payload.mac?.keyTailMs === 200, `expected Mac keyTailMs: ${jsonResult.stdout}`);
     assert(payload.mac?.firstKeyParam === "yes" && payload.mac?.lastKeyParam === "yes", `expected Mac key param flags: ${jsonResult.stdout}`);
+    assert(payload.windows?.canvas === "false" && payload.windows?.image === "false", `expected Windows surface booleans: ${jsonResult.stdout}`);
     assertIncludes(payload.next, "InspectWebCodecsConfigureDecodeQueue", "decode-path next action");
     assertSecretSafe(jsonResult.stdout + jsonResult.stderr, "decode-path JSON");
 
@@ -229,6 +230,7 @@ async function checkWindowsDecodePath(args) {
     assert(summaryResult.stdout.split(/\r?\n/).filter(Boolean).length === 1, `boardSummary should be one line\n${summaryResult.stdout}`);
     assertIncludes(summaryResult.stdout, "W2H264BoardDiagnosis=status=blocked reason=windows-decode-path", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "windows=recv:68 key:1 sps:1 pps:1 idr:1 decoded:0 lastNal:1", "decode-path boardSummary");
+    assertIncludes(summaryResult.stdout, "surface=canvas:false image:false", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "mac=firstKeyNal:7/8/5 lastKeyNal:7/8/5 lastNal:1", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "macKey=h264Key:3 sps:3 pps:3 idr:3 keyParam:3", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "macStream=frames:300 delta:297 keyGapMax:60/1000 keyGapLast:58/966 keyTail:12/200 firstKeyParam:yes lastKeyParam:yes", "decode-path boardSummary");
@@ -331,7 +333,7 @@ async function checkPlaceholderNalEvidenceIgnored(args) {
   console.log("[OK] W2 H.264 board diagnosis ignores placeholder NAL examples");
 }
 async function checkDecodedSurfaceReady(args) {
-  const windowsText = "W2W3Retest=video=H.264 surface=canvas h264=status=decoded decoded=4 skippedDelta=0 needsKeyframe=no queue=1 queueMs=16 staleDrops=0 reason=ok recv=88 key=2 sps=2 pps=2 idr=2 lastNal=1";
+  const windowsText = "W2W3Retest=video=H.264 surface=canvas h264=status=decoded decoded=4 skippedDelta=0 needsKeyframe=no queue=1 queueMs=16 staleDrops=0 reason=ok recv=88 key=2 sps=2 pps=2 idr=2 lastNal=1 canvas=true image=false";
   await withFakeBoard(makeState({ windowsText, macText: macNalEvidence }), async (serverUrl) => {
     const result = await run(["--server", serverUrl, "--json"], args);
     assert(result.exitCode === 0, `decoded-surface JSON should exit 0\n${result.stdout}\n${result.stderr}`);

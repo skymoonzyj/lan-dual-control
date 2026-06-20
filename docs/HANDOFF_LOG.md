@@ -19,6 +19,18 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 H.264 surface 摘要上板
+开发端：Windows Codex
+本轮目标：让下一次真实 W2/W3 复测的一行摘要直接暴露 canvas/image surface 状态，避免再次从长日志里人工找 `canvas=false/image=false`。
+完成内容：`makeH264RetestSummary` 新增 `canvas=true|false` 与 `image=true|false` 输出；`h264=` 的 compact 上限从 180 放宽到 260，确保 surface 字段不会挤掉 `sps/pps/idr/lastNal`。`diagnose-w2-h264-board` 新增 `canvas/image` token 解析，并在 `W2H264BoardDiagnosis=` 输出 `surface=canvas:<...> image:<...>`；普通文本输出也会显示这两个字段。
+修改文件：scripts/windows/test-windows-client-browser.mjs；scripts/windows/diagnose-w2-h264-board.mjs；scripts/windows/test-diagnose-w2-h264-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-windows-client-browser --diagnosticsOnly --boardSummary` 先失败于 h264 摘要缺 `canvas=false image=false`，`test-diagnose-w2-h264-board` 先失败于 JSON/boardSummary 缺 surface token；绿灯后 `test-windows-client-browser --diagnosticsOnly --boardSummary`、`test-diagnose-w2-h264-board`、三项 `node --check` 通过。
+遗留问题：仍需要用户在场后真实运行 `Run-WinClientRetest-And-Post.cmd`，验证上一轮 H.264 keyframe gate 修复在真机链路上是否让 canvas/image surface 恢复。
+下一步建议：真实复测后优先看 `h264=decoded=<n> canvas=<true|false> image=<true|false> needsKeyframe=<...> recv/key/sps/pps/idr=...` 和 `W2H264BoardDiagnosis surface=...`；若仍 `canvas=false image=false` 且关键帧完整，再查 Windows WebCodecs output/draw canvas。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 端保持 host 在线即可。不要把密码发通讯板，不发 input/inject。
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
 开发端：Windows Codex
 本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。

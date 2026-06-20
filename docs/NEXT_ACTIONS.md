@@ -4,6 +4,7 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
+- W2-H264 复测摘要 surface 最新口径：下一次真实 `Run-WinClientRetest-And-Post.cmd` 上板后，先看 `W2W3Retest h264=` 里的 `decoded=<n> canvas=<true|false> image=<true|false> needsKeyframe=<yes>`，再看 `W2H264BoardDiagnosis surface=canvas:<...> image:<...>`。`recv/key/sps/pps/idr` 正常但 `canvas=false image=false` 时继续查 Windows WebCodecs decoded surface / canvas 绘制；`canvas=true` 则进入人工画面/FPS/声音观感确认。不要再让 Mac 端重复补关键帧证据，除非 `recv/key/sps/pps/idr` 缺失。
 - W2-H264 当前下一步：Windows 端已修复“收到 SPS/PPS/IDR 关键帧后仍 `needsKeyframe=yes`”的本地解码门禁；两端拉最新后，用户在场时再运行 `Run-WinClientRetest-And-Post.cmd` 做一次真实 Windows 控 Mac 复测。预期新的 `W2W3Retest h264=` 不应在收到 `key/sps/pps/idr` 后继续长期卡 `needsKeyframe=yes`；若仍黑屏，优先看 `h264Errors`、`decoded`、canvas/image surface 和 WebCodecs 错误，而不是继续补 Mac 侧关键帧证据或扩展 helper。密码只在本机隐藏终端输入，不发通讯板，不发 input/inject。
 - W2/W3 当前最短路径：优先运行 `Run-WinClientRetest-And-Post.cmd`。它会先执行真实 Windows 控 Mac 复测，在本机黑色终端隐藏输入 Mac 临时密码；复测成功且输出 `W2W3Retest=...` 后，会自动做脱敏检查、发 `W2W3Retest=`，并追加只读 `W2H264BoardDiagnosis=`。如果只想先看结果不发板，继续用 `Run-WinClientRetest.cmd`；如果已经有一行或整段复测输出，可用 `node scripts/windows/post-w2w3-retest-board.mjs --send --text "<粘贴 W2W3Retest=...>"`，或 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send`。不要把密码、token、系统账号或原始输入事件放进通讯板。
 
