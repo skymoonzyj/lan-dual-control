@@ -15,6 +15,7 @@ const defaultScripts = [
   "check-windows-resume-status.ps1",
   "check-windows-video-encoder-support.ps1",
   "start-windows-host.ps1",
+  "start-windows-control-mac.ps1",
 ];
 
 function printHelp() {

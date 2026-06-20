@@ -19,6 +19,45 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控 Mac PowerShell 7 最短入口
+开发端：Windows Codex
+本轮目标：给 Windows 控 Mac 的最短启动链路补 PowerShell 7 wrapper，方便现场不用记 Node 长命令。
+完成内容：
+- 新增 `scripts/windows/start-windows-control-mac.ps1`，支持 `-HostName`、`-Port`、`-ClientPort`、`-DebugPort`、`-TimeoutMs`、`-NoOpen`、`-DryRun`、`-Json`、`-BoardSummary`、`-Help/-h`。
+- wrapper 只翻译参数给 `start-windows-control-mac.mjs`；默认打开/复用 Windows 控 Mac 页面，`-DryRun` 不启动服务、不打开浏览器。
+- wrapper 不提供密码参数，页面继续清空 demo 密码，并只让用户在本机页面输入 Mac 临时密码。
+- `test-windows-control-mac-entry` 覆盖 PowerShell help、dry-run JSON 和 boardSummary；`test-windows-powershell-help` 默认覆盖加入该 wrapper。
+修改文件：
+- `scripts/windows/start-windows-control-mac.ps1`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `scripts/windows/test-windows-powershell-help.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-powershell-help.mjs --script start-windows-control-mac.ps1 --shell pwsh.exe --timeoutMs 10000` 先失败于脚本不存在。
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000` 先失败于 PowerShell 找不到 `start-windows-control-mac.ps1`。
+- 绿灯：`node --check scripts/windows/start-windows-control-mac.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-control-mac-entry.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-powershell-help.mjs`
+- 绿灯：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-control-mac.ps1 -Help`
+- 绿灯：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-control-mac.ps1 -DryRun -BoardSummary`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --script start-windows-control-mac.ps1 --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：`git diff --check`
+- 绿灯：冲突标记扫描无命中。
+遗留问题：
+- 真实连接仍需要用户在页面输入当前 Mac 临时密码；本轮只补入口，不做真实认证或 input/inject。
+下一步建议：
+- Windows 现场优先用 `scripts/windows/start-windows-control-mac.ps1` 打开控制页；需要上板或检查命令安全时先跑 `-DryRun -BoardSummary`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端继续保持 host/client/heartbeat 在线即可。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 手工体验第一屏 PowerShell 7 包装入口
 开发端：Windows Codex
 本轮目标：让用户现场在 PowerShell 7 里用短命令查看 Windows 手工体验第一屏，不必记 Node 长命令。
@@ -39,7 +78,14 @@
 验证方式：
 - 红灯：`node scripts/windows/test-windows-powershell-help.mjs --script check-windows-manual-ux-status.ps1 --shell pwsh.exe --timeoutMs 10000` 先失败于脚本不存在。
 - 红灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000` 先失败于 PowerShell 找不到 `check-windows-manual-ux-status.ps1`。
-- 绿灯待最终验证记录补齐。
+- 绿灯：`node --check scripts/windows/check-windows-manual-ux-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-manual-ux-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-powershell-help.mjs`
+- 绿灯：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-manual-ux-status.ps1 -Help`
+- 绿灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --script check-windows-manual-ux-status.ps1 --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：真实通讯板只读检查输出 `WindowsManualUx=status=waiting`。
 遗留问题：
 - 这只是现场入口简化；真实手工体验仍需要用户在场输入 Mac 临时密码并逐项确认画面/声音/剪贴板等。
 下一步建议：

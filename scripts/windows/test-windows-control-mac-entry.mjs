@@ -9,6 +9,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const require = createRequire(import.meta.url);
 const entryScript = "scripts/windows/start-windows-control-mac.mjs";
+const powerShellEntryScript = "scripts/windows/start-windows-control-mac.ps1";
 const defaultTimeoutMs = 12000;
 
 function printHelp() {
@@ -91,6 +92,40 @@ function runCmd(extraArgs, args) {
   return new Promise((resolveRun) => {
     const shell = process.env.ComSpec || "cmd.exe";
     const child = spawn(shell, ["/d", "/c", "Start-Windows-Control-Mac.cmd", ...extraArgs], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
+function runPowerShell(extraArgs, args) {
+  return new Promise((resolveRun) => {
+    const child = spawn("pwsh.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", powerShellEntryScript,
+      ...extraArgs,
+    ], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -244,6 +279,46 @@ async function checkBoardSummary(args) {
   console.log("[OK] Windows control Mac entry prints a secret-free board summary");
 }
 
+async function checkPowerShellWrapperHelp(args) {
+  for (const flag of ["-Help", "-h"]) {
+    const result = await runPowerShell([flag], args);
+    assert(result.exitCode === 0, `PowerShell ${flag} should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "Usage:", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-HostName", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-ClientPort", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-DryRun", `PowerShell ${flag} help`);
+    assertIncludes(result.stdout, "-BoardSummary", `PowerShell ${flag} help`);
+    assertNotIncludes(result.stdout, "Mac host password:", `PowerShell ${flag} help`);
+  }
+  console.log("[OK] Windows control Mac PowerShell wrapper help is pure");
+}
+
+async function checkPowerShellWrapperDryRunJson(args) {
+  const result = await runPowerShell(["-DryRun", "-Json"], args);
+  assert(result.exitCode === 0, `PowerShell dryRun JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+  const payload = parseJson(result.stdout, "PowerShell dryRun JSON");
+  assert(payload.status === "ready", `PowerShell dryRun status should be ready, got ${payload.status}`);
+  assert(payload.host === "192.168.31.122", `PowerShell default host mismatch: ${payload.host}`);
+  assert(payload.clientPort === 5200, `PowerShell default client port mismatch: ${payload.clientPort}`);
+  assert(payload.openBrowser === false, "PowerShell dryRun should not open a browser");
+  assertIncludes(payload.url, "clearDemoPassword=1", "PowerShell dryRun URL");
+  assertIncludes(payload.boardSummary, "WindowsUsableEntry=status=ready", "PowerShell dryRun boardSummary");
+  assertNotIncludes(JSON.stringify(payload), "demo-password", "PowerShell dryRun JSON");
+  assertNotIncludes(JSON.stringify(payload), "secret", "PowerShell dryRun JSON");
+  console.log("[OK] Windows control Mac PowerShell wrapper dry-run JSON is safe");
+}
+
+async function checkPowerShellWrapperBoardSummary(args) {
+  const result = await runPowerShell(["-DryRun", "-BoardSummary"], args);
+  assert(result.exitCode === 0, `PowerShell boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+  assertIncludes(result.stdout, "WindowsUsableEntry=status=ready", "PowerShell boardSummary");
+  assertIncludes(result.stdout, "OpenUrl=http://127.0.0.1:5200/", "PowerShell boardSummary");
+  assertIncludes(result.stdout, "target=192.168.31.122:43770", "PowerShell boardSummary");
+  assertIncludes(result.stdout, "Safety=no-password,no-input-inject", "PowerShell boardSummary");
+  assertNotIncludes(result.stdout, "demo-password", "PowerShell boardSummary");
+  assertNotIncludes(result.stdout, "Mac host password:", "PowerShell boardSummary");
+  console.log("[OK] Windows control Mac PowerShell wrapper prints a secret-free board summary");
+}
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -254,9 +329,12 @@ async function main() {
   checkIndexLoadsLaunchParams();
   checkLaunchParamHelper();
   await checkCmdLauncher(args);
+  await checkPowerShellWrapperHelp(args);
   await checkHelp(args);
   await checkDryRunJson(args);
+  await checkPowerShellWrapperDryRunJson(args);
   await checkBoardSummary(args);
+  await checkPowerShellWrapperBoardSummary(args);
   console.log("[OK] Windows control Mac usable entry tests passed");
 }
 
