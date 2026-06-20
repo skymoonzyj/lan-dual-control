@@ -230,6 +230,10 @@ Machine-readable JSON fields:
                              Secret-free Mac input safety dry-run planner; it
                              keeps real input blocked until the user is
                              watching and does not change system state.
+  commands.macInputSafetyStatusCommand
+                             Secret-free read-only Mac input safety status
+                             gate; it probes /discovery only and keeps real
+                             input blocked until the user is watching.
   commands.macLaunchAgentPlanCommand
                              Secret-free Mac host LaunchAgent dry-run planner;
                              it prints a plist plan and manual load commands
@@ -1659,6 +1663,17 @@ function makeMacInputSafetyPlanCommand() {
   return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
 }
 
+function makeMacInputSafetyStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-input-safety-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacLaunchAgentPlanCommand(args) {
   return [
     "node scripts/mac/install-mac-host-launch-agent.mjs",
@@ -2273,6 +2288,7 @@ function formatBoardSummary(report) {
       `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
       `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
       `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
+      `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -2334,6 +2350,7 @@ function formatBoardSummary(report) {
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
+    `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -2464,6 +2481,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
   console.log(`[NEXT] Mac remote-only audio dry-run plan: ${report.commands.macRemoteAudioPlanCommand}`);
   console.log(`[NEXT] Mac input safety plan: ${report.commands.macInputSafetyPlanCommand}`);
+  console.log(`[NEXT] Mac input safety status: ${report.commands.macInputSafetyStatusCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
   console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
@@ -2552,6 +2570,7 @@ async function main() {
       macPowerPlanCommand: makeMacPowerPlanCommand(),
       macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
+      macInputSafetyStatusCommand: makeMacInputSafetyStatusCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),

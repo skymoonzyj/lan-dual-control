@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 ## 2026-06-20 现场校正
 
+- Mac 真实输入安全路径当前新增只读门禁：开工或准备 M2 前先跑 `node scripts/mac/check-mac-input-safety-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`，或直接看 `MacHeartbeat=` / `MacResumeStatus=` / `MacUnattendedStatus=` 同屏的 `MacInputSafetyStatus=`。当前真机摘要可到 `ready reason=log-mode-permissions-ok inputMode=log permissions=ok`，但同一行仍写明 `realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe`；这不是已开启真实输入。只有用户明确确认正在看 Mac 屏幕后，才安排带 `--confirmUserWatching` 的安全启动和 safe 事件集验收。
 - Mac 侧心跳/恢复摘要现在会生产稳定 `MacCodexHealth=`：Windows 若要判断 Mac Codex 是否 stale，优先看 `MacCodexHealth=blocked reason=mac-codex-stale`；若只看到 `MacHeartbeatHealth=`，仍按旧兼容逻辑处理。`MacCodexHealth=` 只是无密协作状态，不代表 Mac host/client 离线，也不会自动发送 call、密码、认证或 input/inject。
 - 如果 Windows 开工第一屏看到 `MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex`，先让 Mac 端刷新/继续 Mac Codex 或重新上报 `MacHeartbeat` / `MacManualUx`；需要对方配合时再手动复制同屏 `MacCodexStaleCall=` 发起无密 call。这个字段只来自稳定 `MacHeartbeatHealth` 短字段，不代表 Mac host 或 Mac client 离线，也不会自动发送密码、认证或 input/inject。
 - 同一开工第一屏如果看到 `MacCodexHealth=blocked|warning|failed|stale ...`，先按 “Mac Codex 自己状态异常” 处理：刷新 Mac 端 Codex、看通讯板最新 call/status，必要时再发无密 call。它不等于 Mac host 断流、不等于 Mac client 页面离线，也不代表需要重新输入远控密码；Windows 端只读显示，不运行 Mac 脚本、不认证、不发 input/inject。

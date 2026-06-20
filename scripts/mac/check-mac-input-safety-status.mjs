@@ -1,0 +1,331 @@
+#!/usr/bin/env node
+import http from "node:http";
+
+const defaults = {
+  host: "127.0.0.1",
+  port: 43770,
+  timeoutMs: 2500,
+  json: false,
+  boardSummary: false,
+};
+
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage: node scripts/mac/check-mac-input-safety-status.mjs [options]
+
+Checks the read-only safety gate for real Mac input control. It does not start
+Mac host, does not prompt for passwords, does not authenticate a WebSocket,
+does not send input events, and does not enable inject mode.
+
+Options:
+  --host <host>      Mac host discovery host. Default: ${defaults.host}
+  --port <port>      Mac host discovery port. Default: ${defaults.port}
+  --timeoutMs <ms>   Discovery timeout. Default: ${defaults.timeoutMs}
+  --json             Print one machine-readable JSON object.
+  --boardSummary     Print one secret-free Agent Link Board summary line.
+  --help, -h         Show this help without probing anything.
+
+Real input stays blocked until a human explicitly confirms they are watching
+the Mac screen. The start helper must use --confirmUserWatching before any
+--inputMode inject startup, and the first validation event set must be safe.`);
+}
+
+function parseArgs(argv) {
+  const args = { ...defaults };
+  for (let index = 2; index < argv.length; index += 1) {
+    const token = argv[index];
+    const next = argv[index + 1];
+    if (token === "--help" || token === "-h") {
+      args.help = true;
+      continue;
+    }
+    if (token === "--json" || token === "--boardSummary") {
+      args[token.slice(2)] = true;
+      continue;
+    }
+    if (token === "--host" && next && !next.startsWith("--")) {
+      args.host = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--port" && next && !next.startsWith("--")) {
+      args.port = clampInteger(next, 1, 65535, defaults.port);
+      index += 1;
+      continue;
+    }
+    if (token === "--timeoutMs" && next && !next.startsWith("--")) {
+      args.timeoutMs = clampInteger(next, 250, 60000, defaults.timeoutMs);
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unknown argument: ${token}`);
+  }
+  args.host = String(args.host || defaults.host).trim();
+  return args;
+}
+
+function clampInteger(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function requestJson(url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(url, { timeout: timeoutMs }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+        if (body.length > 1024 * 1024) {
+          request.destroy(new Error("response too large"));
+        }
+      });
+      response.on("end", () => {
+        if ((response.statusCode || 0) < 200 || (response.statusCode || 0) >= 300) {
+          reject(new Error(`HTTP ${response.statusCode || 0}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(new Error(`invalid JSON: ${error.message}`));
+        }
+      });
+    });
+    request.on("timeout", () => {
+      request.destroy(new Error(`timeout after ${timeoutMs}ms`));
+    });
+    request.on("error", reject);
+  });
+}
+
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function boardToken(value, fallback = "unknown") {
+  const text = normalizedText(value || "");
+  if (!text) return fallback;
+  return text.replace(/[;\s.]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
+}
+
+function boolPermission(value) {
+  return value === true;
+}
+
+function inputModeFromDiscovery(payload) {
+  return normalizedText(payload?.capabilities?.input?.mode || payload?.capabilities?.inputMode || payload?.inputMode || "unknown").toLowerCase();
+}
+
+function hostSummaryFromDiscovery(payload, args) {
+  const permissions = payload?.permissions && typeof payload.permissions === "object" ? payload.permissions : {};
+  return {
+    online: true,
+    host: args.host,
+    port: args.port,
+    platform: normalizedText(payload?.platform || "unknown").toLowerCase(),
+    role: normalizedText(payload?.role || "unknown").toLowerCase(),
+    deviceName: normalizedText(payload?.deviceName || payload?.name || "unknown"),
+    inputMode: inputModeFromDiscovery(payload),
+    permissions: {
+      screenRecording: boolPermission(permissions.screenRecording ?? permissions.screen),
+      accessibility: boolPermission(permissions.accessibility),
+      inputMonitoring: boolPermission(permissions.inputMonitoring ?? permissions.input),
+    },
+    runtimeBuild: normalizedText(payload?.runtime?.buildId || payload?.buildId || "unknown"),
+  };
+}
+
+function missingPermissionBlockers(permissions) {
+  const blockers = [];
+  if (!permissions.accessibility) blockers.push("accessibility");
+  if (!permissions.inputMonitoring) blockers.push("input-monitoring");
+  return blockers;
+}
+
+function assess(host, error = "") {
+  const gates = {
+    requiresUserWatching: true,
+    requiredFlag: "--confirmUserWatching",
+    firstEventSet: "safe",
+    realInput: "blocked-until-user-watching",
+  };
+  const safety = {
+    noPassword: true,
+    noAuth: true,
+    noInputEventsSent: true,
+    noInjectExecuted: true,
+    noSystemSettingsChanged: true,
+  };
+  const commands = {
+    macInputSafetyPlan: "node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
+    macHostSafeLogStart: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${host?.port || defaults.port} --inputMode log`,
+    macInputLogSmoke: `node scripts/mac/smoke-mac-input-log.mjs --host ${host?.host || defaults.host} --port ${host?.port || defaults.port} --promptPassword --boardSummary`,
+  };
+
+  if (!host?.online) {
+    return {
+      ok: false,
+      status: "blocked",
+      reason: "host-offline",
+      readyForUserWatchedInject: false,
+      host: {
+        online: false,
+        host: host?.host || defaults.host,
+        port: host?.port || defaults.port,
+        error,
+      },
+      gates,
+      blockers: ["host-offline"],
+      warnings: [],
+      nextAction: "start-mac-host-log-mode",
+      commands,
+      safety,
+    };
+  }
+
+  if (host.inputMode === "inject") {
+    return {
+      ok: false,
+      status: "blocked",
+      reason: "inject-active",
+      readyForUserWatchedInject: false,
+      host,
+      gates,
+      blockers: ["inject-active"],
+      warnings: [],
+      nextAction: "return-to-log-mode-or-refresh-user-watching-proof",
+      commands,
+      safety,
+    };
+  }
+
+  const permissionBlockers = missingPermissionBlockers(host.permissions);
+  if (permissionBlockers.length > 0) {
+    return {
+      ok: false,
+      status: "blocked",
+      reason: "permissions",
+      readyForUserWatchedInject: false,
+      host,
+      gates,
+      blockers: permissionBlockers,
+      warnings: host.inputMode === "log" ? [] : [`input-mode-${boardToken(host.inputMode)}`],
+      nextAction: "grant-accessibility-and-input-monitoring-before-user-watched-inject",
+      commands,
+      safety,
+    };
+  }
+
+  if (host.inputMode !== "log") {
+    return {
+      ok: false,
+      status: "blocked",
+      reason: "input-mode",
+      readyForUserWatchedInject: false,
+      host,
+      gates,
+      blockers: [`input-mode-${boardToken(host.inputMode)}`],
+      warnings: [],
+      nextAction: "restart-mac-host-log-mode-before-planning-inject",
+      commands,
+      safety,
+    };
+  }
+
+  return {
+    ok: true,
+    status: "ready",
+    reason: "log-mode-permissions-ok",
+    readyForUserWatchedInject: true,
+    host,
+    gates,
+    blockers: [],
+    warnings: [],
+    nextAction: "ask-user-watching-before-inject-startup-and-safe-event-set",
+    commands,
+    safety,
+  };
+}
+
+function summarizePermissions(permissions) {
+  if (!permissions) return "unknown";
+  const missing = missingPermissionBlockers(permissions);
+  return missing.length === 0 ? "ok" : missing.join(",");
+}
+
+function summarizeIds(items) {
+  return Array.isArray(items) && items.length > 0 ? items.join(",") : "none";
+}
+
+function makeBoardSummary(report) {
+  return [
+    `MacInputSafetyStatus=${report.status}`,
+    `reason=${report.reason}`,
+    `host=${report.host?.online ? "online" : "offline"}`,
+    `inputMode=${report.host?.inputMode || "unknown"}`,
+    `permissions=${summarizePermissions(report.host?.permissions)}`,
+    `realInput=${report.gates.realInput}`,
+    `required=${report.gates.requiredFlag}`,
+    `eventSet=${report.gates.firstEventSet}`,
+    `blockers=${summarizeIds(report.blockers)}`,
+    `warnings=${summarizeIds(report.warnings)}.`,
+    `MacInputSafetyPlan=${report.commands.macInputSafetyPlan}.`,
+    `MacInputLogSmoke=${report.commands.macInputLogSmoke}.`,
+    "Safety=no-password,no-auth,no-input-events,no-inject.",
+  ].join(" ");
+}
+
+function printPlain(report) {
+  console.log("Mac input safety status");
+  console.log(`- status: ${report.status}`);
+  console.log(`- reason: ${report.reason}`);
+  console.log(`- host: ${report.host?.online ? "online" : "offline"} ${report.host?.host || defaults.host}:${report.host?.port || defaults.port}`);
+  console.log(`- input mode: ${report.host?.inputMode || "unknown"}`);
+  console.log(`- permissions: ${summarizePermissions(report.host?.permissions)}`);
+  console.log(`- ready for user-watched inject gate: ${report.readyForUserWatchedInject ? "yes" : "no"}`);
+  console.log(`- required gate: ${report.gates.requiredFlag}, first event set: ${report.gates.firstEventSet}`);
+  console.log(`- next action: ${report.nextAction}`);
+  console.log(makeBoardSummary(report));
+}
+
+async function buildReport(args) {
+  const url = `http://${args.host}:${args.port}/discovery`;
+  try {
+    const payload = await requestJson(url, args.timeoutMs);
+    return assess(hostSummaryFromDiscovery(payload, args));
+  } catch (error) {
+    return assess({ online: false, host: args.host, port: args.port }, error.message);
+  }
+}
+
+async function main() {
+  if (helpRequested(process.argv)) {
+    printHelp();
+    return;
+  }
+  const args = parseArgs(process.argv);
+  if (args.help) {
+    printHelp();
+    return;
+  }
+  const report = await buildReport(args);
+  report.boardSummary = makeBoardSummary(report);
+  if (args.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else if (args.boardSummary) {
+    console.log(report.boardSummary);
+  } else {
+    printPlain(report);
+  }
+  process.exitCode = report.ok ? 0 : 1;
+}
+
+main().catch((error) => {
+  console.error(`[FAIL] ${error.message}`);
+  process.exitCode = 1;
+});

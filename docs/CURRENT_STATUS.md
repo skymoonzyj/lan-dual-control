@@ -4,6 +4,10 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 MacInputSafetyStatus 只读门禁
+- `check-mac-input-safety-status --host <Mac host> --port <port> --boardSummary` 现在只读请求 Mac host `/discovery`，输出 `MacInputSafetyStatus=ready|blocked reason=<...> host=<online|offline> inputMode=<...> permissions=<ok|...> realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe blockers=<...> warnings=<...>`。当前真机只读摘要为 `ready reason=log-mode-permissions-ok host=online inputMode=log permissions=ok`，但真实输入仍保持 `blocked-until-user-watching`；脚本不启动 host、不请求密码、不认证 WebSocket、不发送 `input_event`、不执行 `inject`。
+- `check-mac-heartbeat --checkBoard --boardSummary`、`check-mac-resume-status --checkBoard --boardSummary` 和 `check-mac-unattended-status --boardSummary` 现在都会输出 `MacInputSafetyStatus=node scripts/mac/check-mac-input-safety-status.mjs --host <host> --port <port> --boardSummary`，让两端开工第一屏先跑只读门禁。M2 还未等同完成真实输入验收；切 `inject` 前仍需用户明确确认正在看 Mac 屏幕，并使用 `--confirmUserWatching` 与 safe 事件集。
+
 ## 2026-06-20 MacCodexHealth 稳定短字段
 - `check-mac-heartbeat --checkBoard --boardSummary` 现在会在原有 `codex=...` / `MacHeartbeatHealth=` 之外输出稳定 `MacCodexHealth=<ok|warning|blocked|unknown> reason=<ok|codex-reconnect-signal|codex-reconnect-stuck|mac-codex-stale|...> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...>`；JSON 同步提供 `macCodexHealth`。`check-mac-resume-status --boardSummary` 会从 heartbeat watcher 最近一次心跳派生并显示同一短字段。该字段只包含短 token、时间戳和年龄阈值，不回显 Mac Codex note 原文；不认证、不请求或发送密码、不发 call/input/inject。
 ## 2026-06-20 Windows 消费 MacCodexHealth

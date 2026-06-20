@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 MacInputSafetyStatus 只读门禁
+开发端：Mac Codex
+本轮目标：把 M2 真实输入安全路径从“只有计划”推进到可复查的只读状态门禁，让两端开工第一屏能看到当前 Mac host 是否满足用户在场前置条件。
+完成内容：
+- 新增 `check-mac-input-safety-status`：只读请求 Mac host `/discovery`，输出 `MacInputSafetyStatus=ready|blocked`、`reason=`、`permissions=`、`realInput=blocked-until-user-watching`、`required=--confirmUserWatching`、`eventSet=safe` 和安全复查命令；不启动 host、不请求密码、不认证 WebSocket、不发送 `input_event`、不执行 `inject`。
+- 新增自测覆盖 help 纯净、host offline 阻塞、log+Accessibility/Input Monitoring ready、权限缺失阻塞、已处于 inject 时 fail-closed。
+- `check-mac-heartbeat`、`check-mac-resume-status`、`check-mac-unattended-status` 的 JSON/普通输出/`--boardSummary` 现在都暴露 `MacInputSafetyStatus=node scripts/mac/check-mac-input-safety-status.mjs --host <host> --port <port> --boardSummary`，方便 Windows 或白天继续时先跑状态门禁而不是直接切真实输入。
+修改文件：
+- `scripts/mac/check-mac-input-safety-status.mjs`
+- `scripts/mac/test-mac-input-safety-status.mjs`
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000`、`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`、`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000` 先失败于缺少 `MacInputSafetyStatus` 字段/帮助说明。
+- 绿灯：`node scripts/mac/test-mac-input-safety-status.mjs --timeoutMs 8000`
+- 绿灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000`
+- 绿灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- 绿灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000`
+- 绿灯：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary` 输出 `140/140 commands across 70 scripts`
+- 真机只读摘要：`MacInputSafetyStatus=ready reason=log-mode-permissions-ok host=online inputMode=log permissions=ok realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe`
+遗留问题：
+- 这只是 M2 的安全门禁状态，不代表已经执行真实输入注入；真实 inject 仍必须等用户明确确认正在看 Mac 屏幕后，用带 `--confirmUserWatching` 的路径和 safe event set 单独验收。
+下一步建议：
+- 白天继续时先跑 `node scripts/mac/check-mac-input-safety-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`；若仍 ready，再由用户确认看屏后安排真实输入 safe event set 验收。需要 Windows 端配合时通过通讯板 call。
+是否改了协议：否。只新增 Mac CLI 只读状态和现有摘要入口，不改 WebSocket/HTTP 协议。
+是否需要另一端配合：不需要立即配合；真实输入验收阶段需要 Windows/User 明确在场确认。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 消费 MacCodexHealth

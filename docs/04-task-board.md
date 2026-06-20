@@ -490,6 +490,7 @@ Windows 端：
 - [x] 添加固定密码认证门禁。
 - [x] 添加 Windows 一键自检和联调启动脚本。
 - [x] 添加 Mac host 安全启动助手和 runtime/display 自检入口。
+- [x] 添加 Mac 真实输入只读安全状态门禁：`check-mac-input-safety-status --boardSummary` 只读 `/discovery`，输出 `MacInputSafetyStatus=ready|blocked`、`realInput=blocked-until-user-watching`、`required=--confirmUserWatching` 和 `eventSet=safe`；`check-mac-heartbeat`、`check-mac-resume-status`、`check-mac-unattended-status` 同步给出 `MacInputSafetyStatus=` 复制入口。该项只表示 M2 安全门禁可复查，真实 `inject` 验收仍需用户明确看屏后单独执行。
 - [x] 添加 Mac host 启动助手后台常驻模式。
 - [x] 添加 Mac host 一键体检聚合脚本。
 - [x] 添加中文连接状态。
