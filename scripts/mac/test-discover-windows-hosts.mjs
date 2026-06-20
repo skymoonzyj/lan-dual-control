@@ -284,9 +284,41 @@ function assertWindowsReverseGrantCommands(text, label) {
   assertSecretFreeCommand(extractWindowsReverseGrantLabel(text, "WindowsOpenOneTimeReverseGrantNodeFallback", label), `${label} grant fallback command`);
 }
 
+function assertWindowsHostStatusCommand(command, label) {
+  assertIncludes(command, "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command, "--status", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, "--port 43770", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertSecretFreeCommand(command, label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertWindowsHostReadinessCommand(command, label) {
+  assertIncludes(command, "node scripts/windows/check-windows-host-readiness.mjs", label);
+  assertIncludes(command, "--checkBoard", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertSecretFreeCommand(command, label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function extractFormalSmokeCommand(text, label) {
   const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. MacClientFormalSmoke=|\. MacClientPromptPasswordSmoke=|\. ManualChecklist=|\n|$)/);
   assert(match, `${label} should include FormalSmoke= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractWindowsHostStatusCommand(text, label) {
+  const match = String(text || "").match(/WindowsHostStatus=(.+?)(?:\. WindowsHostReadiness=|\. MacClientPromptPasswordSmoke=|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include WindowsHostStatus= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractWindowsHostReadinessCommand(text, label) {
+  const match = String(text || "").match(/WindowsHostReadiness=(.+?)(?:\. MacClientPromptPasswordSmoke=|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include WindowsHostReadiness= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -491,6 +523,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macRemoteAudioPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsHostStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsHostReadinessCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
@@ -709,6 +743,16 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "MacPowerPlan=", "none board summary");
   assertIncludes(payload.boardSummary, "MacRemoteAudioPlan=", "none board summary");
   assertIncludes(payload.boardSummary, "MacInputSafetyPlan=", "none board summary");
+  assertWindowsHostStatusCommand(payload.windowsHostStatusCommand || "", "none JSON Windows host status command");
+  assertWindowsHostReadinessCommand(payload.windowsHostReadinessCommand || "", "none JSON Windows host readiness command");
+  assertWindowsHostStatusCommand(
+    extractWindowsHostStatusCommand(payload.boardSummary, "none board summary"),
+    "none board summary Windows host status command",
+  );
+  assertWindowsHostReadinessCommand(
+    extractWindowsHostReadinessCommand(payload.boardSummary, "none board summary"),
+    "none board summary Windows host readiness command",
+  );
   assertFallbackMacClientPromptPasswordSmokeCommand(
     payload.macClientPromptPasswordSmokeCommand || "",
     "none JSON Mac client prompt-password smoke command",
