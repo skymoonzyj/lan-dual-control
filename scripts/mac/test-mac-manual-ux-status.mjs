@@ -418,6 +418,48 @@ function expiredMacManualUxCallWhileWindowsCommittingBoardState() {
   };
 }
 
+function expiredMacManualUxCallWhileUserSleepingBoardState() {
+  const state = expiredMacManualUxCallBoardState();
+  return {
+    ...state,
+    events: [
+      ...(state.recentEvents || []),
+      {
+        at: "2026-06-20T10:11:00.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "【Supervisor 夜间下一批无授权任务】用户仍是 USER_SLEEPING。currentCall 是用户在场 manual UX，请发起方清理/暂停或标记 BLOCKED_BY_USER_SLEEP，醒后再重发；禁止密码、系统授权、真实 input/inject、人工听感/观感确认。",
+      },
+    ],
+    recentEvents: [],
+  };
+}
+
+function expiredMacManualUxCallWithAwakeAfterPresenceLabelReferenceBoardState() {
+  const state = expiredMacManualUxCallWhileUserSleepingBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Mac Codex": {
+        status: "testing",
+        role: "Mac 端",
+        note: "Mac manual UX 已补 USER_SLEEPING/USER_AWAKE gate：睡眠态抑制 reconfirm/sendCall，用户醒后需按明确 call 协调；这只是功能说明，不是当前用户睡眠状态。",
+        updatedAt: "2026-06-20T10:13:00.000Z",
+      },
+    },
+    events: [
+      ...(state.events || []),
+      {
+        at: "2026-06-20T10:12:00.000Z",
+        type: "message",
+        from: "Mac Codex",
+        text: "USER_AWAKE: 用户已在 Mac Codex 线程确认可以正式工作并可参与授权。后续仍需按任务发明确 call；不要在通讯板发送密码、密钥或系统账号。",
+      },
+    ],
+  };
+}
+
 function confirmedMacManualUxCallBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -974,6 +1016,55 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
   console.log("[OK] Mac manual UX status warns when the active manual UX call times out");
 }
 
+async function checkExpiredManualUxCallWaitsForUserAwake(args) {
+  await withFakeBoard(expiredMacManualUxCallWhileUserSleepingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `expired manual UX while user sleeping JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "expired manual UX while user sleeping JSON");
+    assert(payload.status === "calling", `expired manual UX while user sleeping should remain calling, got ${payload.status}`);
+    assert(payload.coordination?.userPresence?.state === "sleeping", `user sleeping state should be detected: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.coordination?.manualUxGate === "wait-user-awake", `manual UX gate should wait for user awake: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.warnings?.includes("user-sleeping"), `expired manual UX while sleeping should include user-sleeping warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.nextActions?.join("\n") || "", "Wait for USER_AWAKE", "expired manual UX while sleeping nextActions");
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "expired manual UX while sleeping boardSummary");
+    assertIncludes(payload.boardSummary, "warnings=manual-ux-call-timeout,user-sleeping", "expired manual UX while sleeping boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "expired manual UX while sleeping boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired sleeping state should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "expired manual UX while user sleeping JSON");
+  });
+  console.log("[OK] Mac manual UX status suppresses reconfirm while the user is sleeping");
+}
+
+async function checkReconfirmRefusesWhileUserSleeping(args) {
+  await withFakeBoard(expiredMacManualUxCallWhileUserSleepingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
+    assert(result.exitCode === 1, `expired manual UX --reconfirmCall should fail while user is sleeping. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "user sleeping --reconfirmCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "User is sleeping", "user sleeping reconfirm refusal");
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "user sleeping reconfirm refusal boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "user sleeping reconfirm refusal boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `user sleeping state should not post a reconfirm call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "user sleeping --reconfirmCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses --reconfirmCall while the user is sleeping");
+}
+
+async function checkPresenceLabelReferenceDoesNotOverrideUserAwake(args) {
+  await withFakeBoard(expiredMacManualUxCallWithAwakeAfterPresenceLabelReferenceBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `presence label reference JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "presence label reference JSON");
+    assert(payload.coordination?.userPresence?.state === "awake", `presence label reference should keep latest real USER_AWAKE: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.coordination?.manualUxGate === "clear", `presence label reference should not gate manual UX: ${JSON.stringify(payload.coordination)}`);
+    assert(!payload.warnings?.includes("user-sleeping"), `presence label reference should not add user-sleeping warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "presence label reference boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "presence label reference boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `presence label reference read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "presence label reference JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores explanatory USER_SLEEPING/USER_AWAKE label references");
+}
+
 async function checkExpiredManualUxCallCanBeReconfirmed(args) {
   await withFakeBoard(expiredMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
@@ -1097,6 +1188,9 @@ async function main() {
   await checkLateManualUxConfirmationDoesNotReadyExpiredCall(args);
   await checkExpiredCallRequiresReconfirmEvenWhenPreviouslyConfirmed(args);
   await checkExpiredManualUxCallRequestsReconfirmation(args);
+  await checkExpiredManualUxCallWaitsForUserAwake(args);
+  await checkReconfirmRefusesWhileUserSleeping(args);
+  await checkPresenceLabelReferenceDoesNotOverrideUserAwake(args);
   await checkExpiredManualUxCallCanBeReconfirmed(args);
   await checkActiveManualUxCallRefusesReconfirm(args);
   await checkReconfirmRefusesWhileWindowsIsPushing(args);

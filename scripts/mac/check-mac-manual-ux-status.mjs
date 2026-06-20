@@ -290,6 +290,74 @@ function isUserAwakeManualUxCall(text) {
   return userAwake && manualUx;
 }
 
+function isUserSleepingText(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  if (isUserPresenceReferenceText(source)) return false;
+  return /\bUSER_SLEEPING\b|\bBLOCKED_BY_USER_SLEEP\b|用户仍是\s*USER_SLEEPING|用户睡眠|夜间[^。；;\n]{0,40}无授权任务/i.test(source);
+}
+
+function isUserAwakeText(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  if (isUserPresenceReferenceText(source)) return false;
+  if (/Wait for USER_AWAKE|等待\s*USER_AWAKE|醒后再|等用户醒/i.test(source)) return false;
+  return /\bUSER_AWAKE\s*[:=]|user is awake|用户已醒|用户醒了|可以授权|可授权任务|resume authorized tasks/i.test(source);
+}
+
+function isUserPresenceReferenceText(text) {
+  const source = compactText(text);
+  if (!/\bUSER_SLEEPING\b|\bUSER_AWAKE\b|\bBLOCKED_BY_USER_SLEEP\b/i.test(source)) return false;
+  return /\b(gate|parser|parse|detect|test|coverage|help|docs?|summary|status script|script)\b/i.test(source)
+    || /已补|新增|实现|测试|文案|说明|引用|标签|识别|解析|守卫|防误判|功能说明/i.test(source);
+}
+
+function detectUserPresence(state) {
+  const candidates = [];
+  let order = 0;
+  const addCandidate = (source, value, at = "") => {
+    const raw = compactText(value);
+    if (!raw) return;
+    const stateName = isUserSleepingText(raw) ? "sleeping" : isUserAwakeText(raw) ? "awake" : "";
+    if (!stateName) return;
+    candidates.push({
+      state: stateName,
+      source,
+      at: normalizedText(at),
+      order: order += 1,
+    });
+  };
+
+  if (state?.currentCall) {
+    addCandidate("currentCall", state.currentCall, state.currentCall.updatedAt || state.currentCall.startedAt);
+  }
+  if (state?.statuses && typeof state.statuses === "object") {
+    for (const [device, status] of Object.entries(state.statuses)) {
+      addCandidate(`status:${device}`, status, status?.updatedAt);
+    }
+  }
+  for (const event of boardEvents(state)) {
+    addCandidate(`event:${event?.from || "unknown"}`, event, event?.at);
+  }
+
+  if (candidates.length === 0) return { state: "unknown", source: "", at: "" };
+  candidates.sort((left, right) => {
+    const leftMs = Date.parse(left.at || "");
+    const rightMs = Date.parse(right.at || "");
+    const leftValid = Number.isFinite(leftMs);
+    const rightValid = Number.isFinite(rightMs);
+    if (leftValid && rightValid && leftMs !== rightMs) return leftMs - rightMs;
+    if (leftValid !== rightValid) return leftValid ? 1 : -1;
+    return left.order - right.order;
+  });
+  const latest = candidates[candidates.length - 1];
+  return {
+    state: latest.state,
+    source: latest.source,
+    at: latest.at,
+  };
+}
+
 function isMacManualUxValidationCall(text) {
   const source = compactText(text);
   if (!source) return false;
@@ -536,6 +604,7 @@ function makeReport(state, server) {
   const combined = texts.join("\n");
   const boardCallBeforeCheck = normalizeCurrentBoardCall(state.currentCall);
   const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
+  const userPresence = detectUserPresence(state);
   const signals = {
     realTestPass: /\bREAL_TEST_PASS(?:_RECORDED)?\b/i.test(combined),
     postPassNext: /\bPostPassNext\s*=\s*WindowsRecordPassAndTailError\+MacManualUxStandby\b/i.test(combined),
@@ -548,7 +617,8 @@ function makeReport(state, server) {
   };
   const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || signals.manualUxConfirmed;
   const calling = signals.manualUxCallInProgress;
-  const callReady = !ready && !calling && signals.userAwakeManualUxCall;
+  const userSleeping = userPresence.state === "sleeping";
+  const callReady = !ready && !calling && signals.userAwakeManualUxCall && !userSleeping;
   const status = ready ? "ready" : calling ? "calling" : callReady ? "call-ready" : "waiting";
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
@@ -562,6 +632,12 @@ function makeReport(state, server) {
   if (windowsCoordination.pushInProgress) warnings.push("windows-codex-pushing");
   if (manualUxCall?.timedOut) warnings.push("manual-ux-call-timeout");
   else if (manualUxCall?.nearTimeout) warnings.push("manual-ux-call-near-timeout");
+  if (userSleeping) warnings.push("user-sleeping");
+  const manualUxGate = userSleeping
+    ? "wait-user-awake"
+    : windowsCoordination.pushInProgress
+      ? "wait-windows-codex-push"
+      : "clear";
   const report = {
     ok: ready || calling || callReady,
     status,
@@ -583,19 +659,20 @@ function makeReport(state, server) {
       rerunFormalE2E: false,
     },
     commands: {
-      manualUxCallCommand: callReady ? makeManualUxCallCommand(server) : null,
-      manualUxReconfirmCommand: calling && manualUxCall?.timedOut && !windowsCoordination.pushInProgress
+      manualUxCallCommand: callReady && manualUxGate === "clear" ? makeManualUxCallCommand(server) : null,
+      manualUxReconfirmCommand: calling && manualUxCall?.timedOut && manualUxGate === "clear"
         ? makeManualUxReconfirmCommand(server)
         : null,
     },
     manualUxCall,
     coordination: {
       windowsCodex: windowsCoordination,
-      manualUxGate: windowsCoordination.pushInProgress ? "wait-windows-codex-push" : "clear",
+      userPresence,
+      manualUxGate,
     },
     blockers,
     warnings,
-    nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination),
+    nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination, userPresence),
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
@@ -609,7 +686,17 @@ function withCoordinationGate(actions, status, windowsCoordination = null) {
   ];
 }
 
-function makeNextActions(status, manualUxCall = null, server = defaults.server, windowsCoordination = null) {
+function makeNextActions(status, manualUxCall = null, server = defaults.server, windowsCoordination = null, userPresence = null) {
+  if (userPresence?.state === "sleeping") {
+    const actions = [
+      "Wait for USER_AWAKE or direct user confirmation before sending or reconfirming a manual UX call.",
+      "Do not request credentials, system authorization, real input/inject, or human audio/visual confirmation while the user is sleeping.",
+    ];
+    if (status === "calling" && manualUxCall?.timedOut) {
+      actions.push("Leave the expired manual UX call paused/cleared, then rerun this status command after the user is awake.");
+    }
+    return actions;
+  }
   if (status === "ready") {
     return withCoordinationGate([
       "Keep Mac host, Mac client, and heartbeat online for user-present manual UX testing.",
@@ -683,6 +770,7 @@ function makeBoardSummary(report) {
   if (report.reconfirmedCall?.ok) parts.push("ManualUxCallReconfirmed=true");
   if (report.reconfirmedCall?.ok === false) parts.push("ManualUxCallReconfirmed=false");
   if (report.coordination?.manualUxGate === "wait-windows-codex-push") parts.push("ManualUxGate=wait-windows-codex-push");
+  if (report.coordination?.manualUxGate === "wait-user-awake") parts.push("ManualUxGate=wait-user-awake");
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);
   if (report.warnings.length > 0) parts.push(`warnings=${report.warnings.join(",")}`);
   return parts.join(" ");
@@ -858,6 +946,9 @@ async function sendCall(args, report) {
     const status = report.coordination.windowsCodex.status || "unknown";
     throw new Error(`Windows Codex is ${status}; refusing to send manual UX call until Windows finishes push/rebase coordination.`);
   }
+  if (report.coordination?.userPresence?.state === "sleeping") {
+    throw new Error("User is sleeping; refusing to send manual UX call until USER_AWAKE or direct user confirmation is visible.");
+  }
   const payload = makeManualUxCallPayload();
   const result = await postToBoard(args, "/api/call", payload);
   return {
@@ -886,6 +977,9 @@ async function reconfirmCall(args, report) {
   if (report.coordination?.windowsCodex?.pushInProgress) {
     const status = report.coordination.windowsCodex.status || "unknown";
     throw new Error(`Windows Codex is ${status}; refusing to reconfirm manual UX call until Windows finishes push/rebase coordination.`);
+  }
+  if (report.coordination?.userPresence?.state === "sleeping") {
+    throw new Error("User is sleeping; refusing to reconfirm manual UX call until USER_AWAKE or direct user confirmation is visible.");
   }
   const payload = makeManualUxCallPayload();
   const result = await postToBoard(args, "/api/call", payload);
