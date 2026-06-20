@@ -724,6 +724,7 @@ function makeH264Observation(h264) {
   return {
     frames: h264.frames,
     keyFrames: h264.keyFrames,
+    deltaFrames: Math.max(0, h264.frames - h264.keyFrames),
     keyFrameFlagFrames: h264.keyFrameFlagFrames,
     payloadKeyFrames: h264.payloadKeyFrames,
     spsFrames: h264.spsFrames,

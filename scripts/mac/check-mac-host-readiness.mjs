@@ -1151,14 +1151,19 @@ function formatMediaBoardSummary(summary) {
 function formatMediaH264BoardSummary(details) {
   const h264 = details?.video?.observation?.h264;
   if (!h264 || typeof h264 !== "object") return "";
+  const frames = Number(h264.frames);
   const keyFrames = Number(h264.keyFrames);
+  const deltaFramesRaw = Number(h264.deltaFrames);
+  const deltaFrames = Number.isFinite(deltaFramesRaw) ? deltaFramesRaw : Math.max(0, frames - keyFrames);
   const spsFrames = Number(h264.spsFrames);
   const ppsFrames = Number(h264.ppsFrames);
   const idrFrames = Number(h264.idrFrames);
   const keyParam = Number(h264.keyFramesWithParameterSets);
-  if (![keyFrames, spsFrames, ppsFrames, idrFrames, keyParam].every(Number.isFinite)) return "";
+  if (![frames, keyFrames, deltaFrames, spsFrames, ppsFrames, idrFrames, keyParam].every(Number.isFinite)) return "";
   return [
+    `h264Frames=${frames}`,
     `h264Key=${keyFrames}`,
+    `h264Delta=${deltaFrames}`,
     `sps=${spsFrames}`,
     `pps=${ppsFrames}`,
     `idr=${idrFrames}`,

@@ -603,6 +603,8 @@ function checkMediaBoardSummaryStatusFormatting() {
             observation: {
               h264: {
                 keyFrames: 2,
+                frames: 7,
+                deltaFrames: 5,
                 spsFrames: 2,
                 ppsFrames: 2,
                 idrFrames: 2,
@@ -619,8 +621,8 @@ function checkMediaBoardSummaryStatusFormatting() {
           },
         },
       }],
-    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2 firstKeyNal=7,8,5 lastKeyNal=7,8,5 lastNal=1 keyGapFramesMax=5 keyGapMsMax=167 keyGapFramesLast=5 keyGapMsLast=167 keyTailFrames=1 keyTailMs=33",
-    "media board summary should surface ok status, H.264 keyframe evidence, first/last NAL types, keyframe gaps, latest gap, and tail gap",
+    }) === "media=ok h264Frames=7 h264Key=2 h264Delta=5 sps=2 pps=2 idr=2 keyParam=2 firstKeyNal=7,8,5 lastKeyNal=7,8,5 lastNal=1 keyGapFramesMax=5 keyGapMsMax=167 keyGapFramesLast=5 keyGapMsLast=167 keyTailFrames=1 keyTailMs=33",
+    "media board summary should surface ok status, H.264 sent/key/delta evidence, first/last NAL types, keyframe gaps, latest gap, and tail gap",
   );
   assert(
     formatMediaBoardSummaryFixture({

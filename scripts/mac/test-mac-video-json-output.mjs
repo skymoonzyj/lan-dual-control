@@ -375,6 +375,9 @@ async function assertJsonSuccess(timeoutMs) {
     if (!payload.observation?.h264 || Number(payload.observation.h264.keyFrames) < 1) {
       throw new Error(`JSON success should count H.264 keyframes.\n${result.stdout}`);
     }
+    if (!Number.isFinite(Number(payload.observation.h264.deltaFrames)) || Number(payload.observation.h264.deltaFrames) < 1) {
+      throw new Error(`JSON success should count H.264 delta frames.\n${result.stdout}`);
+    }
     if (Number(payload.observation.h264.spsFrames) < 1 || Number(payload.observation.h264.ppsFrames) < 1 || Number(payload.observation.h264.idrFrames) < 1) {
       throw new Error(`JSON success should count H.264 SPS/PPS/IDR frames.\n${result.stdout}`);
     }

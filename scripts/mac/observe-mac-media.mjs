@@ -725,8 +725,13 @@ function formatProbeSummary(probe) {
 }
 
 function formatH264ProbeSummary(h264) {
+  const frames = h264.frames || 0;
+  const keyFrames = h264.keyFrames || 0;
+  const deltaFrames = Number.isFinite(Number(h264.deltaFrames)) ? Number(h264.deltaFrames) : Math.max(0, frames - keyFrames);
   return [
-    `h264Key=${h264.keyFrames || 0}`,
+    `h264Frames=${frames}`,
+    `h264Key=${keyFrames}`,
+    `h264Delta=${deltaFrames}`,
     `sps=${h264.spsFrames || 0}`,
     `pps=${h264.ppsFrames || 0}`,
     `idr=${h264.idrFrames || 0}`,
