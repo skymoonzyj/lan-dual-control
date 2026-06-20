@@ -5,7 +5,7 @@
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
 ## 2026-06-20 Windows host 双击启动入口
-- 仓库根目录新增 `Start-Windows-Host.cmd`：用户可直接双击启动 Windows 被控端，入口会优先使用 PowerShell 7 调用 `scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword`，只在 Windows 本机终端隐藏输入临时密码。`.\Start-Windows-Host.cmd -Help` 只打印安全帮助，不启动 host、不认证、不请求或打印密码、不发 input/inject；自测已覆盖入口存在、帮助快速退出和不包含明文密码参数。
+- 仓库根目录新增 `Start-Windows-Host.cmd`：用户可直接双击启动 Windows 被控端，入口会优先使用 PowerShell 7 调用 `scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword`，只在 Windows 本机终端隐藏输入临时密码。`.\Start-Windows-Host.cmd -Help` 只打印安全帮助，不启动 host、不认证、不请求或打印密码、不发 input/inject；`start-windows-host --status` 的 JSON、普通输出和 `--boardSummary` 现在同步暴露 `WindowsHostUserEntry=Start-Windows-Host.cmd` / `windowsHostUserEntryCommand`，方便通讯板和 Mac 端提示用户走双击入口；自测已覆盖入口存在、帮助快速退出、状态字段和不包含明文密码参数。
 
 ## 2026-06-20 Windows host 安全启动动作摘要
 - `start-windows-host --status` / `-Status` 在 Windows host 离线或 no-listener 时，现在会输出 `WindowsHostStartAction=needs-local-password-prompt`：包含 Windows 本机隐藏密码启动命令、启动后让 Mac 只读重试 `discover-windows-hosts --checkBoard --boardSummary` 的命令，以及 `Safety=no-password-on-board,no-auth,no-input-inject`。JSON 同步提供 `windowsHostStartAction` 对象；`--boardSummary` 会带同一条无密动作。该动作不启动 host、不认证、不请求或发送密码、不发 input/inject，也不会默认让 Mac 再发 call。

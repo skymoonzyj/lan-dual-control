@@ -26,6 +26,7 @@
 - 新增仓库根目录 `Start-Windows-Host.cmd`，双击后优先使用 PowerShell 7 调用 `start-windows-host.ps1 -PromptPassword -RequirePassword`。
 - 入口失败时保留窗口并提示只读 status/boardSummary 复查命令；`-Help` 只打印帮助，不启动 host。
 - `test-windows-host-start-helper` 增加根目录入口覆盖，确认入口存在、帮助 0 退出、不提示密码、不含明文密码或环境密码参数。
+- `start-windows-host --status` 的普通输出、JSON 和 `--boardSummary` 新增 `WindowsHostUserEntry=Start-Windows-Host.cmd` / `windowsHostUserEntryCommand`，让通讯板摘要也能直接提示双击入口。
 修改文件：
 - `Start-Windows-Host.cmd`
 - `scripts/windows/test-windows-host-start-helper.mjs`

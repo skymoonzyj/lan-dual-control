@@ -633,6 +633,13 @@ function macFormalSendCallCommand(host, port) {
 function macDiscoverWindowsRetryCommand() {
   return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
+function windowsHostUserEntryCommand() {
+  return "Start-Windows-Host.cmd";
+}
+
+function windowsHostUserEntrySummary(status = {}) {
+  return status.windowsHostUserEntryCommand ? `WindowsHostUserEntry=${status.windowsHostUserEntryCommand}` : "";
+}
 
 function windowsHostStartAction(args = {}) {
   return {
@@ -817,7 +824,9 @@ function makeBoardSummary(status) {
     const ephemeralStart = status.ephemeralStartCommand ? ` temporary smoke with ${status.ephemeralStartCommand}.` : "";
     const startAction = windowsHostStartActionSummary(status.windowsHostStartAction);
     const startActionText = startAction ? ` ${startAction}.` : "";
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart}${startActionText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+    const userEntry = windowsHostUserEntrySummary(status);
+    const userEntryText = userEntry ? ` ${userEntry}.` : "";
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart}${startActionText}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -831,7 +840,9 @@ function makeBoardSummary(status) {
   const formalChecklist = targets[0]?.formalChecklistLabel ? ` ${targets[0].formalChecklistLabel}.` : "";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  const userEntry = windowsHostUserEntrySummary(status);
+  const userEntryText = userEntry ? ` ${userEntry}.` : "";
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -913,6 +924,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsOpenOneTimeReverseGrantCommand: windowsOpenOneTimeReverseGrantCommand(args.port),
     windowsOpenOneTimeReverseGrantPowerShellCommand: windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
     windowsHostStartAction: windowsHostStartAction(args),
+    windowsHostUserEntryCommand: windowsHostUserEntryCommand(),
     safeStartCommand: windowsHostSafeStartCommand(args),
     ephemeralStartCommand: windowsHostEphemeralStartCommand(args),
     windowsSecureAuthPath: windowsSecureAuthPath(args.port),
@@ -1022,6 +1034,9 @@ async function printStatus(args) {
       if (status.macClientReadinessCommands[0].sendCallCommand) {
         console.log(`[INFO] Mac formal send-call command: ${status.macClientReadinessCommands[0].sendCallCommand}`);
       }
+      if (status.windowsHostUserEntryCommand) {
+        console.log(`[INFO] Windows host user entry: ${status.windowsHostUserEntryCommand}`);
+      }
       console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
       console.log(`[INFO] Windows host media baseline PowerShell command: ${status.windowsHostMediaReadinessPowerShellCommand}`);
       console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
@@ -1057,6 +1072,9 @@ async function printStatus(args) {
   if (status.windowsHostStartAction?.status) {
     const action = status.windowsHostStartAction;
     console.log(`[INFO] Windows host start action: ${action.status}; run ${action.startCommand}; after start ask Mac to retry ${action.macRetryCommand}; safety=${action.safety}`);
+  }
+  if (status.windowsHostUserEntryCommand) {
+    console.log(`[INFO] Windows host user entry: ${status.windowsHostUserEntryCommand}`);
   }
   console.log(`[INFO] Add --wasapi when Mac should receive Windows system sound.`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
