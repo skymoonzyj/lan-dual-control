@@ -201,12 +201,16 @@ async function checkHelp(args) {
     assertSecretSafe(result.stdout + result.stderr, `node help ${flag}`);
   }
 
-  const cmdHelp = await runRootCmd(["-Help"], args);
-  assert(cmdHelp.exitCode === 0, `root cmd -Help failed\n${cmdHelp.stdout}\n${cmdHelp.stderr}`);
-  assertIncludes(cmdHelp.stdout, "Run-WinClientRetest.cmd", "root cmd help");
-  assertIncludes(cmdHelp.stdout, "--preflightOnly", "root cmd help");
-  assertIncludes(cmdHelp.stdout, "post-w2w3-retest-board.mjs", "root cmd help");
-  assertSecretSafe(cmdHelp.stdout + cmdHelp.stderr, "root cmd help");
+  if (process.platform === "win32") {
+    const cmdHelp = await runRootCmd(["-Help"], args);
+    assert(cmdHelp.exitCode === 0, `root cmd -Help failed\n${cmdHelp.stdout}\n${cmdHelp.stderr}`);
+    assertIncludes(cmdHelp.stdout, "Run-WinClientRetest.cmd", "root cmd help");
+    assertIncludes(cmdHelp.stdout, "--preflightOnly", "root cmd help");
+    assertIncludes(cmdHelp.stdout, "post-w2w3-retest-board.mjs", "root cmd help");
+    assertSecretSafe(cmdHelp.stdout + cmdHelp.stderr, "root cmd help");
+  } else {
+    console.log("[SKIP] Root cmd help requires Windows cmd.exe");
+  }
   console.log("[OK] WinClient retest-and-post entry help is safe");
 }
 
