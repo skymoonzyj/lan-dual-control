@@ -700,6 +700,12 @@ function assertSecretSafe(text, label) {
   assert(!/--inputMode\s+inject/i.test(text), `${label} should not include an inject-mode command.\n${text}`);
 }
 
+function assertOperatorAction(payload, expected, label) {
+  assert(payload.operatorAction?.id === expected, `${label} operatorAction mismatch: ${JSON.stringify(payload.operatorAction)}`);
+  assertIncludes(payload.boardSummary || "", `ManualUxAction=${expected}`, `${label} boardSummary`);
+  assertSecretSafe(JSON.stringify(payload.operatorAction), `${label} operatorAction`);
+}
+
 async function checkHelp(args) {
   const result = await run(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0. stderr=${result.stderr}`);
@@ -711,6 +717,7 @@ async function checkHelp(args) {
   assertIncludes(result.stdout, "--sendMessage", "help");
   assertIncludes(result.stdout, "--sendCall", "help");
   assertIncludes(result.stdout, "--reconfirmCall", "help");
+  assertIncludes(result.stdout, "operatorAction", "help");
   assertIncludes(result.stdout, "events", "help");
   assertIncludes(result.stdout, "recentEvents", "help");
   assertNotIncludes(result.stdout, "Mac host password:", "help");
@@ -734,6 +741,7 @@ async function checkReadyJson(args) {
     assertIncludes(payload.boardSummary, "MacManualUx=status=ready", "ready JSON boardSummary");
     assertIncludes(payload.boardSummary, `ManualUxChecklist=${defaultChecklist}`, "ready JSON boardSummary");
     assertIncludes(payload.boardSummary, "ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断", "ready JSON boardSummary");
+    assertOperatorAction(payload, "start-manual-ux-test", "ready JSON");
     assertSecretSafe(JSON.stringify(payload), "ready JSON");
   });
   console.log("[OK] Mac manual UX status detects ready PostPass board state");
@@ -748,6 +756,7 @@ async function checkReadyWhileWindowsPushingAddsManualUxGate(args) {
     assert(payload.warnings?.includes("windows-codex-pushing"), `ready while Windows pushing should include warning: ${JSON.stringify(payload.warnings)}`);
     assertIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "ready while Windows pushing boardSummary");
     assertIncludes(payload.nextActions?.join("\n") || "", "Wait for Windows Codex to finish push/rebase coordination", "ready while Windows pushing nextActions");
+    assertOperatorAction(payload, "wait-windows-codex-push", "ready while Windows pushing JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only ready status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "ready while Windows pushing JSON");
   });
@@ -844,6 +853,7 @@ async function checkRequireReadyFailure(args) {
     assert(payload.status === "waiting", `waiting JSON status mismatch: ${payload.status}`);
     assert(payload.blockers?.includes("manual-ux-standby-not-detected"), "waiting JSON should include blocker");
     assertIncludes(payload.boardSummary, "MacManualUx=status=waiting", "waiting JSON boardSummary");
+    assertOperatorAction(payload, "wait-manual-ux-standby", "waiting JSON");
     assertSecretSafe(JSON.stringify(payload), "waiting JSON");
   });
   console.log("[OK] Mac manual UX status requireReady fails closed before standby signal");
@@ -881,6 +891,7 @@ async function checkUserAwakeCallProducesManualUxCallPlan(args) {
     assertIncludes(payload.boardSummary, "Next=SendManualUxCall", "USER_AWAKE boardSummary");
     assertIncludes(payload.boardSummary, "ManualUxCallCommand=", "USER_AWAKE boardSummary");
     assertNotIncludes(payload.boardSummary, "blockers=manual-ux-standby-not-detected", "USER_AWAKE boardSummary");
+    assertOperatorAction(payload, "send-manual-ux-call", "USER_AWAKE currentCall JSON");
     assertSecretSafe(JSON.stringify(payload), "USER_AWAKE currentCall JSON");
   });
   console.log("[OK] Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan");
@@ -923,6 +934,7 @@ async function checkManualUxCallInProgressDoesNotOfferDuplicateCall(args) {
     assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "manual UX call-in-progress boardSummary");
     assertMatches(payload.boardSummary, /\bManualUxCallRemainingMs=\d+\b/, "manual UX call-in-progress boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "manual UX call-in-progress boardSummary");
+    assertOperatorAction(payload, "wait-manual-ux-confirmation", "manual UX call-in-progress JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only calling status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "manual UX call-in-progress JSON");
   });
@@ -944,6 +956,7 @@ async function checkConfirmedManualUxCallIsReady(args) {
     assertIncludes(payload.boardSummary, "ManualUxCall=active", "confirmed manual UX call boardSummary");
     assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "confirmed manual UX call boardSummary");
     assertMatches(payload.boardSummary, /\bManualUxCallRemainingMs=\d+\b/, "confirmed manual UX call boardSummary");
+    assertOperatorAction(payload, "start-manual-ux-test", "confirmed manual UX call JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `confirmed read-only status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "confirmed manual UX call JSON");
   });
@@ -1033,6 +1046,7 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
     assertIncludes(payload.boardSummary, "--reconfirmCall", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallRemainingMs=", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "expired manual UX call boardSummary");
+    assertOperatorAction(payload, "reconfirm-manual-ux-call", "expired manual UX call JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired read-only status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "expired manual UX call JSON");
   });
@@ -1052,6 +1066,7 @@ async function checkExpiredManualUxCallWaitsForUserAwake(args) {
     assertIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "expired manual UX while sleeping boardSummary");
     assertIncludes(payload.boardSummary, "warnings=manual-ux-call-timeout,user-sleeping", "expired manual UX while sleeping boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "expired manual UX while sleeping boardSummary");
+    assertOperatorAction(payload, "wait-user-awake", "expired manual UX while sleeping JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired sleeping state should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "expired manual UX while user sleeping JSON");
   });

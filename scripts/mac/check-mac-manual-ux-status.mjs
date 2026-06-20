@@ -81,7 +81,10 @@ Description:
   is treated as calling so the script does not offer a duplicate call. An expired
   Mac manual UX call can be refreshed only with explicit --reconfirmCall. When
   safe, an expired Mac manual UX call prints ManualUxReconfirmCommand=... so the
-  next coordination step is visible without sending it automatically. It does
+  next coordination step is visible without sending it automatically. The JSON
+  report also includes operatorAction.id, mirrored as ManualUxAction=... in the
+  board summary, so another agent can read the next human-safe action directly.
+  It does
   not authenticate, does not ask for or print passwords, does not send
   user-auth requests, and does not send input events.
 
@@ -609,6 +612,66 @@ function makeManualUxReconfirmCommand(server) {
   ].map(quoteCliArg).join(" ");
 }
 
+function makeOperatorAction(report) {
+  if (report.sentCall?.ok || report.reconfirmedCall?.ok) {
+    return {
+      id: "wait-manual-ux-confirmation",
+      description: "等待 Windows/User 确认当前手工体验窗口。",
+    };
+  }
+  if (report.coordination?.manualUxGate === "wait-user-awake") {
+    return {
+      id: "wait-user-awake",
+      description: "等待 USER_AWAKE 或用户明确确认后再发起/重新确认手工体验窗口。",
+    };
+  }
+  if (report.coordination?.manualUxGate === "wait-windows-codex-push") {
+    return {
+      id: "wait-windows-codex-push",
+      description: "等待 Windows Codex 完成提交/推送/变基协调，再推进手工体验。",
+    };
+  }
+  if (report.status === "ready") {
+    return {
+      id: "start-manual-ux-test",
+      description: "开始 5-10 分钟手工体验清单；验证连接、画面、声音、剪贴板、文件、窗口、全屏、原画和复制诊断。",
+    };
+  }
+  if (report.status === "call-ready") {
+    return {
+      id: "send-manual-ux-call",
+      description: "发送无密手工体验 call，说明目标、安全边界和预计 5-10 分钟。",
+    };
+  }
+  if (report.status === "calling" && report.manualUxCall?.timedOut) {
+    return {
+      id: "reconfirm-manual-ux-call",
+      description: "重新确认已超时的 Mac 手工体验 call。",
+    };
+  }
+  if (report.status === "calling") {
+    return {
+      id: "wait-manual-ux-confirmation",
+      description: "等待 Windows/User 确认当前手工体验窗口。",
+    };
+  }
+  if (report.status === "offline") {
+    return {
+      id: "check-agent-link-board",
+      description: "检查 Agent Link Board 连通性后重跑状态。",
+    };
+  }
+  return {
+    id: "wait-manual-ux-standby",
+    description: "等待 PostPass/ManualUxStandby/USER_AWAKE 协调信号。",
+  };
+}
+
+function refreshOperatorAction(report) {
+  report.operatorAction = makeOperatorAction(report);
+  return report.operatorAction;
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const eventSources = boardEventSources(state);
@@ -685,6 +748,7 @@ function makeReport(state, server) {
     warnings,
     nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination, userPresence),
   };
+  refreshOperatorAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
@@ -743,6 +807,7 @@ function makeNextActions(status, manualUxCall = null, server = defaults.server, 
 }
 
 function makeBoardSummary(report) {
+  const operatorAction = refreshOperatorAction(report);
   const next = report.status === "ready"
     ? "ManualUxTest"
     : report.status === "call-ready"
@@ -760,6 +825,7 @@ function makeBoardSummary(report) {
     `BoardEventSources=${report.boardEventSources?.join(",") || "none"}`,
     `Target=${report.target}`,
     `Next=${next}`,
+    `ManualUxAction=${operatorAction.id}`,
     "Safety=no-password,no-input-inject",
     "NoFormalE2ERerun=true",
   ];
@@ -795,6 +861,7 @@ function printHuman(report) {
   console.log(`[INFO] Signals: ${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(", ") || "none"}`);
   if (report.blockers.length > 0) console.log(`[INFO] Blockers: ${report.blockers.join(", ")}`);
   if (report.warnings.length > 0) console.log(`[INFO] Warnings: ${report.warnings.join(", ")}`);
+  console.log(`[INFO] Operator action: ${report.operatorAction.id} - ${report.operatorAction.description}`);
   console.log("[INFO] Safety: 不请求密码；不发送用户认证请求；不发送 input；不回旧 formal E2E 复跑。");
   for (const action of report.nextActions) {
     console.log(`[INFO] Next: ${action}`);
@@ -842,6 +909,7 @@ function makeOfflineReport(server, error) {
     nextActions: ["Check Agent Link Board connectivity, then rerun this read-only status command."],
     error: String(error?.message || error || "unknown"),
   };
+  refreshOperatorAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
