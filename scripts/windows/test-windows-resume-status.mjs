@@ -939,44 +939,48 @@ async function checkWindowsClientRetestRootEntry(args) {
   assertNotIncludes(content, "input_event", windowsClientRetestUserEntryCommand);
   assertNotIncludes(content, "inject", windowsClientRetestUserEntryCommand);
 
-  const result = await new Promise((resolveRun) => {
-    const child = spawn("cmd.exe", ["/d", "/c", windowsClientRetestUserEntryCommand, "-Help"], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        LAN_DUAL_PASSWORD: "",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
+  if (process.platform === "win32") {
+    const result = await new Promise((resolveRun) => {
+      const child = spawn("cmd.exe", ["/d", "/c", windowsClientRetestUserEntryCommand, "-Help"], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          LAN_DUAL_PASSWORD: "",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill();
+        resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+      }, args.timeoutMs);
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        resolveRun({ exitCode: null, error, stdout, stderr });
+      });
+      child.on("close", (exitCode) => {
+        clearTimeout(timer);
+        resolveRun({ exitCode, stdout, stderr });
+      });
     });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill();
-      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
-    }, args.timeoutMs);
-    child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolveRun({ exitCode: null, error, stdout, stderr });
-    });
-    child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      resolveRun({ exitCode, stdout, stderr });
-    });
-  });
 
-  assert(result.exitCode === 0, `${windowsClientRetestUserEntryCommand} -Help failed\n${result.stdout}\n${result.stderr}`);
-  assertIncludes(result.stdout, "test-windows-client-browser.ps1", `${windowsClientRetestUserEntryCommand} -Help`);
-  assertIncludes(result.stdout, "-PromptPassword", `${windowsClientRetestUserEntryCommand} -Help`);
-  assertIncludes(result.stdout, "-RequireH264", `${windowsClientRetestUserEntryCommand} -Help`);
-  assertNotIncludes(result.stdout + result.stderr, "Mac host password:", `${windowsClientRetestUserEntryCommand} -Help should not prompt for password`);
-  assertNotIncludes(result.stdout + result.stderr, "test-password", `${windowsClientRetestUserEntryCommand} -Help`);
+    assert(result.exitCode === 0, `${windowsClientRetestUserEntryCommand} -Help failed\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "test-windows-client-browser.ps1", `${windowsClientRetestUserEntryCommand} -Help`);
+    assertIncludes(result.stdout, "-PromptPassword", `${windowsClientRetestUserEntryCommand} -Help`);
+    assertIncludes(result.stdout, "-RequireH264", `${windowsClientRetestUserEntryCommand} -Help`);
+    assertNotIncludes(result.stdout + result.stderr, "Mac host password:", `${windowsClientRetestUserEntryCommand} -Help should not prompt for password`);
+    assertNotIncludes(result.stdout + result.stderr, "test-password", `${windowsClientRetestUserEntryCommand} -Help`);
+  } else {
+    console.log(`[SKIP] ${windowsClientRetestUserEntryCommand} -Help requires Windows cmd.exe`);
+  }
   const andPostEntryPath = resolve(repoRoot, windowsClientRetestAndPostUserEntryCommand);
   let andPostContent = "";
   try {
@@ -995,43 +999,47 @@ async function checkWindowsClientRetestRootEntry(args) {
   assertNotIncludes(andPostContent, "input_event", windowsClientRetestAndPostUserEntryCommand);
   assertNotIncludes(andPostContent, "inject", windowsClientRetestAndPostUserEntryCommand);
 
-  const andPostHelp = await new Promise((resolveRun) => {
-    const child = spawn("cmd.exe", ["/d", "/c", windowsClientRetestAndPostUserEntryCommand, "-Help"], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        LAN_DUAL_PASSWORD: "",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
+  if (process.platform === "win32") {
+    const andPostHelp = await new Promise((resolveRun) => {
+      const child = spawn("cmd.exe", ["/d", "/c", windowsClientRetestAndPostUserEntryCommand, "-Help"], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          LAN_DUAL_PASSWORD: "",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill();
+        resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+      }, args.timeoutMs);
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        resolveRun({ exitCode: null, error, stdout, stderr });
+      });
+      child.on("close", (exitCode) => {
+        clearTimeout(timer);
+        resolveRun({ exitCode, stdout, stderr });
+      });
     });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill();
-      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
-    }, args.timeoutMs);
-    child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolveRun({ exitCode: null, error, stdout, stderr });
-    });
-    child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      resolveRun({ exitCode, stdout, stderr });
-    });
-  });
 
-  assert(andPostHelp.exitCode === 0, `${windowsClientRetestAndPostUserEntryCommand} -Help failed\n${andPostHelp.stdout}\n${andPostHelp.stderr}`);
-  assertIncludes(andPostHelp.stdout, "Run-WinClientRetest.cmd", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
-  assertIncludes(andPostHelp.stdout, "post-w2w3-retest-board.mjs", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
-  assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "Mac host password:", `${windowsClientRetestAndPostUserEntryCommand} -Help should not prompt for password`);
-  assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "test-password", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+    assert(andPostHelp.exitCode === 0, `${windowsClientRetestAndPostUserEntryCommand} -Help failed\n${andPostHelp.stdout}\n${andPostHelp.stderr}`);
+    assertIncludes(andPostHelp.stdout, "Run-WinClientRetest.cmd", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+    assertIncludes(andPostHelp.stdout, "post-w2w3-retest-board.mjs", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+    assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "Mac host password:", `${windowsClientRetestAndPostUserEntryCommand} -Help should not prompt for password`);
+    assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "test-password", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+  } else {
+    console.log(`[SKIP] ${windowsClientRetestAndPostUserEntryCommand} -Help requires Windows cmd.exe`);
+  }
   console.log("[OK] Windows client real retest root entry is board-safe and help-only safe");
 }
 
