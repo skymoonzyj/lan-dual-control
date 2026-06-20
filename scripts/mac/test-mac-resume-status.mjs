@@ -226,6 +226,10 @@ function assertBoardSummaryShape(text, label) {
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(text), `${label} should include Mac client copy diagnostics action`);
   assert(/MacClientDiscoverWindows=/.test(text), `${label} should include Mac client Windows discovery guidance`);
   assert(/discover-windows-hosts\.mjs/.test(text), `${label} should include the Mac client Windows discovery command`);
+  assert(/WindowsHostStatus=/.test(text), `${label} should include Windows host status guidance`);
+  assert(/WindowsHostStatus=.*start-windows-host\.mjs/.test(text), `${label} should include the Windows host status command`);
+  assert(/WindowsHostReadiness=/.test(text), `${label} should include Windows host readiness guidance`);
+  assert(/WindowsHostReadiness=.*check-windows-host-readiness\.mjs/.test(text), `${label} should include the Windows host readiness command`);
   assert(/MacClientReverseRehearsal=/.test(text), `${label} should include Mac client reverse rehearsal guidance`);
   assert(/ReverseRehearsal=/.test(text), `${label} should mention the discovery ReverseRehearsal line`);
   assert(/LAN008/.test(text), `${label} should mention the safe default-deny reverse-control response`);
@@ -503,6 +507,36 @@ function assertMacClientDiscoverWindowsCommand(command, label) {
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
 }
 
+function assertWindowsHostStatusCommand(command, label) {
+  assert(/scripts\/windows\/start-windows-host\.mjs/.test(command), `${label} should use Windows host status`);
+  assert(command.includes("--status"), `${label} should be a status-only command`);
+  assert(command.includes("--host 127.0.0.1"), `${label} should run on Windows loopback`);
+  assert(command.includes("--port 43770"), `${label} should keep the default Windows host port explicit`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--forceCall"), `${label} should not replace an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not mention input events`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertWindowsHostReadinessCommand(command, label) {
+  assert(/scripts\/windows\/check-windows-host-readiness\.mjs/.test(command), `${label} should use Windows host readiness`);
+  assert(command.includes("--host 127.0.0.1"), `${label} should run on Windows loopback`);
+  assert(command.includes("--port 43770"), `${label} should keep the default Windows host port explicit`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board for current hints`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--forceCall"), `${label} should not replace an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not mention input events`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacClientReverseRehearsalAction(text, label) {
   assert(String(text || "").includes("MacClientDiscoverWindows"), `${label} should start from discovery`);
   assert(String(text || "").includes("ReverseRehearsal="), `${label} should point to discovery ReverseRehearsal output`);
@@ -732,6 +766,8 @@ function checkHelp(args) {
     assert(/commands\.macClientPageStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac client page status JSON field`);
     assert(/commands\.macClientManualChecklistAction/.test(result.stdout), `${script} ${flag} should document Mac client manual checklist JSON field`);
     assert(/commands\.macClientDiscoverWindowsCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery JSON field`);
+    assert(/commands\.windowsHostStatusCommand/.test(result.stdout), `${script} ${flag} should document Windows host status JSON field`);
+    assert(/commands\.windowsHostReadinessCommand/.test(result.stdout), `${script} ${flag} should document Windows host readiness JSON field`);
     assert(/commands\.macClientFormalChecklistCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal checklist JSON field`);
     assert(/commands\.macClientFormalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal smoke preflight JSON field`);
     assert(/commands\.macClientPromptPasswordSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac client prompt-password smoke JSON field`);
@@ -811,6 +847,8 @@ function checkOfflineJson(args) {
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "offline JSON Mac client diagnostics command");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "offline JSON Mac client manual checklist action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
+  assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "offline JSON Windows host status command");
+  assertWindowsHostReadinessCommand(payload.commands?.windowsHostReadinessCommand || "", "offline JSON Windows host readiness command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "offline JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke preflight command");
@@ -928,6 +966,10 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("手工清单"), "plain report should mention the Mac client manual checklist");
   assert(String(result.stdout || "").includes("连接/视频/音频/剪贴板/input_ack/诊断"), "plain report should include the Mac client manual checklist items");
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
+  assert(String(result.stdout || "").includes("Windows host status for Windows side:"), "plain report should include Windows host status label");
+  assert(String(result.stdout || "").includes("start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary"), "plain report should include Windows host status command");
+  assert(String(result.stdout || "").includes("Windows host readiness for Windows side:"), "plain report should include Windows host readiness label");
+  assert(String(result.stdout || "").includes("check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary"), "plain report should include Windows host readiness command");
   assert(String(result.stdout || "").includes("ReverseRehearsal="), "plain report should point to discovery ReverseRehearsal output");
   assert(String(result.stdout || "").includes("check-mac-client-formal-status.mjs"), "plain report should include Mac client formal checklist command");
   assert(String(result.stdout || "").includes("run-mac-client-formal-smoke.mjs"), "plain report should include Mac client formal smoke preflight command");
@@ -1006,6 +1048,8 @@ function checkOnlineJson(args) {
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "online JSON Mac client diagnostics command");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "online JSON Mac client manual checklist action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "online JSON Mac client Windows discovery command");
+  assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "online JSON Windows host status command");
+  assertWindowsHostReadinessCommand(payload.commands?.windowsHostReadinessCommand || "", "online JSON Windows host readiness command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "online JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "online JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "online JSON Mac client formal smoke preflight command");

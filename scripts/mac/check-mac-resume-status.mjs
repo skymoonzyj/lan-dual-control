@@ -247,6 +247,12 @@ Machine-readable JSON fields:
                              Secret-free Windows host discovery command from
                              the Mac side; it does not authenticate or send
                              input.
+  commands.windowsHostStatusCommand
+                             Secret-free Windows-side loopback status command
+                             for checking or safely starting the Windows host.
+  commands.windowsHostReadinessCommand
+                             Secret-free Windows-side loopback readiness command
+                             for checking host readiness and board hints.
   commands.macClientFormalChecklistCommand
                              Secret-free Mac controls Windows formal checklist
                              command; it discovers Windows hosts on the
@@ -1576,6 +1582,14 @@ function makeMacClientDiscoverWindowsCommand() {
   return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
 
+function makeWindowsHostStatusCommand() {
+  return "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary";
+}
+
+function makeWindowsHostReadinessCommand() {
+  return "node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary";
+}
+
 function makeMacClientFormalChecklistCommand() {
   return "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
 }
@@ -2067,6 +2081,8 @@ function formatBoardSummary(report) {
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+      `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
+      `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
       `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
@@ -2124,6 +2140,8 @@ function formatBoardSummary(report) {
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+    `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
+    `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
@@ -2248,6 +2266,8 @@ function printReport(report) {
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client manual checklist: ${report.commands.macClientManualChecklistAction}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
+  console.log(`[NEXT] Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
+  console.log(`[NEXT] Windows host readiness for Windows side: ${report.commands.windowsHostReadinessCommand}`);
   console.log(`[NEXT] Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`[NEXT] Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
@@ -2330,6 +2350,8 @@ async function main() {
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientManualChecklistAction: makeMacClientManualChecklistAction(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
+      windowsHostStatusCommand: makeWindowsHostStatusCommand(),
+      windowsHostReadinessCommand: makeWindowsHostReadinessCommand(),
       macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
