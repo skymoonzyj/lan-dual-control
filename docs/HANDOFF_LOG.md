@@ -19,6 +19,42 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控 Mac 入口自动发现 Mac host
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 最短入口默认只读发现最新 Mac host，避免 Mac IP 变化后仍预填旧地址。
+完成内容：
+- `start-windows-control-mac.mjs` 默认内置 HTTP `/discovery` 探测，不再通过子进程调用 discovery 脚本；发现 Mac host 后预填最新 LAN 目标并输出 `targetSource=discovery`。
+- 发现失败时安全回退到默认 `192.168.31.122:43770`；用户显式给 `--host` 且未要求 discovery 时尊重手填目标。
+- 新增/同步 `--discover`、`--noDiscover`、`--discoverHost`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs`；PowerShell wrapper 同步支持 `-Discover`、`-NoDiscover`、`-DiscoverHost`、`-DiscoverNoLocalSubnets`、`-DiscoverTimeoutMs`。
+- 入口测试新增假 Mac `/discovery` 服务，验证 dry-run 会选择发现到的 LAN Mac host，且不打印密码、不认证、不发 input/inject。
+修改文件：
+- `scripts/windows/start-windows-control-mac.mjs`
+- `scripts/windows/start-windows-control-mac.ps1`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000` 先失败于 `Unknown argument: --noDiscover`。
+- 绿灯：`node --check scripts/windows/start-windows-control-mac.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-control-mac-entry.mjs`
+- 绿灯：真实 Mac 只读 dry-run：`node scripts/windows/start-windows-control-mac.mjs --dryRun --boardSummary --discoverHost 192.168.31.122 --discoverNoLocalSubnets --discoverTimeoutMs 1200` 输出 `targetSource=discovery`。
+- 绿灯：PowerShell 只读 dry-run：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-control-mac.ps1 -DryRun -BoardSummary -DiscoverHost 192.168.31.122 -DiscoverNoLocalSubnets -DiscoverTimeoutMs 1200` 输出 `targetSource=discovery`。
+- 绿灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --script start-windows-control-mac.ps1 --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：`node scripts/windows/test-windows-powershell-help.mjs --shell pwsh.exe --timeoutMs 10000`
+- 绿灯：`git diff --check`
+- 绿灯：冲突标记扫描无命中。
+遗留问题：
+- 真实连接仍需要用户在页面输入当前 Mac 临时密码；本轮只改入口选目标，不做真实认证或 input/inject。
+下一步建议：
+- 用户现场优先继续用 `Start-Windows-Control-Mac.cmd` 或 `scripts/windows/start-windows-control-mac.ps1`；如果摘要显示 `targetSource=discovery`，说明已经使用发现到的 Mac host。只有需要锁死旧地址时才加 `-NoDiscover` / `--noDiscover`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端保持 `/discovery` 可达即可。
+
 日期：2026-06-20 Windows 控 Mac PowerShell 7 最短入口
 开发端：Windows Codex
 本轮目标：给 Windows 控 Mac 的最短启动链路补 PowerShell 7 wrapper，方便现场不用记 Node 长命令。

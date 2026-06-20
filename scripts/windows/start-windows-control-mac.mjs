@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import http from "node:http";
+import os from "node:os";
 
 const defaults = {
   host: "192.168.31.122",
@@ -8,6 +9,9 @@ const defaults = {
   clientPort: 5200,
   debugPort: 9340,
   timeoutMs: 8000,
+  discover: true,
+  discoverTimeoutMs: 650,
+  discoverConcurrency: 64,
 };
 
 function printHelp() {
@@ -15,26 +19,35 @@ function printHelp() {
   node scripts/windows/start-windows-control-mac.mjs [options]
 
 Options:
-  --host <ip>            Mac host LAN IP. Default: ${defaults.host}
-  --port <port>          Mac host WebSocket port. Default: ${defaults.port}
-  --clientPort <port>    Local Windows control page port. Default: ${defaults.clientPort}
-  --debugPort <port>     Reserved browser diagnostics debug port. Default: ${defaults.debugPort}
-  --timeoutMs <ms>       Wait for the local page server. Default: ${defaults.timeoutMs}
-  --noOpen               Start/reuse the page server but do not open a browser.
-  --dryRun               Print the URL and plan without starting services or opening a browser.
-  --boardSummary         Print one secret-free Agent Link Board summary line.
-  --json                 Print one machine-readable JSON object.
-  --help, -h             Show this help without starting services or browsers.
+  --host <ip>                 Mac host LAN IP fallback. Default: ${defaults.host}
+  --port <port>               Mac host WebSocket/discovery port. Default: ${defaults.port}
+  --clientPort <port>         Local Windows control page port. Default: ${defaults.clientPort}
+  --debugPort <port>          Reserved browser diagnostics debug port. Default: ${defaults.debugPort}
+  --timeoutMs <ms>            Wait for the local page server. Default: ${defaults.timeoutMs}
+  --discover                  Force a read-only /discovery probe before choosing the target.
+  --noDiscover                Skip discovery and use --host/--port fallback directly.
+  --discoverHost <ip>         Direct host to probe during discovery. Can be repeated.
+  --discoverNoLocalSubnets    Only probe --host and --discoverHost targets.
+  --discoverTimeoutMs <ms>    Per-host discovery timeout, 100-5000. Default: ${defaults.discoverTimeoutMs}
+  --noOpen                    Start/reuse the page server but do not open a browser.
+  --dryRun                    Print the URL and plan without starting services or opening a browser.
+  --boardSummary              Print one secret-free Agent Link Board summary line.
+  --json                      Print one machine-readable JSON object.
+  --help, -h                  Show this help without starting services or browsers.
 
 Description:
-  Opens the shortest Windows entry for controlling the current Mac host. The page
-  is prefilled with WebSocket LAN target settings, clears the demo password for a
-  real Mac connection, and waits for the user to type the current temporary Mac
-  password locally. It does not print passwords, authenticate, or send input/inject.
+  Opens the shortest Windows entry for controlling the current Mac host. By
+  default it first runs a read-only LAN /discovery probe and uses the latest Mac
+  host when found; otherwise it falls back to the configured host/port. The page
+  clears the demo password for a real Mac connection and waits for the user to
+  type the current temporary Mac password locally. It does not print passwords,
+  authenticate, or send input/inject.
 
 Examples:
   node scripts/windows/start-windows-control-mac.mjs
   node scripts/windows/start-windows-control-mac.mjs --dryRun --boardSummary
+  node scripts/windows/start-windows-control-mac.mjs --dryRun --json --discoverHost 192.168.31.122
+  node scripts/windows/start-windows-control-mac.mjs --dryRun --boardSummary --noDiscover
 `);
 }
 
@@ -44,9 +57,19 @@ function clampPort(value, fallback) {
   return port;
 }
 
+function clampInteger(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
 function parseArgs(argv) {
   const args = {
     ...defaults,
+    discoverHosts: [],
+    discoverNoLocalSubnets: false,
+    discoverRequested: false,
+    hostProvided: false,
     openBrowser: true,
     dryRun: false,
     json: false,
@@ -77,8 +100,27 @@ function parseArgs(argv) {
       args.boardSummary = true;
       continue;
     }
+    if (token === "--discover") {
+      args.discover = true;
+      args.discoverRequested = true;
+      continue;
+    }
+    if (token === "--noDiscover") {
+      args.discover = false;
+      continue;
+    }
+    if (token === "--discoverNoLocalSubnets") {
+      args.discoverNoLocalSubnets = true;
+      continue;
+    }
     if (token === "--host" && next && !next.startsWith("--")) {
       args.host = next.trim();
+      args.hostProvided = true;
+      index += 1;
+      continue;
+    }
+    if (token === "--discoverHost" && next && !next.startsWith("--")) {
+      args.discoverHosts.push(next.trim());
       index += 1;
       continue;
     }
@@ -102,8 +144,14 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (token === "--discoverTimeoutMs" && next && !next.startsWith("--")) {
+      args.discoverTimeoutMs = clampInteger(next, 100, 5000, defaults.discoverTimeoutMs);
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
+  args.discoverHosts = [...new Set(args.discoverHosts.filter(Boolean))];
   return args;
 }
 
@@ -123,6 +171,7 @@ function makeBoardSummary(report) {
     "USABLE_NEXT=open_windows_client",
     "BLOCKER=none",
     `target=${report.host}:${report.port}`,
+    `targetSource=${report.targetSource}`,
     `clientPort=${report.clientPort}`,
     `debugPort=${report.debugPort}`,
     `OpenUrl=${report.url}`,
@@ -135,11 +184,13 @@ function makeReport(args, extra = {}) {
     status: "ready",
     host: args.host,
     port: args.port,
+    targetSource: args.targetSource || (args.hostProvided ? "explicit" : "default"),
     clientPort: args.clientPort,
     debugPort: args.debugPort,
     url: makeControlUrl(args),
     openBrowser: Boolean(args.openBrowser && !args.dryRun),
     dryRun: Boolean(args.dryRun),
+    discovery: args.discovery || { attempted: false, selected: false, reason: "disabled" },
     serverStarted: false,
     serverReused: false,
     safety: {
@@ -182,6 +233,217 @@ async function waitForServer(url, timeoutMs) {
   return false;
 }
 
+function ipv4ToInt(address) {
+  const parts = String(address).split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return ((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+}
+
+function intToIpv4(value) {
+  return [
+    (value >>> 24) & 255,
+    (value >>> 16) & 255,
+    (value >>> 8) & 255,
+    value & 255,
+  ].join(".");
+}
+
+function prefixLengthFromNetmask(netmask) {
+  const numeric = ipv4ToInt(netmask);
+  if (numeric === null) return 24;
+  let prefix = 0;
+  for (let bit = 31; bit >= 0; bit -= 1) {
+    if ((numeric & (1 << bit)) !== 0) prefix += 1;
+    else break;
+  }
+  return Math.max(1, Math.min(30, prefix));
+}
+
+function hostsForInterface(entry) {
+  const address = ipv4ToInt(entry.address);
+  if (address === null) return [];
+  const prefix = prefixLengthFromNetmask(entry.netmask);
+  const effectivePrefix = prefix < 24 ? 24 : prefix;
+  const mask = (0xffffffff << (32 - effectivePrefix)) >>> 0;
+  const network = address & mask;
+  const broadcast = network | (~mask >>> 0);
+  const hosts = [];
+  for (let value = network + 1; value < broadcast; value += 1) {
+    hosts.push(intToIpv4(value >>> 0));
+  }
+  return hosts;
+}
+
+function isLoopbackHost(host) {
+  const value = String(host || "").trim().toLowerCase();
+  return value === "localhost" || value === "127.0.0.1" || value === "::1" || value.startsWith("127.");
+}
+
+function isUsableDiscoveredHost(host) {
+  const value = String(host || "").trim();
+  if (!value || value === "0.0.0.0" || value === "::") return false;
+  return !isLoopbackHost(value);
+}
+
+function makeDiscoveryCandidates(args) {
+  const hostSet = new Set([args.host, ...args.discoverHosts].filter(Boolean));
+  if (!args.discoverNoLocalSubnets) {
+    for (const entries of Object.values(os.networkInterfaces())) {
+      for (const entry of entries || []) {
+        if (!entry || entry.family !== "IPv4" || entry.internal || String(entry.address).startsWith("169.254.")) continue;
+        for (const host of hostsForInterface(entry)) hostSet.add(host);
+      }
+    }
+  }
+  return [...hostSet]
+    .filter((host) => host && host !== "0.0.0.0" && host !== "::")
+    .map((host) => ({ host, port: args.port }));
+}
+
+function normalizeDiscoveryPayload(payload, candidate, latencyMs) {
+  if (!payload || payload.type !== "lan_dual_discovery") return null;
+  const discoveredPort = Number(payload.controlPort ?? payload.port);
+  return {
+    host: payload.host && payload.host !== "0.0.0.0" ? String(payload.host) : candidate.host,
+    port: String(Number.isInteger(discoveredPort) && discoveredPort > 0 ? discoveredPort : candidate.port),
+    probeHost: candidate.host,
+    probePort: candidate.port,
+    latencyMs,
+    deviceId: payload.deviceId || "",
+    deviceName: payload.deviceName || payload.hostName || "",
+    platform: payload.platform || "",
+    role: payload.role || "",
+    runtime: payload.runtime || null,
+    capabilities: payload.capabilities || {},
+  };
+}
+
+function isMacHost(item) {
+  return String(item?.platform || "").toLowerCase() === "macos" && String(item?.role || "host").toLowerCase() === "host";
+}
+
+async function fetchDiscoveryCandidate(candidate, timeoutMs) {
+  const startedAt = performance.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`http://${candidate.host}:${candidate.port}/discovery`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return normalizeDiscoveryPayload(payload, candidate, Math.round(performance.now() - startedAt));
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = [];
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function normalizeDiscoveredMacTarget(candidate) {
+  if (!candidate) return null;
+  const host = isUsableDiscoveredHost(candidate.host) ? String(candidate.host) : "";
+  const probeHost = isUsableDiscoveredHost(candidate.probeHost) ? String(candidate.probeHost) : "";
+  const targetHost = host || probeHost;
+  if (!targetHost) return null;
+  return {
+    ...candidate,
+    targetHost,
+    targetPort: clampPort(candidate.port, defaults.port),
+    sourceHost: host ? "payload-host" : "probe-host",
+  };
+}
+
+function pickDiscoveredMacHost(macHosts) {
+  for (const candidate of macHosts) {
+    const normalized = normalizeDiscoveredMacTarget(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+async function runDiscovery(args) {
+  const candidates = makeDiscoveryCandidates(args);
+  if (candidates.length === 0) {
+    return { ok: false, error: "no-candidates", candidates: 0, found: [], macHosts: [] };
+  }
+  const raw = await mapWithConcurrency(candidates, defaults.discoverConcurrency, (candidate) => fetchDiscoveryCandidate(candidate, args.discoverTimeoutMs));
+  const found = raw.filter(Boolean);
+  const macHosts = found.filter(isMacHost);
+  const bestMacHost = pickDiscoveredMacHost(macHosts);
+  return {
+    ok: Boolean(bestMacHost),
+    error: bestMacHost ? "" : `no usable Mac host found after probing ${candidates.length} candidate(s)`,
+    candidates: candidates.length,
+    found,
+    macHosts,
+    bestMacHost,
+  };
+}
+
+async function resolveTarget(args) {
+  const shouldDiscover = args.discover && (!args.hostProvided || args.discoverRequested || args.discoverHosts.length > 0 || args.discoverNoLocalSubnets);
+  if (!shouldDiscover) {
+    return {
+      ...args,
+      targetSource: args.hostProvided ? "explicit" : "default",
+      discovery: { attempted: false, selected: false, reason: args.discover ? "explicit-host" : "disabled" },
+    };
+  }
+
+  const discovery = await runDiscovery(args);
+  const selected = discovery.bestMacHost;
+  if (selected) {
+    return {
+      ...args,
+      host: String(selected.targetHost),
+      port: clampPort(selected.targetPort, args.port),
+      targetSource: "discovery",
+      discovery: {
+        attempted: true,
+        selected: true,
+        scanned: discovery.candidates,
+        found: discovery.found.length,
+        macHosts: discovery.macHosts.length,
+        selectedHost: String(selected.targetHost),
+        selectedPort: clampPort(selected.targetPort, args.port),
+        sourceHost: selected.sourceHost || "",
+        deviceName: selected.deviceName || "",
+        runtime: selected.runtime || null,
+        capabilities: selected.capabilities || {},
+      },
+    };
+  }
+
+  return {
+    ...args,
+    targetSource: args.hostProvided ? "explicit" : "default",
+    discovery: {
+      attempted: true,
+      selected: false,
+      scanned: discovery.candidates || 0,
+      found: discovery.found?.length || 0,
+      macHosts: discovery.macHosts?.length || 0,
+      reason: discovery.error || "no-usable-mac-host",
+    },
+  };
+}
+
 async function ensureClientServer(args) {
   const baseUrl = `http://127.0.0.1:${args.clientPort}/`;
   if (await probeHttp(baseUrl, 700)) {
@@ -220,8 +482,11 @@ function openUrl(url) {
 function printHuman(report) {
   console.log("[OK] Windows 控 Mac 一键入口已准备好");
   console.log(`[INFO] 打开地址：${report.url}`);
-  console.log(`[INFO] Mac 目标：${report.host}:${report.port}`);
+  console.log(`[INFO] Mac 目标：${report.host}:${report.port}（来源：${report.targetSource}）`);
   console.log(`[INFO] 本地页面端口：${report.clientPort}；诊断调试端口：${report.debugPort}`);
+  if (report.discovery?.attempted && !report.discovery.selected) {
+    console.log(`[WARN] 未发现可用 LAN Mac host，已回退到 ${report.targetSource} 目标：${report.discovery.reason}`);
+  }
   console.log("[INFO] 页面会清空 demo 密码；请在页面里输入 Mac 端当前临时密码后点连接。");
   console.log("[INFO] 安全：不打印密码，不认证，不发送 input/inject。当前先做手工体验测试。");
   if (report.serverReused) console.log("[INFO] 已复用正在运行的本地控制端页面服务。");
@@ -230,12 +495,13 @@ function printHuman(report) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv);
-  if (args.help) {
+  const parsedArgs = parseArgs(process.argv);
+  if (parsedArgs.help) {
     printHelp();
     return;
   }
 
+  const args = await resolveTarget(parsedArgs);
   let runtime = {};
   if (!args.dryRun) {
     runtime = await ensureClientServer(args);

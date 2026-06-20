@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -159,6 +160,60 @@ function parseJson(stdout, label) {
     throw new Error(`${label} did not print valid JSON: ${error.message}\n${stdout}`);
   }
 }
+function withFakeMacDiscoveryServer(payloadForPort, callback) {
+  let activePort = 0;
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((request, response) => {
+      if (request.url !== "/discovery") {
+        response.writeHead(404, { "content-type": "text/plain" });
+        response.end("not found");
+        return;
+      }
+      const payload = typeof payloadForPort === "function" ? payloadForPort(activePort) : payloadForPort;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(payload));
+    });
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", async () => {
+      activePort = server.address().port;
+      try {
+        resolve(await callback(activePort));
+      } catch (error) {
+        reject(error);
+      } finally {
+        server.close();
+      }
+    });
+  });
+}
+
+function fakeMacDiscoveryPayload(port, host = "192.168.31.155") {
+  return {
+    type: "lan_dual_discovery",
+    platform: "macos",
+    role: "host",
+    host,
+    port,
+    deviceName: "Fake Mac host",
+    hostMode: "mac-host-h264-stream",
+    capturePipeline: "screencapturekit-h264",
+    audioMode: "system-pcm",
+    inputMode: "log",
+    capabilities: {
+      h264Stream: true,
+      video: true,
+      audio: true,
+      clipboardText: true,
+      clipboardFile: true,
+      input: true,
+      maxScreenFps: 60,
+    },
+    runtime: {
+      buildId: "test-build",
+      startedAt: "2026-06-20T00:00:00.000Z",
+    },
+  };
+}
 
 function checkIndexLoadsLaunchParams() {
   const indexHtml = require("node:fs").readFileSync(resolve(repoRoot, "apps/windows-client/index.html"), "utf8");
@@ -215,7 +270,7 @@ async function checkCmdLauncher(args) {
     return;
   }
 
-  const result = await runCmd(["--dryRun", "--boardSummary"], args);
+  const result = await runCmd(["--dryRun", "--boardSummary", "--noDiscover"], args);
   assert(result.exitCode === 0, `cmd dryRun boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
   assertIncludes(result.stdout, "WindowsUsableEntry=status=ready", "cmd boardSummary");
   assertIncludes(result.stdout, "OpenUrl=http://127.0.0.1:5200/", "cmd boardSummary");
@@ -238,7 +293,7 @@ async function checkHelp(args) {
 }
 
 async function checkDryRunJson(args) {
-  const result = await run(["--dryRun", "--json"], args);
+  const result = await run(["--dryRun", "--json", "--noDiscover"], args);
   assert(result.exitCode === 0, `dryRun JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
   const payload = parseJson(result.stdout, "dryRun JSON");
   assert(payload.status === "ready", `status should be ready, got ${payload.status}`);
@@ -267,8 +322,33 @@ async function checkDryRunJson(args) {
   console.log("[OK] Windows control Mac entry dry-run JSON uses fixed usable defaults");
 }
 
+async function checkDiscoveryDryRunJson(args) {
+  await withFakeMacDiscoveryServer((activePort) => fakeMacDiscoveryPayload(activePort), async (activePort) => {
+    const result = await run([
+      "--dryRun",
+      "--json",
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--discoverHost", "127.0.0.1",
+      "--port", String(activePort),
+    ], args);
+    assert(result.exitCode === 0, `discovery dryRun JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const report = parseJson(result.stdout, "discovery dryRun JSON");
+    assert(report.host === "192.168.31.155", `discovery should select LAN Mac host, got ${report.host}`);
+    assert(String(report.port) === String(activePort), `discovery should keep discovered Mac port, got ${report.port}`);
+    assert(report.targetSource === "discovery", `targetSource should be discovery, got ${report.targetSource}`);
+    assert(report.openBrowser === false, "discovery dryRun should not open a browser");
+    assertIncludes(report.url, "host=192.168.31.155", "discovery dryRun URL");
+    assertIncludes(report.boardSummary, `target=192.168.31.155:${activePort}`, "discovery boardSummary");
+    assertIncludes(report.boardSummary, "targetSource=discovery", "discovery boardSummary");
+    assertNotIncludes(JSON.stringify(report), "Mac host password:", "discovery dryRun JSON");
+    assertNotIncludes(JSON.stringify(report), "demo-password", "discovery dryRun JSON");
+    assertNotIncludes(JSON.stringify(report), "secret", "discovery dryRun JSON");
+  });
+  console.log("[OK] Windows control Mac entry can discover the current LAN Mac host safely");
+}
 async function checkBoardSummary(args) {
-  const result = await run(["--dryRun", "--boardSummary"], args);
+  const result = await run(["--dryRun", "--boardSummary", "--noDiscover"], args);
   assert(result.exitCode === 0, `boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
   assertIncludes(result.stdout, "WindowsUsableEntry=status=ready", "boardSummary");
   assertIncludes(result.stdout, "OpenUrl=http://127.0.0.1:5200/", "boardSummary");
@@ -294,7 +374,7 @@ async function checkPowerShellWrapperHelp(args) {
 }
 
 async function checkPowerShellWrapperDryRunJson(args) {
-  const result = await runPowerShell(["-DryRun", "-Json"], args);
+  const result = await runPowerShell(["-DryRun", "-Json", "-NoDiscover"], args);
   assert(result.exitCode === 0, `PowerShell dryRun JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
   const payload = parseJson(result.stdout, "PowerShell dryRun JSON");
   assert(payload.status === "ready", `PowerShell dryRun status should be ready, got ${payload.status}`);
@@ -309,7 +389,7 @@ async function checkPowerShellWrapperDryRunJson(args) {
 }
 
 async function checkPowerShellWrapperBoardSummary(args) {
-  const result = await runPowerShell(["-DryRun", "-BoardSummary"], args);
+  const result = await runPowerShell(["-DryRun", "-BoardSummary", "-NoDiscover"], args);
   assert(result.exitCode === 0, `PowerShell boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
   assertIncludes(result.stdout, "WindowsUsableEntry=status=ready", "PowerShell boardSummary");
   assertIncludes(result.stdout, "OpenUrl=http://127.0.0.1:5200/", "PowerShell boardSummary");
@@ -332,6 +412,7 @@ async function main() {
   await checkPowerShellWrapperHelp(args);
   await checkHelp(args);
   await checkDryRunJson(args);
+  await checkDiscoveryDryRunJson(args);
   await checkPowerShellWrapperDryRunJson(args);
   await checkBoardSummary(args);
   await checkPowerShellWrapperBoardSummary(args);
