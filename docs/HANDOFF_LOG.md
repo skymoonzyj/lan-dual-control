@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac heartbeat 暴露 discovery readiness call 命令
+开发端：Mac Codex
+本轮目标：让最新 `Mac Heartbeat` 行也能直接给出显式刷新 Windows host readiness call 的安全命令，避免白天接手时只看最新心跳却找不到可复制入口。
+完成内容：
+- `check-mac-heartbeat` 新增 JSON `commands.macClientDiscoverWindowsCallCommand`。
+- `--boardSummary` / 普通输出新增 `MacClientDiscoverWindowsCall=node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary`。
+- 保留原 `MacClientDiscoverWindows=` 只读 discovery 命令，不带 `--sendCall`；heartbeat 默认不发送 call、不连接 Windows、不认证、不请求或发送密码、不发 input_event/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败于 help 未记录 `macClientDiscoverWindowsCallCommand`。
+- 绿灯：同一测试通过，覆盖 JSON 命令、`MacClientDiscoverWindowsCall=` 摘要标签、旧 `MacClientDiscoverWindows=` 不含 `--sendCall`，以及无密码/无 force/server/input/inject 边界。
+遗留问题：
+- 当前真实 Agent Link Board active call 仍需要 Windows Codex 在 Windows 本机刷新 Windows host status/readiness 或安全启动 Windows host。
+下一步建议：
+- 白天继续时，若最新 `Mac Heartbeat` 仍显示 Windows discovery timeout，可复制 `MacClientDiscoverWindowsCall=` 刷新给 Windows 端；Windows 端仍需执行 `WindowsHostStatus=` / `WindowsHostReadiness=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端处理当前 host readiness call；本轮不要求 Windows 代码修改。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac discovery 上板 POST 重试
 开发端：Mac Codex
 本轮目标：修复真实运行 `discover-windows-hosts --sendStatus --sendMessage --sendCall` 时，discovery 已输出安全摘要但 Agent Link Board `/api/status` 偶发/重复 `ECONNRESET` 会中断后续 message/call 的问题。

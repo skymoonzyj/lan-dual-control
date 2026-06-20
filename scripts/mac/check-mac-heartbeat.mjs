@@ -182,6 +182,8 @@ Machine-readable JSON fields:
                               macManualUxStatusCommand, and
                               macLaunchAgentPlanCommand for dry-run
                               power/audio/input/manual UX/LaunchAgent plans,
+                              macClientDiscoverWindowsCallCommand for explicit
+                              Agent Link Board Windows-discovery calls,
                               plus windowsHostStatusCommand and
                               windowsHostReadinessCommand for Windows-side
                               local host checks.
@@ -889,6 +891,7 @@ function buildCommands(args) {
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
     macFormalE2eStatusCommand: `node scripts/mac/check-mac-formal-e2e-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
+    macClientDiscoverWindowsCallCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary",
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
     windowsHostStatusCommand: "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary",
     windowsHostReadinessCommand: "node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
@@ -1132,6 +1135,7 @@ function makeBoardSummary(report) {
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+    `MacClientDiscoverWindowsCall=${report.commands.macClientDiscoverWindowsCallCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
     `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
