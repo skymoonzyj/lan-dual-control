@@ -632,6 +632,10 @@ function makeMacClientManualChecklistAction() {
   return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 }
 
+function makeMacClientPasswordLocationAction() {
+  return "Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断";
+}
+
 function makeMacClientPageStatusCommand() {
   return "node scripts/mac/start-mac-client.mjs --status --boardSummary";
 }
@@ -929,7 +933,7 @@ function makeBoardSummary(report) {
   const findings = formatChecklistFindings(report.checklist);
   const diagnosticsEvidence = makeMacClientDiagnosticsEvidence(report);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}; MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}; MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function makeMacClientDiagnosticsEvidence(report) {
@@ -991,6 +995,7 @@ function printHuman(report) {
   console.log(`- Mac input safety plan: ${report.commands.macInputSafetyPlanCommand}`);
   console.log(`- Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(`- Mac client manual checklist: ${report.commands.macClientManualChecklistAction}`);
+  console.log(`- Mac client password location: ${report.commands.macClientPasswordLocationAction}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`- result: ${report.ok ? "ready with warnings allowed" : "blocked"} (${report.counts.blocker} blockers, ${report.counts.warning} warnings)`);
   console.log("");
@@ -1075,6 +1080,7 @@ async function buildReport(args) {
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
       macClientManualChecklistAction: makeMacClientManualChecklistAction(),
+      macClientPasswordLocationAction: makeMacClientPasswordLocationAction(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
     },
     recommendations: makeRecommendations(checklist, windowsHost, args, board),

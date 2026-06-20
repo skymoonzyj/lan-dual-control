@@ -6,6 +6,7 @@
 
 ## 2026-06-20 Mac client 密码输入位置
 - Mac 控 Windows 页面现在在密码框下固定显示“在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断”。复制/导出诊断新增 `密码输入位置` 行，同步带出同一条无密说明；自测覆盖页面提示、诊断复制和连接密码不泄漏。该改动不改协议、不认证、不请求或发送密码、不发 input/inject。- Windows 恢复总览和 Windows 控制端现在会消费 Mac 侧无密 `MacClientPasswordLocation=`：`check-windows-resume-status --checkBoard` 在 JSON、普通输出和 `--boardSummary` 中显示 Mac client 页面密码框位置；Windows 控制页 Mac 提醒区、值守证据和复制/导出诊断也会显示“Mac client 页面密码框填写 Windows 临时密码 / 终端隐藏输入只用于 formal/browser runner / 不要把密码发到通讯板”。解析拒绝 `password=...`、token/secret、`input_event`、`inject` 或自动发送伪造候选；Windows 不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+- Mac 常用开工入口现在也会稳定输出同一条 `MacClientPasswordLocation=`：`check-mac-client-readiness`、`check-mac-resume-status` 和 `check-mac-heartbeat` 的 JSON commands 与 `--boardSummary` 都带“Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断”。这只是无密位置提示，不代表已连接、认证或发送输入。
 
 ## 2026-06-20 Mac formal/status
 - Mac 控 Windows formal checklist / smoke 的反控请求演练摘要已步骤化：`reverseControlRehearsal` 和 `Reverse rehearsal` 现在明确 Step 1 Mac 点击“请求反控”并预期 `LAN008/default deny`，Step 2 Windows 在 Windows host 本机 loopback 跑 `WindowsOpenOneTimeReverseGrant` 开 30 秒一次性授权，且明确 `Do not run the grant from Mac`，Step 3 Mac 点击“重试反控”并确认 `临时授权已使用`。PowerShell 首选、Node fallback、无密码、无 `input_event`、无 `inject` 的安全边界保持不变；不改协议、不认证、不请求密码、不发 input/inject。

@@ -223,6 +223,11 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacClientManualChecklist=/.test(text), `${label} should include Mac client manual checklist guidance`);
   assert(/MacClientManualChecklist=.*手工清单/.test(text), `${label} should mention the Mac client manual checklist`);
   assert(/MacClientManualChecklist=.*连接\/视频\/音频\/剪贴板\/input_ack\/诊断/.test(text), `${label} should include the Mac client manual checklist items`);
+  assert(/MacClientPasswordLocation=/.test(text), `${label} should include Mac client password location guidance`);
+  assertMacClientPasswordLocationAction(
+    String(text || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",
+    `${label} Mac client password location action`,
+  );
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(text), `${label} should include Mac client copy diagnostics action`);
   assert(/MacClientDiscoverWindows=/.test(text), `${label} should include Mac client Windows discovery guidance`);
   assert(/discover-windows-hosts\.mjs/.test(text), `${label} should include the Mac client Windows discovery command`);
@@ -561,6 +566,18 @@ function assertMacClientManualChecklistAction(text, label) {
   assert(!String(text || "").includes("LAN_DUAL_INPUT_MODE=inject"), `${label} should not instruct injection mode`);
 }
 
+function assertMacClientPasswordLocationAction(text, label) {
+  assert(String(text || "").includes("Mac 页面密码框"), `${label} should mention the Mac page password field`);
+  assert(String(text || "").includes("Windows 临时密码"), `${label} should mention Windows temporary password location`);
+  assert(String(text || "").includes("不要发到通讯板"), `${label} should keep Agent Link Board password safety visible`);
+  assert(String(text || "").includes("不保存到最近连接或诊断"), `${label} should mention storage and diagnostics safety`);
+  assert(!String(text || "").includes("LAN_DUAL_PASSWORD"), `${label} should not mention password env vars`);
+  assert(!String(text || "").includes("--password"), `${label} should not embed a password argument`);
+  assert(!String(text || "").includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!String(text || "").includes("input_event"), `${label} should not mention input events`);
+  assert(!String(text || "").includes("LAN_DUAL_INPUT_MODE=inject"), `${label} should not instruct injection mode`);
+}
+
 function assertMacClientFormalChecklistCommand(command, label) {
   assert(/check-mac-client-formal-status\.mjs/.test(command), `${label} should use check-mac-client-formal-status`);
   assert(command.includes("--discover"), `${label} should discover Windows hosts safely`);
@@ -846,6 +863,7 @@ function checkOfflineJson(args) {
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "offline JSON Mac client diagnostics command");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "offline JSON Mac client manual checklist action");
+  assertMacClientPasswordLocationAction(payload.commands?.macClientPasswordLocationAction || "", "offline JSON Mac client password location action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
   assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "offline JSON Windows host status command");
   assertWindowsHostReadinessCommand(payload.commands?.windowsHostReadinessCommand || "", "offline JSON Windows host readiness command");
@@ -1047,6 +1065,7 @@ function checkOnlineJson(args) {
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "online JSON Mac client diagnostics command");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "online JSON Mac client manual checklist action");
+  assertMacClientPasswordLocationAction(payload.commands?.macClientPasswordLocationAction || "", "online JSON Mac client password location action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "online JSON Mac client Windows discovery command");
   assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "online JSON Windows host status command");
   assertWindowsHostReadinessCommand(payload.commands?.windowsHostReadinessCommand || "", "online JSON Windows host readiness command");

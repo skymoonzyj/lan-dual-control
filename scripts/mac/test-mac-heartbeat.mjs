@@ -281,6 +281,18 @@ function assertMacClientManualChecklistAction(text, label) {
   assertNotIncludes(text || "", "LAN_DUAL_INPUT_MODE=inject", label);
 }
 
+function assertMacClientPasswordLocationAction(text, label) {
+  assertIncludes(text || "", "Mac 页面密码框", label);
+  assertIncludes(text || "", "Windows 临时密码", label);
+  assertIncludes(text || "", "不要发到通讯板", label);
+  assertIncludes(text || "", "不保存到最近连接或诊断", label);
+  assertNotIncludes(text || "", "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text || "", "--password", label);
+  assertNotIncludes(text || "", "--sendCall", label);
+  assertNotIncludes(text || "", "input_event", label);
+  assertNotIncludes(text || "", "LAN_DUAL_INPUT_MODE=inject", label);
+}
+
 function assertMacLaunchAgentPlanCommand(command, label) {
   assertIncludes(command || "", "install-mac-host-launch-agent.mjs", label);
   assertIncludes(command || "", "--boardSummary", label);
@@ -372,6 +384,7 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
   assertMacClientManualChecklistAction(commands?.macClientManualChecklistAction || "", label);
+  assertMacClientPasswordLocationAction(commands?.macClientPasswordLocationAction || "", label);
   assertIncludes(commands?.macFormalLocalSmokeCommand || "", "check-mac-formal-local-smoke.mjs", label);
   assertIncludes(commands?.macFormalE2eStatusCommand || "", "check-mac-formal-e2e-status.mjs", label);
   assertIncludes(commands?.macFormalE2eStatusCommand || "", "--boardSummary", label);
@@ -551,6 +564,11 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "手工清单", "offline board summary");
   assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientPasswordLocation=", "offline board summary");
+  assertMacClientPasswordLocationAction(
+    (payload.boardSummary || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",
+    "offline board summary password location action",
+  );
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
   assertWindowsHostBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
@@ -657,6 +675,11 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "online board summary");
       assertIncludes(payload.boardSummary || "", "手工清单", "online board summary");
       assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientPasswordLocation=", "online board summary");
+      assertMacClientPasswordLocationAction(
+        (payload.boardSummary || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",
+        "online board summary password location action",
+      );
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "online board summary");
       assertWindowsHostBoardSummary(payload.boardSummary || "", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "online board summary");

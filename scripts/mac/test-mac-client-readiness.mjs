@@ -168,6 +168,18 @@ function assertMacClientManualChecklistAction(text, label) {
   assertNotIncludes(text, "LAN_DUAL_INPUT_MODE=inject", label);
 }
 
+function assertMacClientPasswordLocationAction(text, label) {
+  assertIncludes(text, "Mac 页面密码框", label);
+  assertIncludes(text, "Windows 临时密码", label);
+  assertIncludes(text, "不要发到通讯板", label);
+  assertIncludes(text, "不保存到最近连接或诊断", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "LAN_DUAL_INPUT_MODE=inject", label);
+}
+
 function assertWindowsReverseGrantPowerShellCommand(command, label, expectedPort = "43770", action = "grant") {
   assertIncludes(command, "pwsh -NoProfile -ExecutionPolicy Bypass", label);
   assertIncludes(command, "-File scripts/windows/allow-windows-reverse-control.ps1", label);
@@ -463,6 +475,10 @@ function checkOfflineJson(args) {
     payload.commands?.macClientManualChecklistAction || "",
     "offline JSON Mac client manual checklist action",
   );
+  assertMacClientPasswordLocationAction(
+    payload.commands?.macClientPasswordLocationAction || "",
+    "offline JSON Mac client password location action",
+  );
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
@@ -507,6 +523,11 @@ function checkOfflineJson(args) {
   assertMacClientManualChecklistAction(
     (payload.boardSummary || "").split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
     "offline JSON boardSummary manual checklist action",
+  );
+  assert(/MacClientPasswordLocation=/.test(payload.boardSummary || ""), "boardSummary should include password location action");
+  assertMacClientPasswordLocationAction(
+    (payload.boardSummary || "").split("MacClientPasswordLocation=")[1]?.split("; ")[0] || "",
+    "offline JSON boardSummary password location action",
   );
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
   print("OK", "Offline JSON is parseable and secret-free");
@@ -606,6 +627,11 @@ function checkBoardSummary(args) {
     text.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
     "board summary manual checklist action",
   );
+  assertIncludes(text, "MacClientPasswordLocation=", "board summary");
+  assertMacClientPasswordLocationAction(
+    text.split("MacClientPasswordLocation=")[1]?.split("; ")[0] || "",
+    "board summary password location action",
+  );
   assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
   assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
@@ -681,6 +707,11 @@ function checkPlainReport(args) {
   assertMacClientManualChecklistAction(
     extractPlainLineValue(result.stdout, "- Mac client manual checklist: ", "plain report"),
     "plain report Mac client manual checklist",
+  );
+  assertIncludes(result.stdout, "Mac client password location:", "plain report");
+  assertMacClientPasswordLocationAction(
+    extractPlainLineValue(result.stdout, "- Mac client password location: ", "plain report"),
+    "plain report Mac client password location",
   );
   assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
   assertIncludes(result.stdout, "复制诊断", "plain report");

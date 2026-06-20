@@ -19,6 +19,36 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 开工第一屏补密码位置标签
+开发端：Mac Codex
+本轮目标：让 Windows 已实现的 `MacClientPasswordLocation=` 消费逻辑能在 Mac 常用开工入口里稳定看到无密密码位置提示。
+完成内容：
+- `check-mac-client-readiness`、`check-mac-resume-status`、`check-mac-heartbeat` 的 JSON commands 和 `--boardSummary` 都新增 `MacClientPasswordLocation=`。
+- 普通输出新增同一条提示：Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断。
+- 仅输出固定无密说明，不改变连接、认证、密码弹窗、call 或 input/inject 行为。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：三条自测先分别失败于缺少 `macClientPasswordLocationAction` 或 `MacClientPasswordLocation=`。
+- 绿灯：`node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 12000`
+- 绿灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000`
+- 绿灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+遗留问题：
+- 当前通讯板 active call 仍是 Windows host readiness/启动配合，Mac 侧这轮只补无密提示标签。
+下一步建议：
+- Windows 端继续按 `MacResumeStatus=` 或 `MacHeartbeat=` 中的 `MacClientPasswordLocation=` 显示密码填写位置；若仍有 Windows host discovery timeout，先刷新 Windows host status/readiness。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 代码修改；仍需要 Windows 端处理当前 host readiness call。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac resume 消费 Windows discovery 状态
 开发端：Mac Codex
 本轮目标：让 `check-mac-resume-status --checkBoard` 直接读懂 `Mac Client Discover Windows` 的通讯板状态，白天恢复工作时不用再从长 heartbeat/消息里找 discovery timeout。

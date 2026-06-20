@@ -885,6 +885,7 @@ function buildCommands(args) {
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
     macClientManualChecklistAction: makeMacClientManualChecklistAction(),
+    macClientPasswordLocationAction: makeMacClientPasswordLocationAction(),
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
     macFormalE2eStatusCommand: `node scripts/mac/check-mac-formal-e2e-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
@@ -900,6 +901,10 @@ function buildCommands(args) {
 
 function makeMacClientManualChecklistAction() {
   return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+}
+
+function makeMacClientPasswordLocationAction() {
+  return "Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断";
 }
 
 function buildFindings(args, { macHost, macClient, board, codex }) {
@@ -1123,6 +1128,7 @@ function makeBoardSummary(report) {
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}.`,
     `MacClientManualChecklist=${report.commands.macClientManualChecklistAction}.`,
+    `MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,

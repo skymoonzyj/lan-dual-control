@@ -1681,6 +1681,10 @@ function makeMacClientManualChecklistAction() {
   return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 }
 
+function makeMacClientPasswordLocationAction() {
+  return "Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断";
+}
+
 function makeMacClientDiscoverWindowsCommand() {
   return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
@@ -2190,7 +2194,7 @@ function formatBoardSummary(report) {
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
-      `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+      `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
       `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
@@ -2250,7 +2254,7 @@ function formatBoardSummary(report) {
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
-    `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+    `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
     `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
@@ -2377,6 +2381,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client manual checklist: ${report.commands.macClientManualChecklistAction}`);
+  console.log(`[NEXT] Mac client password location: ${report.commands.macClientPasswordLocationAction}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`[NEXT] Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
   console.log(`[NEXT] Windows host readiness for Windows side: ${report.commands.windowsHostReadinessCommand}`);
@@ -2461,6 +2466,7 @@ async function main() {
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientManualChecklistAction: makeMacClientManualChecklistAction(),
+      macClientPasswordLocationAction: makeMacClientPasswordLocationAction(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
       windowsHostStatusCommand: makeWindowsHostStatusCommand(),
       windowsHostReadinessCommand: makeWindowsHostReadinessCommand(),
