@@ -256,6 +256,7 @@ function extractWindowsEvidence(entries) {
 
 function extractMacEvidence(entries) {
   const ordered = [...entries].reverse();
+  let evidence = null;
   for (const entry of ordered) {
     if (!isMacEvidenceEntry(entry)) continue;
     const text = entry.text || "";
@@ -277,12 +278,12 @@ function extractMacEvidence(entries) {
       "keyGapFramesLast",
     ].some((key) => tokens[key] !== undefined);
     if (!hasEvidence) continue;
-    return {
-      h264Key: toNumber(tokens.h264Key, 0),
-      sps: toNumber(tokens.sps, 0),
-      pps: toNumber(tokens.pps, 0),
-      idr: toNumber(tokens.idr, 0),
-      keyParam: toNumber(tokens.keyParam, 0),
+    const candidate = {
+      h264Key: tokens.h264Key !== undefined ? toNumber(tokens.h264Key, 0) : undefined,
+      sps: tokens.sps !== undefined ? toNumber(tokens.sps, 0) : undefined,
+      pps: tokens.pps !== undefined ? toNumber(tokens.pps, 0) : undefined,
+      idr: tokens.idr !== undefined ? toNumber(tokens.idr, 0) : undefined,
+      keyParam: tokens.keyParam !== undefined ? toNumber(tokens.keyParam, 0) : undefined,
       firstKeyNal: tokens.firstKeyNal ? String(tokens.firstKeyNal) : undefined,
       firstNal: tokens.firstNal ? String(tokens.firstNal) : undefined,
       lastNal: tokens.lastNal ? String(tokens.lastNal) : undefined,
@@ -299,8 +300,17 @@ function extractMacEvidence(entries) {
       lastKeyParam: tokens.lastKeyParam ? String(tokens.lastKeyParam) : undefined,
       updatedAt: entry.at,
     };
+    if (!evidence) {
+      evidence = candidate;
+      continue;
+    }
+    for (const [key, value] of Object.entries(candidate)) {
+      if (evidence[key] === undefined && value !== undefined) {
+        evidence[key] = value;
+      }
+    }
   }
-  return null;
+  return evidence;
 }
 
 function hasMacKeyEvidence(mac) {

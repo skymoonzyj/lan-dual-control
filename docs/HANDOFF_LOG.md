@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Mac Codex
+
+日期：2026-06-21 W2 H.264 通讯板 Mac 证据合并修复
+开发端：Mac Codex
+本轮目标：修复真实通讯板上较新的短 Mac 摘要覆盖较旧完整 `MacHostMedia` 证据，导致 `W2H264BoardDiagnosis` 的 `macStream` / `firstKeyNal` 重新变成 `na` 的问题。
+完成内容：`diagnose-w2-h264-board` 现在会从新到旧合并 Mac H.264 证据：较新的状态有字段时优先用新值，缺失字段会从较旧完整 `MacHostMedia` / readiness 摘要补齐；缺失 token 不再预先变成 `0`，避免挡住旧证据。新增回归覆盖“后来的短 `h264Key/sps/pps/idr/keyParam` 摘要不能丢掉之前的 `h264Frames/h264Delta/keyGap/keyTail/firstKeyNal`”。
+修改文件：scripts/windows/diagnose-w2-h264-board.mjs；scripts/windows/test-diagnose-w2-h264-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-diagnose-w2-h264-board` 先失败于 `mac=firstKeyNal:na` / `macStream=frames:na`；绿灯后 `node --check` 两项和 `node scripts/windows/test-diagnose-w2-h264-board.mjs --timeoutMs 30000` 通过。真实通讯板只读复跑输出 `macStream=frames:293 delta:290 keyGapMax:120/2067 keyGapLast:120/2067 keyTail:52/896 firstKeyParam:yes lastKeyParam:yes`。
+遗留问题：仍无真实 `W2W3Retest=`；当前诊断仍是 `waiting-for-w2w3-retest`。下一步还是 Windows 用户运行 `Run-WinClientRetest.cmd` 并把 `W2W3Retest=` 上板。
+下一步建议：真实复测上板后立即跑 `diagnose-w2-h264-board --boardSummary`；若 Mac `macStream` 正常但 Windows `recv/decoded` 异常，再按接收或 WebCodecs 解码路径继续。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续真实运行 `Run-WinClientRetest.cmd`；不在通讯板发送密码，不发 input/inject。
+
 ## 2026-06-21 Windows Codex
 
 日期：2026-06-21 W2/W3 复测结果脱敏上板助手

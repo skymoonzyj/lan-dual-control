@@ -250,6 +250,36 @@ async function checkWaitingForRetest(args) {
   console.log("[OK] W2 H.264 board diagnosis asks for WinClientRetest when evidence is missing");
 }
 
+async function checkMacEvidenceMergesLaterPartialSummaries(args) {
+  const state = makeState({
+    windowsText: "Windows online, no W2W3Retest yet.",
+    macText: "Mac Codex latest status only repeats h264Key=3 sps=3 pps=3 idr=3 keyParam=3 while waiting for WinClientRetest.",
+  });
+  state.statuses["Mac Host Media"] = {
+    role: "Mac 端",
+    status: "media-ok",
+    note: macNalEvidence,
+    updatedAt: "2026-06-21T02:37:30.000Z",
+  };
+  state.events.push({
+    id: "evt-mac-media",
+    at: "2026-06-21T02:37:30.000Z",
+    type: "status",
+    from: "Mac Host Media",
+    text: macNalEvidence,
+  });
+
+  await withFakeBoard(state, async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary"], args);
+    assert(result.exitCode === 1, `partial later Mac summaries should stay waiting for retest\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "macKey=h264Key:3 sps:3 pps:3 idr:3 keyParam:3", "merged Mac evidence boardSummary");
+    assertIncludes(result.stdout, "mac=firstKeyNal:7/8/5 lastKeyNal:7/8/5 lastNal:1", "merged Mac evidence boardSummary");
+    assertIncludes(result.stdout, "macStream=frames:300 delta:297 keyGapMax:60/1000 keyGapLast:58/966 keyTail:12/200 firstKeyParam:yes lastKeyParam:yes", "merged Mac evidence boardSummary");
+    assertSecretSafe(result.stdout + result.stderr, "merged Mac evidence boardSummary");
+  });
+  console.log("[OK] W2 H.264 board diagnosis merges complete Mac media evidence across later partial summaries");
+}
+
 async function checkExplanatoryW2TextIgnored(args) {
   const explanatoryWindowsText = "Windows 已推送：新增诊断，对照 Windows W2W3Retest h264= 与 Mac h264Key/SPS/PPS/IDR；真实板当前摘要为 windows recv=0 key=0 sps=0 pps=0 idr=0 decoded=0。";
   await withFakeBoard(makeState({ windowsText: explanatoryWindowsText, macText: macNalEvidence }), async (serverUrl) => {
@@ -324,6 +354,7 @@ async function main() {
   await checkHelp(args);
   await checkWindowsDecodePath(args);
   await checkWaitingForRetest(args);
+  await checkMacEvidenceMergesLaterPartialSummaries(args);
   await checkExplanatoryW2TextIgnored(args);
   await checkBacktickedRetestLabelIgnored(args);
   await checkMacParamExplanationIgnored(args);
