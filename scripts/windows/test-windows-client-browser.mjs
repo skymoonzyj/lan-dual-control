@@ -6267,6 +6267,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         lastDropReason: state.audioLastDropReason,
         underrunCount: state.audioUnderrunCount,
         lastBufferReason: state.audioLastBufferReason,
+        stablePrebufferCount: state.audioStablePrebufferCount,
+        lastUnderrunAt: state.audioLastUnderrunAt,
       };
       const starts = [];
       const stops = [];
@@ -6323,6 +6325,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioLastDropReason = "";
         state.audioUnderrunCount = 0;
         state.audioLastBufferReason = "";
+        state.audioStablePrebufferCount = 0;
+        state.audioLastUnderrunAt = 0;
         starts.length = 0;
         stops.length = 0;
         const underrunPlayed = await playPcmAudioFrame(makeFrame());
@@ -6338,6 +6342,23 @@ async function verifyAudioPlaybackBufferGuards(session) {
           underrunExportText.includes("补缓冲 1") &&
           underrunExportText.includes("原因 queue-underrun-prebuffer");
         const preservedPrebuffer = underrunPrebufferDiagnosed;
+
+        state.audioContext.currentTime = 10.2;
+        starts.length = 0;
+        stops.length = 0;
+        const adaptiveUnderrunPlayed = await playPcmAudioFrame(makeFrame());
+        const adaptiveUnderrunStart = starts[0] || 0;
+        const adaptiveUnderrunExportText = getAudioPerformanceExportStatus();
+        const adaptivePrebuffered =
+          adaptiveUnderrunPlayed &&
+          adaptiveUnderrunStart >= 10.315 &&
+          adaptiveUnderrunStart < 10.36 &&
+          state.audioUnderrunCount === 2 &&
+          state.audioStablePrebufferCount === 1 &&
+          state.audioLastBufferReason === "queue-underrun-stable-prebuffer" &&
+          adaptiveUnderrunExportText.includes("补缓冲 2") &&
+          adaptiveUnderrunExportText.includes("稳缓冲 1") &&
+          adaptiveUnderrunExportText.includes("原因 queue-underrun-stable-prebuffer");
 
         state.audioContext = makeFakeContext(20);
         state.audioGain = { gain: { value: 0 } };
@@ -6366,13 +6387,17 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && flushedOldQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
           underrunBufferReason: underrunBufferReasonAfterPrebuffer,
           underrunExportText,
           underrunStart,
+          adaptivePrebuffered,
+          adaptiveUnderrunStart,
+          adaptiveUnderrunExportText,
+          stablePrebufferCount: state.audioStablePrebufferCount,
           overflowPlayed,
           overflowStarts: starts.length,
           overflowDropped: state.audioDroppedFrames,
@@ -6400,6 +6425,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioLastDropReason = original.lastDropReason;
         state.audioUnderrunCount = original.underrunCount;
         state.audioLastBufferReason = original.lastBufferReason;
+        state.audioStablePrebufferCount = original.stablePrebufferCount;
+        state.audioLastUnderrunAt = original.lastUnderrunAt;
       }
     })()`,
   );
@@ -6640,7 +6667,7 @@ async function run() {
     summary.checks.push("audio-buffer-guards");
     print(
       "OK",
-      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} underrun=${audioBufferGuardCheck.underrunCount ?? 0} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0}`,
+      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} underrun=${audioBufferGuardCheck.underrunCount ?? 0} stable=${audioBufferGuardCheck.stablePrebufferCount ?? 0} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0}`,
     );
     const layoutStabilityCheck = await verifyLiveStatusLayoutStability(session);
     summary.checks.push("layout-stability");

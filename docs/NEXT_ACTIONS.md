@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W3 音频最新口径补充：Windows 控制端现在保留首次低水位 80ms 补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，并在“现场声音”里输出 `稳缓冲 <n>` 与 `原因 queue-underrun-stable-prebuffer`。现场声音若 `补缓冲` 增长但 `稳缓冲` 很少，说明只是偶发供流间歇；若 `稳缓冲` 持续增长，优先查 Mac 采集/网络音频供流抖动或下一步做更完整 jitter buffer。
 
 - W3 音频最新口径补充：Windows 控制端现在会在 WebAudio 队列低于 70ms 并补到 80ms 时输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。现场声音若主要是 `补缓冲` 增长，优先查 Mac 采集/网络供流间歇；若主要是 `重同步` 和 `queue-overflow-flush-old`，优先查 Windows 本地播放队列持续溢出或突发堆积。
 - W2 视频低延迟最新口径：Windows 控制端现在把 WebCodecs `VideoDecoder.decodeQueueSize` 也纳入本机 H.264 背压治理；如果浏览器内部解码队列超过 8，即使 meta 队列还不长，也会走 `queue-overflow-wait-keyframe` 重同步，清旧队列并等待关键帧。现场诊断若看到 `本地过期丢帧` 和该原因，优先理解为 Windows 本机为了追实时主动丢旧帧，而不是远端采集必然丢帧。

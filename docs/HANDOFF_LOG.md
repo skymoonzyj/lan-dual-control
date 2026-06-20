@@ -16,6 +16,32 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
+开发端：Windows Codex
+本轮目标：减少连续低水位 underrun 时的声音断续，同时保持首次补缓冲低延迟。
+完成内容：
+- WebAudio 首次低于 70ms 时仍补到 80ms，维持低延迟。
+- 如果 2 秒内再次低水位，改用 120ms 稳定预缓冲，并记录 `audioStablePrebufferCount` 与 `audioLastBufferReason=queue-underrun-stable-prebuffer`。
+- 复制/导出诊断“现场声音”新增 `稳缓冲 <n>`，方便区分偶发 underrun 和连续供流抖动。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于第二次低水位仍从 `10.2` 补到 `10.28`，缺少 `稳缓冲 1`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 输出 `Audio buffer guards: underrunStart=10.080 underrun=1 stable=1 overflowDropped=2 resync=1`。
+遗留问题：真实体验仍需要用户贴“现场声音”行；若 `稳缓冲` 持续增长，下一步查 Mac 采集/网络供流抖动或做更完整 jitter buffer。
+下一步建议：继续 W3 可基于真实样本做自适应 jitter buffer；若视频仍是主要痛点则转 W2 关键帧恢复/抖动治理。
+是否改了协议：否；只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测。
+是否需要另一端配合：暂不需要；真实体验复测时可请 Mac 端同步跑音频媒体基线。
 
 ## 2026-06-20 Windows Codex
 

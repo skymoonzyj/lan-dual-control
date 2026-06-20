@@ -7,6 +7,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W3 Windows 音频连续低水位稳定预缓冲：Windows 控制端首次低水位仍用 80ms；2 秒内再次低于 70ms 时改用 120ms 稳定预缓冲，并在复制诊断“现场声音”输出 `稳缓冲 <n>` / `queue-underrun-stable-prebuffer`。页面自测先红于第二次仍 80ms，再绿于 `Audio buffer guards ... stable=1`；不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 - [x] 建立策划书。
 - [x] 建立双端开发计划书。

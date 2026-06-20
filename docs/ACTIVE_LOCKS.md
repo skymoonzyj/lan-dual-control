@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频连续低水位稳定预缓冲：首次低水位仍 80ms；2 秒内再次低水位临时用 120ms 稳定预缓冲，诊断新增 `稳缓冲 <n>` / `queue-underrun-stable-prebuffer`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频低水位补缓冲诊断：WebAudio 队列低于 70ms 并补到 80ms 时记录 `补缓冲 <n>` 和 `queue-underrun-prebuffer`，帮助区分供流间歇和本地队列溢出；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows WebCodecs decodeQueueSize 背压重同步：浏览器内部 `decodeQueueSize` 超过阈值时也触发 H.264 低延迟重同步，清旧队列并等待关键帧；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频卡顿事件诊断：现场视频诊断新增 `卡顿 <n>` 和 `最大卡顿 <ms> ms`，页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |

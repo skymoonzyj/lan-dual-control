@@ -3,6 +3,8 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+## 2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
+- Windows 控制端 WebAudio 仍保持首次低水位 80ms 低延迟补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，记录 `audioStablePrebufferCount` 和 `audioLastBufferReason=queue-underrun-stable-prebuffer`。复制/导出诊断“现场声音”会在既有 `补缓冲 <n>` 外新增 `稳缓冲 <n>`，用于判断声音断续是否已经进入连续 underrun 稳定模式。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯第二次仍为 80ms，绿灯确认 `Audio buffer guards ... stable=1`。本轮只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 W3 Windows 音频低水位补缓冲诊断
 - Windows 控制端 WebAudio 播放队列低于 70ms 并自动补到 80ms 时，现在会记录 `audioUnderrunCount` 和 `audioLastBufferReason=queue-underrun-prebuffer`；复制/导出诊断“现场声音”同步输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。这样用户反馈声音断续时，可以区分“本地队列溢出后 flush 重同步”和“采集/网络供流间歇导致低水位补缓冲”。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `underrunPrebufferDiagnosed=false`，绿灯确认 `Audio buffer guards ... underrun=1 ...`。本轮只改 Windows 控制端本地 WebAudio 诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
