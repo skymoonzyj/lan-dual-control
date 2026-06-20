@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Mac Codex
+
+日期：2026-06-21 M3 Mac readiness 媒体探测参数化
+开发端：Mac Codex
+本轮目标：把上一轮 Mac 60Hz/H.264/PCM 基线从一次性命令沉淀到正式 readiness 入口，方便后续和 Windows `W2W3Retest=` 对照。
+完成内容：`check-mac-host-readiness --probeMedia` 新增 `--probeMediaFps`、`--probeMediaBandwidthKbps`、`--probeMediaVideoDurationMs`、`--probeMediaAudioDurationMs`、`--probeMediaVideoMinFps` 等参数；参数会转发给 `observe-mac-media`，JSON 和 `--boardSummary` 会输出无密 `mediaTarget=...`。
+修改文件：scripts/mac/check-mac-host-readiness.mjs；scripts/mac/test-mac-host-readiness-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 help 缺少 `--probeMediaFps`；绿灯 `node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 45000` 通过，覆盖 help、命令转发、离线 JSON 和 boardSummary。
+遗留问题：真实 Windows 端 60Hz/H.264 页面复测仍未完成；本轮只让 Mac 侧基线复跑更稳定，不替代用户输入当前 Mac host 临时密码后的真实体验验证。
+下一步建议：用户在场时，如需刷新 Mac 60Hz 基线，运行 `node scripts/mac/check-mac-host-readiness.mjs --promptPassword --probeMedia --probeMediaResourceSample --probeMediaFps 60 --probeMediaBandwidthKbps 20000 --probeMediaVideoDurationMs 5000 --probeMediaAudioDurationMs 5000 --probeMediaVideoMinFps 50 --boardSummary`，再让 Windows 对照 `W2W3Retest=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续真实 60Hz/H.264 页面复测；不在通讯板发送密码，不发 input/inject。
+
 ## 2026-06-21 Windows Codex
 
 日期：2026-06-21 W2/W3 Windows client boardSummary 复测矩阵

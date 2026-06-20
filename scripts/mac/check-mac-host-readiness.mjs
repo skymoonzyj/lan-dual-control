@@ -28,6 +28,17 @@ const defaults = {
   maxAudioFrameAgeMs: 0,
   probeMedia: false,
   probeMediaResourceSample: false,
+  probeMediaWidth: 1280,
+  probeMediaHeight: 720,
+  probeMediaFps: 30,
+  probeMediaBandwidthKbps: 12000,
+  probeMediaVideoDurationMs: 2500,
+  probeMediaAudioDurationMs: 2500,
+  probeMediaVideoMinFrames: 10,
+  probeMediaAudioMinFrames: 80,
+  probeMediaVideoMinFps: 0,
+  probeMediaVideoMaxGapMs: 1500,
+  probeMediaAudioMaxGapMs: 1000,
   probeInputLog: false,
   probeClipboardSecurity: false,
   probeStartHelper: false,
@@ -133,6 +144,17 @@ function parseArgs(argv) {
   args.currentBuildId = getGitBuildId();
   args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
   args.maxAudioFrameAgeMs = clampInteger(args.maxAudioFrameAgeMs, 0, 600000, defaults.maxAudioFrameAgeMs);
+  args.probeMediaWidth = clampInteger(args.probeMediaWidth, 16, 8192, defaults.probeMediaWidth);
+  args.probeMediaHeight = clampInteger(args.probeMediaHeight, 16, 8192, defaults.probeMediaHeight);
+  args.probeMediaFps = clampInteger(args.probeMediaFps, 1, 240, defaults.probeMediaFps);
+  args.probeMediaBandwidthKbps = clampInteger(args.probeMediaBandwidthKbps, 1, 1000000, defaults.probeMediaBandwidthKbps);
+  args.probeMediaVideoDurationMs = clampInteger(args.probeMediaVideoDurationMs, 200, 1200000, defaults.probeMediaVideoDurationMs);
+  args.probeMediaAudioDurationMs = clampInteger(args.probeMediaAudioDurationMs, 200, 1200000, defaults.probeMediaAudioDurationMs);
+  args.probeMediaVideoMinFrames = clampInteger(args.probeMediaVideoMinFrames, 0, 1000000, defaults.probeMediaVideoMinFrames);
+  args.probeMediaAudioMinFrames = clampInteger(args.probeMediaAudioMinFrames, 0, 1000000, defaults.probeMediaAudioMinFrames);
+  args.probeMediaVideoMinFps = clampInteger(args.probeMediaVideoMinFps, 0, 240, defaults.probeMediaVideoMinFps);
+  args.probeMediaVideoMaxGapMs = clampInteger(args.probeMediaVideoMaxGapMs, 1, 1200000, defaults.probeMediaVideoMaxGapMs);
+  args.probeMediaAudioMaxGapMs = clampInteger(args.probeMediaAudioMaxGapMs, 1, 1200000, defaults.probeMediaAudioMaxGapMs);
   args.requireOpen = booleanArg(args.requireOpen);
   args.requireControlPermissions = booleanArg(args.requireControlPermissions);
   args.requireInputMonitoring = booleanArg(args.requireInputMonitoring);
@@ -224,6 +246,33 @@ Options:
   --probeMedia              Run observe-mac-media aggregate for one combined
                             H.264 + PCM report. This does not start the host,
                             play a tone, send input, or execute inject.
+  --probeMediaWidth <px>    Video width for --probeMedia. Default: ${defaults.probeMediaWidth}
+  --probeMediaHeight <px>   Video height for --probeMedia. Default: ${defaults.probeMediaHeight}
+  --probeMediaFps <fps>     Requested video FPS for --probeMedia. Default: ${defaults.probeMediaFps}
+  --probeMediaBandwidthKbps <kbps>
+                            Requested video bandwidth for --probeMedia.
+                            Default: ${defaults.probeMediaBandwidthKbps}
+  --probeMediaVideoDurationMs <ms>
+                            Video observation window for --probeMedia.
+                            Default: ${defaults.probeMediaVideoDurationMs}
+  --probeMediaAudioDurationMs <ms>
+                            Audio observation window for --probeMedia.
+                            Default: ${defaults.probeMediaAudioDurationMs}
+  --probeMediaVideoMinFrames <count>
+                            Minimum video frames for --probeMedia.
+                            Default: ${defaults.probeMediaVideoMinFrames}
+  --probeMediaAudioMinFrames <count>
+                            Minimum audio frames for --probeMedia.
+                            Default: ${defaults.probeMediaAudioMinFrames}
+  --probeMediaVideoMinFps <fps>
+                            Minimum observed video FPS for --probeMedia.
+                            Default: off
+  --probeMediaVideoMaxGapMs <ms>
+                            Maximum video frame gap for --probeMedia.
+                            Default: ${defaults.probeMediaVideoMaxGapMs}
+  --probeMediaAudioMaxGapMs <ms>
+                            Maximum audio frame gap for --probeMedia.
+                            Default: ${defaults.probeMediaAudioMaxGapMs}
   --probeMediaResourceSample
                             With --probeMedia, sample local Mac host CPU/RSS
                             when /discovery.runtime.processId is local.
@@ -511,20 +560,31 @@ function mediaCommandArgs(args) {
     String(args.timeoutMs),
     "--commandTimeoutMs",
     String(Math.max(args.timeoutMs, 20000)),
+    "--width",
+    String(args.probeMediaWidth),
+    "--height",
+    String(args.probeMediaHeight),
+    "--fps",
+    String(args.probeMediaFps),
+    "--bandwidthKbps",
+    String(args.probeMediaBandwidthKbps),
     "--videoDurationMs",
-    "2500",
+    String(args.probeMediaVideoDurationMs),
     "--videoMinFrames",
-    "10",
+    String(args.probeMediaVideoMinFrames),
     "--videoMaxGapMs",
-    "1500",
+    String(args.probeMediaVideoMaxGapMs),
     "--audioDurationMs",
-    "2500",
+    String(args.probeMediaAudioDurationMs),
     "--audioMinFrames",
-    "80",
+    String(args.probeMediaAudioMinFrames),
     "--audioMaxGapMs",
-    "1000",
+    String(args.probeMediaAudioMaxGapMs),
     "--requireFrameTimestamp",
   ];
+  if (args.probeMediaVideoMinFps > 0) {
+    mediaArgs.push("--videoMinFps", String(args.probeMediaVideoMinFps));
+  }
   const maxFrameAgeMs = Math.max(args.maxVideoFrameAgeMs, args.maxAudioFrameAgeMs);
   if (maxFrameAgeMs > 0) {
     mediaArgs.push("--maxFrameAgeMs", String(maxFrameAgeMs));
@@ -797,6 +857,16 @@ function formatMacHostAuthPathSummary(board) {
   ].join(" ");
 }
 
+function formatMediaProbeTarget(args) {
+  const config = args || {};
+  if (!config.probeMedia) return "";
+  return [
+    `mediaTarget=${config.probeMediaWidth || 1280}x${config.probeMediaHeight || 720}@${config.probeMediaFps || 30}Hz/${config.probeMediaBandwidthKbps || 12000}kbps/${config.probeMediaVideoDurationMs || 2500}ms`,
+    `audio=${config.probeMediaAudioDurationMs || 2500}ms`,
+    config.probeMediaVideoMinFps > 0 ? `minVideoFps=${config.probeMediaVideoMinFps}` : "",
+  ].filter(Boolean).join(" ");
+}
+
 function formatReadinessBoardSummary(summary) {
   const failed = Number(summary.failed || 0);
   const warnings = Number(summary.warnings || 0);
@@ -808,6 +878,7 @@ function formatReadinessBoardSummary(summary) {
   const findings = formatReadinessFindings(summary.results);
   const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
   const media = formatMediaBoardSummary(summary);
+  const mediaTarget = formatMediaProbeTarget(summary.args);
   const hostBuild = formatHostBuildBoardSummary(summary);
   const hostMedia = formatHostMediaBoardSummary(summary);
   const suggestedAction = summary.suggestedAction?.boardSummary ? `; ${summary.suggestedAction.boardSummary}` : "";
@@ -825,7 +896,7 @@ function formatReadinessBoardSummary(summary) {
         ? "Next: review warnings, then continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks."
         : "Next: continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks.";
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}${manualUxStandby ? `; ${manualUxStandby}` : ""}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${mediaTarget ? ` ${mediaTarget}` : ""}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}${manualUxStandby ? `; ${manualUxStandby}` : ""}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
@@ -1621,6 +1692,17 @@ async function main() {
       maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeMedia: args.probeMedia,
       probeMediaResourceSample: args.probeMediaResourceSample,
+      probeMediaWidth: args.probeMediaWidth,
+      probeMediaHeight: args.probeMediaHeight,
+      probeMediaFps: args.probeMediaFps,
+      probeMediaBandwidthKbps: args.probeMediaBandwidthKbps,
+      probeMediaVideoDurationMs: args.probeMediaVideoDurationMs,
+      probeMediaAudioDurationMs: args.probeMediaAudioDurationMs,
+      probeMediaVideoMinFrames: args.probeMediaVideoMinFrames,
+      probeMediaAudioMinFrames: args.probeMediaAudioMinFrames,
+      probeMediaVideoMinFps: args.probeMediaVideoMinFps,
+      probeMediaVideoMaxGapMs: args.probeMediaVideoMaxGapMs,
+      probeMediaAudioMaxGapMs: args.probeMediaAudioMaxGapMs,
       probeInputLog: args.probeInputLog,
       probeClipboardSecurity: args.probeClipboardSecurity,
       probeStartHelper: args.probeStartHelper,

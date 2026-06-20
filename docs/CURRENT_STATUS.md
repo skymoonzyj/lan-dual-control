@@ -7,6 +7,9 @@
 ## 2026-06-21 W2/W3 Windows client boardSummary 复测矩阵
 - `test-windows-client-browser --boardSummary` 现在会把页面已有“现场视频 / 现场声音”提炼成脱敏 `W2W3Retest=` 短字段，例如 `video=实收 20.1 FPS · 请求 60 Hz · 协商 60 Hz ...` 与 `audio=队列 120 ms · 缓冲 80/70/450/120 ms ... 原因 queue-overflow-trim-future`。真实连接时同一摘要还会继续带 `h264Errors=<n>`、surface、FPS 和声音状态；`diagnosticsOnly`/discover 回归只用本地模拟页面验证字段格式，不认证、不请求或发送密码、不发 input/inject。
 
+## 2026-06-21 M3 Mac readiness 媒体探测参数化
+- `check-mac-host-readiness --probeMedia` 现在可直接指定媒体聚合探测参数：`--probeMediaFps`、`--probeMediaBandwidthKbps`、`--probeMediaVideoDurationMs`、`--probeMediaAudioDurationMs`、`--probeMediaVideoMinFps` 等会转发给 `observe-mac-media`，JSON 和 `--boardSummary` 会带 `mediaTarget=1280x720@60Hz/20000kbps/5000ms audio=5000ms minVideoFps=50` 这类无密目标摘要。该入口只观察已运行的 Mac host，不启动 host、不泄露认证密码、不播放测试音、不发 input/inject；需要真实密码时仍用本地 `--promptPassword`。
+
 ## 2026-06-21 W3 Windows WebAudio 高水位只修剪未来队列
 - Mac 侧 60Hz H.264+PCM 基线显示音频供流稳定后，Windows 控制端把 WebAudio 高水位治理从“停止全部已排队 source”改成“只停止尚未开始播放的未来 source”，当前正在播放的片段会保留；随后 `audioNextPlayTime` 接到当前片段结束时间或 120ms 重同步预缓冲之后，现场诊断原因改为 `queue-overflow-trim-future`。页面自测红灯先证明旧逻辑会把正在播放的 0.10s 片段也停掉，绿灯确认只停止两个未来 0.12s source、`overflowDropped=2`、`resync=1`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

@@ -299,6 +299,14 @@ function formatMediaBoardSummaryFixture(summary) {
   return Function("summary", `${formatter}\nreturn formatMediaBoardSummary(summary);`)(summary);
 }
 
+function mediaCommandArgsFixture(args) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "mediaCommandArgs"),
+  ].join("\n");
+  return Function("args", `${helpers}\nreturn mediaCommandArgs(args);`)(args);
+}
+
 function h264FallbackPipelineWarningFixture(capabilities) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const helpers = [
@@ -358,6 +366,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "normalizedText"),
     functionBlock(source, "status"),
     functionBlock(source, "getMaxScreenFps"),
+    functionBlock(source, "formatMediaProbeTarget"),
     functionBlock(source, "formatMediaBoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
     functionBlock(source, "formatHostBuildBoardSummary"),
@@ -476,6 +485,11 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("--checkBoard"), `${script} ${flag} should document --checkBoard`);
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
     assert(String(result.stdout).includes("--probeMedia"), `${script} ${flag} should document --probeMedia`);
+    assert(String(result.stdout).includes("--probeMediaFps"), `${script} ${flag} should document --probeMediaFps`);
+    assert(String(result.stdout).includes("--probeMediaBandwidthKbps"), `${script} ${flag} should document --probeMediaBandwidthKbps`);
+    assert(String(result.stdout).includes("--probeMediaVideoDurationMs"), `${script} ${flag} should document --probeMediaVideoDurationMs`);
+    assert(String(result.stdout).includes("--probeMediaAudioDurationMs"), `${script} ${flag} should document --probeMediaAudioDurationMs`);
+    assert(String(result.stdout).includes("--probeMediaVideoMinFps"), `${script} ${flag} should document --probeMediaVideoMinFps`);
     assert(String(result.stdout).includes("commands.macHostSafeStartCommand"), `${script} ${flag} should document safe start command`);
     assert(String(result.stdout).includes("commands.macHostStopCommand"), `${script} ${flag} should document stop command`);
     assert(String(result.stdout).includes("commands.macMaxFpsSafeStartCommand"), `${script} ${flag} should document foreground 60Hz safe start command`);
@@ -612,6 +626,46 @@ function checkMediaBoardSummaryStatusFormatting() {
     "media board summary should keep a media=failed fallback",
   );
   print("OK", "Mac host readiness media boardSummary formats ok/partial/failed");
+}
+
+function checkProbeMediaTuningCommandArgs() {
+  const argv = mediaCommandArgsFixture({
+    host: "192.168.31.122",
+    port: 43770,
+    timeoutMs: 45000,
+    maxVideoFrameAgeMs: 250,
+    maxAudioFrameAgeMs: 0,
+    probeMediaResourceSample: true,
+    probeMediaWidth: 1280,
+    probeMediaHeight: 720,
+    probeMediaFps: 60,
+    probeMediaBandwidthKbps: 20000,
+    probeMediaVideoDurationMs: 5000,
+    probeMediaAudioDurationMs: 5000,
+    probeMediaVideoMinFrames: 180,
+    probeMediaAudioMinFrames: 200,
+    probeMediaVideoMinFps: 50,
+    probeMediaVideoMaxGapMs: 250,
+    probeMediaAudioMaxGapMs: 250,
+  });
+  const joined = argv.join(" ");
+  assert(joined.includes("--width 1280"), "media aggregate should forward custom width");
+  assert(joined.includes("--height 720"), "media aggregate should forward custom height");
+  assert(joined.includes("--fps 60"), "media aggregate should forward custom FPS");
+  assert(joined.includes("--bandwidthKbps 20000"), "media aggregate should forward custom bandwidth");
+  assert(joined.includes("--videoDurationMs 5000"), "media aggregate should forward custom video duration");
+  assert(joined.includes("--audioDurationMs 5000"), "media aggregate should forward custom audio duration");
+  assert(joined.includes("--videoMinFrames 180"), "media aggregate should forward custom video min frames");
+  assert(joined.includes("--audioMinFrames 200"), "media aggregate should forward custom audio min frames");
+  assert(joined.includes("--videoMinFps 50"), "media aggregate should forward custom video minimum FPS");
+  assert(joined.includes("--videoMaxGapMs 250"), "media aggregate should forward custom video max gap");
+  assert(joined.includes("--audioMaxGapMs 250"), "media aggregate should forward custom audio max gap");
+  assert(joined.includes("--maxFrameAgeMs 250"), "media aggregate should keep freshness threshold forwarding");
+  assert(joined.includes("--resourceSample"), "media aggregate should preserve resource sampling");
+  assert(!joined.includes("--password"), "media aggregate command args should not embed passwords");
+  assert(!joined.includes("input_event"), "media aggregate command args should not send input events");
+  assert(!joined.includes("inject"), "media aggregate command args should not instruct injection");
+  print("OK", "Mac host readiness forwards probeMedia tuning args");
 }
 
 function checkReadinessFindingsFormatting() {
@@ -987,6 +1041,41 @@ function checkProbeMediaOfflineJson(args) {
   print("OK", "Mac host readiness probeMedia exposes offline aggregate details safely");
 }
 
+function checkProbeMediaTuningOfflineJson(args) {
+  const result = run([
+    "--json",
+    "--probeMedia",
+    "--probeMediaFps",
+    "60",
+    "--probeMediaBandwidthKbps",
+    "20000",
+    "--probeMediaVideoDurationMs",
+    "5000",
+    "--probeMediaAudioDurationMs",
+    "5000",
+    "--probeMediaVideoMinFps",
+    "50",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "5000",
+    "--skipCurrentBuildCheck",
+  ], args);
+  assert(result.status !== 0, "tuned --probeMedia against an offline host should fail readiness");
+  const payload = parseJson(result.stdout, "tuned offline media readiness JSON");
+  assert(payload.args?.probeMedia === true, "tuned readiness JSON should preserve probeMedia flag");
+  assert(payload.args?.probeMediaFps === 60, "tuned readiness JSON should preserve requested FPS");
+  assert(payload.args?.probeMediaBandwidthKbps === 20000, "tuned readiness JSON should preserve requested bandwidth");
+  assert(payload.args?.probeMediaVideoDurationMs === 5000, "tuned readiness JSON should preserve video duration");
+  assert(payload.args?.probeMediaAudioDurationMs === 5000, "tuned readiness JSON should preserve audio duration");
+  assert(payload.args?.probeMediaVideoMinFps === 50, "tuned readiness JSON should preserve minimum video FPS");
+  assert(String(payload.boardSummary || "").includes("mediaTarget=1280x720@60Hz/20000kbps/5000ms audio=5000ms minVideoFps=50"), "tuned boardSummary should expose the secret-free media target");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "tuned offline probeMedia readiness JSON");
+  print("OK", "Mac host readiness preserves probeMedia tuning args in JSON and boardSummary");
+}
+
 function checkProbeMediaResourceSampleImpliesProbeMedia(args) {
   const result = run([
     "--json",
@@ -1296,6 +1385,7 @@ async function main() {
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
   checkMediaBoardSummaryStatusFormatting();
+  checkProbeMediaTuningCommandArgs();
   checkReadinessFindingsFormatting();
   checkReadinessNextStepFormatting();
   checkUsableEntryCallKeepsManualUxStandby();
@@ -1304,6 +1394,7 @@ async function main() {
   checkDiscoveryBackgroundJpegFormatting();
   checkMaxScreenFpsWarningFormatting();
   checkProbeMediaOfflineJson(args);
+  checkProbeMediaTuningOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
   checkProbeMediaBoardSummary(args);
   checkPlainOutputIncludesLaunchAgentPlan(args);
