@@ -144,6 +144,9 @@ clipboard, input_ack, and diagnostics in that order.
   status extraction accepts only safe short fields such as blocked/ready,
   inputMode, realInput, --confirmUserWatching, eventSet=safe, no-password
   safety tokens, and checkedAt; password/secret/input_event candidates are rejected.
+  It also includes MacInputSafetyUserNotice for the short user-facing notice
+  required before real Mac input tests: goal/action/boundary/duration tokens
+  are accepted only from a fixed allow-list and never trigger input/inject.
   It also includes MacManualUxStatus for the secret-free post-PASS manual UX
   first-screen status path; command extraction accepts only the read-only
   --boardSummary form.
@@ -646,6 +649,21 @@ function emptyMacInputSafetyStatus(source = "none", textCount = 0, rejectedCount
     eventSet: "",
     safety: [],
     checkedAt: "",
+    summary: "not-seen",
+  };
+}
+
+function emptyMacInputSafetyUserNotice(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    segmentCount: 0,
+    rejectedCount,
+    goal: "",
+    action: "",
+    boundary: "",
+    duration: "",
     summary: "not-seen",
   };
 }
@@ -1987,6 +2005,82 @@ function extractMacInputSafetyStatusFromBoardState(state) {
 function extractMacInputSafetyStatusFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacInputSafetyStatusFromTexts(value ? [value] : [], source);
+}
+
+const macInputSafetyUserNoticeAllowedGoals = new Set(["verify-real-mac-input-safe-event-set"]);
+const macInputSafetyUserNoticeAllowedActions = new Set(["watch-mac-screen-and-be-ready-to-take-over"]);
+const macInputSafetyUserNoticeAllowedBoundaries = new Set(["safe-event-set-only-no-click-delete-shortcuts-return-log"]);
+const macInputSafetyUserNoticeAllowedDurations = new Set(["2-3-minutes"]);
+const macInputSafetyUserNoticeSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌|input_event/i;
+
+function splitMacInputSafetyUserNoticeSegments(text) {
+  const value = String(text || "");
+  const matches = [...value.matchAll(/\bUserNoticeGoal\s*=/gi)];
+  return matches.map((match, index) => {
+    const start = match.index || 0;
+    const end = index + 1 < matches.length ? matches[index + 1].index || value.length : value.length;
+    return value.slice(start, end);
+  });
+}
+
+function parseMacInputSafetyUserNoticeSegment(segment, source = "text") {
+  const value = String(segment || "");
+  if (!value || macInputSafetyUserNoticeSecretPattern.test(value)) return null;
+  const goal = extractMacInputSafetyField(value, "UserNoticeGoal");
+  const action = extractMacInputSafetyField(value, "UserNoticeAction");
+  const boundary = extractMacInputSafetyField(value, "UserNoticeBoundary");
+  const duration = extractMacInputSafetyField(value, "UserNoticeDuration");
+  if (
+    !macInputSafetyUserNoticeAllowedGoals.has(goal) ||
+    !macInputSafetyUserNoticeAllowedActions.has(action) ||
+    !macInputSafetyUserNoticeAllowedBoundaries.has(boundary) ||
+    !macInputSafetyUserNoticeAllowedDurations.has(duration)
+  ) {
+    return null;
+  }
+  const summary = `goal=${goal} action=${action} boundary=${boundary} duration=${duration}`;
+  return {
+    found: true,
+    source,
+    goal,
+    action,
+    boundary,
+    duration,
+    summary,
+  };
+}
+
+function extractMacInputSafetyUserNoticeFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacInputSafetyUserNoticeSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacInputSafetyUserNoticeSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacInputSafetyUserNotice(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacInputSafetyUserNoticeFromBoardState(state) {
+  return extractMacInputSafetyUserNoticeFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacInputSafetyUserNoticeFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacInputSafetyUserNoticeFromTexts(value ? [value] : [], source);
 }
 
 const macManualUxAllowedStatuses = new Set(["ready", "waiting", "call-ready", "calling"]);
@@ -3756,6 +3850,7 @@ async function getBoardSnapshot(args) {
       macManualUx: emptyMacManualUx("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
       macInputSafetyStatus: emptyMacInputSafetyStatus("skipped"),
+      macInputSafetyUserNotice: emptyMacInputSafetyUserNotice("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
       macHeartbeatStart: emptyMacSafeStart("skipped"),
@@ -3803,6 +3898,7 @@ async function getBoardSnapshot(args) {
       macManualUx: extractMacManualUxFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macInputSafetyStatus: extractMacInputSafetyStatusFromBoardState(stateResult.state),
+      macInputSafetyUserNotice: extractMacInputSafetyUserNoticeFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
       macHeartbeatStart: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStart", "start"),
@@ -3856,6 +3952,7 @@ async function getBoardSnapshot(args) {
     macManualUx: extractMacManualUxFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyStatus: extractMacInputSafetyStatusFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macInputSafetyUserNotice: extractMacInputSafetyUserNoticeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStart: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStart", "start", result.ok ? "codex-link-client" : "unavailable"),
@@ -5002,6 +5099,9 @@ function makeBoardSummary(report) {
     ...(report.board.macInputSafetyStatus?.found
       ? [`MacInputSafetyStatus=${report.board.macInputSafetyStatus.summary}.`]
       : []),
+    ...(report.board.macInputSafetyUserNotice?.found
+      ? [`MacInputSafetyUserNotice=${report.board.macInputSafetyUserNotice.summary}.`]
+      : []),
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
@@ -5402,6 +5502,12 @@ function printHuman(report) {
     if (report.board.macInputSafety?.found) {
       console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
     }
+    if (report.board.macInputSafetyStatus?.found) {
+      console.log(`  MacInputSafetyStatus=${report.board.macInputSafetyStatus.summary}`);
+    }
+    if (report.board.macInputSafetyUserNotice?.found) {
+      console.log(`  MacInputSafetyUserNotice=${report.board.macInputSafetyUserNotice.summary}`);
+    }
     if (report.board.macHeartbeatFreshness?.present) {
       console.log(`  MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}`);
     }
@@ -5509,6 +5615,12 @@ function printHuman(report) {
   }
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
+  }
+  if (report.board.macInputSafetyStatus?.found) {
+    console.log(`  MacInputSafetyStatus=${report.board.macInputSafetyStatus.summary}`);
+  }
+  if (report.board.macInputSafetyUserNotice?.found) {
+    console.log(`  MacInputSafetyUserNotice=${report.board.macInputSafetyUserNotice.summary}`);
   }
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);

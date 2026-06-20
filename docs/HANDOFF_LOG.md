@@ -76,6 +76,31 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 M2 Windows 消费 MacInputSafety UserNotice
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览读懂 Mac 真实输入测试前的用户提示字段。
+完成内容：
+- `check-windows-resume-status` 新增 `MacInputSafetyUserNotice=` 只读解析和输出。
+- 仅接受固定 `UserNoticeGoal/Action/Boundary/Duration` 短 token，拒绝 password/token/secret、`input_event` 和非白名单动作。
+- JSON、普通输出和 `--boardSummary` 都能显示真实输入测试前的目标、用户动作、安全边界和预计耗时。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000` 失败于缺少 `MacInputSafety UserNotice should be found in board state`。
+- 绿灯：同一命令通过。
+遗留问题：真实 input/inject 仍未执行；后续仍需用户看 Mac 屏幕并显式确认后才能做 safe 事件集验收。
+下一步建议：如 Mac 端继续扩展 user notice 字段，Windows 仍按固定短 token 消费，避免回显自由文本。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 后续可继续发布同名 UserNotice 字段。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W3/M1 Windows 消费 Mac remote audio consent/restore guard
 开发端：Windows Codex
 本轮目标：让 Windows 控制端把 Mac 新版远端独占声音同意/恢复门禁显示给用户，并清理上一轮 stale 文件占用。

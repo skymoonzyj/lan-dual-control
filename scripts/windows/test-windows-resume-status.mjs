@@ -1509,7 +1509,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
   const macInputSafetyBoardText = "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.";
   const macInputSafetyStatusSummary = "status=ready reason=log-mode-permissions-ok inputMode=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-auth,no-input-events,no-inject";
-  const macInputSafetyStatusBoardText = `MacInputSafetyStatus=ready reason=log-mode-permissions-ok host=online inputMode=log permissions=ok realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe blockers=none warnings=none. MacInputSafetyPlan=${macInputSafetyPlanCommand}. MacInputLogSmoke=node scripts/mac/smoke-mac-input-log.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary. Safety=no-password,no-auth,no-input-events,no-inject.`;
+  const macInputSafetyUserNoticeSummary = "goal=verify-real-mac-input-safe-event-set action=watch-mac-screen-and-be-ready-to-take-over boundary=safe-event-set-only-no-click-delete-shortcuts-return-log duration=2-3-minutes";
+  const macInputSafetyStatusBoardText = `MacInputSafetyStatus=ready reason=log-mode-permissions-ok host=online inputMode=log permissions=ok realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe blockers=none warnings=none UserNoticeGoal=verify-real-mac-input-safe-event-set UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log UserNoticeDuration=2-3-minutes. MacInputSafetyPlan=${macInputSafetyPlanCommand}. MacInputLogSmoke=node scripts/mac/smoke-mac-input-log.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary. Safety=no-password,no-auth,no-input-events,no-inject.`;
   const heartbeatNow = Date.now();
   const freshCheckedAt = new Date(heartbeatNow - 60_000).toISOString();
   const freshCodexUpdatedAt = new Date(heartbeatNow - 65_000).toISOString();
@@ -1739,6 +1740,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         {
           type: "message",
           from: "Mac Codex",
+          text: "UserNoticeGoal=verify-real-mac-input-safe-event-set UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log UserNoticeDuration=password=secret-value",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "UserNoticeGoal=verify-real-mac-input-safe-event-set UserNoticeAction=send-input-event-automatically UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log UserNoticeDuration=2-3-minutes",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
           text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --password secret-value --boardSummary",
         },
         {
@@ -1887,6 +1898,13 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macInputSafetyStatus.safety?.includes("no-auth"), "MacInputSafetyStatus should include no-auth safety");
       assert(payload.board.macInputSafetyStatus.safety?.includes("no-password"), "MacInputSafetyStatus should include no-password safety");
       assert(payload.board.macInputSafetyStatus.rejectedCount >= 2, "unsafe MacInputSafetyStatus summaries should be rejected");
+      assert(payload.board?.macInputSafetyUserNotice?.found === true, "MacInputSafety UserNotice should be found in board state");
+      assert(payload.board.macInputSafetyUserNotice.summary === macInputSafetyUserNoticeSummary, "MacInputSafety UserNotice summary mismatch");
+      assert(payload.board.macInputSafetyUserNotice.goal === "verify-real-mac-input-safe-event-set", "MacInputSafety UserNotice goal mismatch");
+      assert(payload.board.macInputSafetyUserNotice.action === "watch-mac-screen-and-be-ready-to-take-over", "MacInputSafety UserNotice action mismatch");
+      assert(payload.board.macInputSafetyUserNotice.boundary === "safe-event-set-only-no-click-delete-shortcuts-return-log", "MacInputSafety UserNotice boundary mismatch");
+      assert(payload.board.macInputSafetyUserNotice.duration === "2-3-minutes", "MacInputSafety UserNotice duration mismatch");
+      assert(payload.board.macInputSafetyUserNotice.rejectedCount >= 2, "unsafe MacInputSafety UserNotice summaries should be rejected");
       assert(payload.board?.macHeartbeatOnce?.found === true, "MacHeartbeatOnce should be found in board state");
       assert(payload.board.macHeartbeatOnce.command === heartbeatOnceCommand, "MacHeartbeatOnce command mismatch");
       assert(payload.board.macHeartbeatOnce.source === "api-state", "MacHeartbeatOnce should come from /api/state");
@@ -1940,6 +1958,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "MacManualUx timeout ack JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafetyStatus=${macInputSafetyStatusSummary}.`, "MacInputSafetyStatus JSON board summary");
+      assertIncludes(payload.boardSummary, `MacInputSafetyUserNotice=${macInputSafetyUserNoticeSummary}.`, "MacInputSafety UserNotice JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart JSON board summary");
@@ -1986,6 +2005,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "MacManualUx timeout ack board summary");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety board summary");
       assertIncludes(result.stdout, `MacInputSafetyStatus=${macInputSafetyStatusSummary}.`, "MacInputSafetyStatus board summary");
+      assertIncludes(result.stdout, `MacInputSafetyUserNotice=${macInputSafetyUserNoticeSummary}.`, "MacInputSafety UserNotice board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
       assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart board summary");
@@ -2028,6 +2048,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacManualUxReconfirm=${macManualUxReconfirmCommand}`, "MacManualUx reconfirm human output");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}`, "Mac input safety human output");
       assertIncludes(result.stdout, `MacInputSafetyStatus=${macInputSafetyStatusSummary}`, "MacInputSafetyStatus human output");
+      assertIncludes(result.stdout, `MacInputSafetyUserNotice=${macInputSafetyUserNoticeSummary}`, "MacInputSafety UserNotice human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");
       assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}`, "MacHeartbeatStart human output");

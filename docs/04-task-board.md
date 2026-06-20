@@ -8,6 +8,7 @@
 
 状态：进行中。
 - [x] M2 Mac Input Safety sendStatus：`check-mac-input-safety-status --sendStatus --checkBoard --boardSummary` 可把当前 `MacInputSafetyStatus=` 发布到 Agent Link Board 的 `Mac Input Safety` 状态；`userPresence=away` 时发布 blocked/no-auth-only 且保持非零退出，避免旧 present/ready 摘要误导后续真实输入流程。只读、不启动 host、不请求密码、不认证、不发 input/inject。
+- [x] M2 Windows 恢复总览消费 MacInputSafety UserNotice：只读识别 `UserNoticeGoal/Action/Boundary/Duration`，JSON、普通输出和 `--boardSummary` 新增 `MacInputSafetyUserNotice=`，让真实 Mac 输入测试前的目标、用户动作、安全边界和预计耗时在 Windows 第一屏可见；测试先红于缺少 UserNotice，再绿于 `test-windows-resume-status`。不认证、不请求或发送密码、不发 input/inject。
 - [x] W3/M1 Windows 控制端消费 Mac remote audio consent/restore guard：识别 `Consent=explicit-before-change` / `RestorePath=required-before-apply`，Mac 提醒区、值守证据和复制/导出诊断新增“恢复路径需先确认”；页面自测红绿灯通过；同时清理上一轮 stale `ACTIVE_LOCKS` 当前占用。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] M1 Mac remote audio consent/restore guard：`plan-mac-remote-audio --json/--boardSummary` 新增 `consentChecklist[]`、`restoreChecklist[]`、`Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，明确远端独占声音任何真实静音/切输出/产品开关前必须先说明当前本机会出声风险、唯一路线和恢复复查路径。保持 plan-only，只读，不改系统音量/输出设备、不认证、不请求或发送密码、不发 input/inject。
 - [x] M2 Mac input safety user notice：`check-mac-input-safety-status --checkBoard` 与 `plan-mac-safe-inject-rehearsal --checkBoard` 在用户在场且可进入说明流程时输出 `userNotice` / `UserNoticeGoal` / `UserNoticeAction` / `UserNoticeBoundary` / `UserNoticeDuration`，把真实输入 safe 事件集验收前必须告知用户的目标、用户动作、安全边界和 2-3 分钟预计耗时结构化。保持只读/plan-only，不启动 host、不请求密码、不认证、不发 input/inject。
