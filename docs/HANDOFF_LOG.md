@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Mac Codex
 
+日期：2026-06-21 W2/W3 复测结果 stdin 上板入口
+开发端：Mac Codex
+本轮目标：降低 Windows 真实跑完 `Run-WinClientRetest.cmd` 后把脱敏复测结果发回通讯板的摩擦，避免只能复制长 `--text` 或先手动剪一行。
+完成内容：`post-w2w3-retest-board` 新增显式 `--stdin`，可从管道读取整段终端输出并提取最后一条真实 `W2W3Retest=`；帮助文本同步说明 `--stdin` 只用于显式管道。读取后仍走同一套危险标记拒绝、`video=`/`h264=` 必要字段检查、默认 dry-run、`--send` 追加 `W2H264BoardDiagnosis=` 流程。
+修改文件：scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-post-w2w3-retest-board` 先失败于 help 缺少 `--stdin`；绿灯专项回归通过，覆盖 help、`--text` dry-run、`--stdin` dry-run、发送 retest+diagnosis、危险输入不上板、缺少复测证据、通讯板 ok:false。
+遗留问题：仍无真实 `W2W3Retest=`；这轮只是让 Windows 端复测后更容易安全上板，不代替用户在 Windows 本机输入 Mac 临时密码和真实复测。
+下一步建议：Windows 端真实复测后可任选 `--text`、`--file` 或 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send` 上板；随后两端看最新 `W2H264BoardDiagnosis=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续运行真实 `Run-WinClientRetest.cmd` 并上板结果；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Mac Codex
+
 日期：2026-06-21 W2 H.264 通讯板 Mac 证据合并修复
 开发端：Mac Codex
 本轮目标：修复真实通讯板上较新的短 Mac 摘要覆盖较旧完整 `MacHostMedia` 证据，导致 `W2H264BoardDiagnosis` 的 `macStream` / `firstKeyNal` 重新变成 `na` 的问题。

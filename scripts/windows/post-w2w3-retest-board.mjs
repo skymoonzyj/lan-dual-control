@@ -24,6 +24,7 @@ function printHelp() {
 Options:
   --text <text>     Text that contains one W2W3Retest= line.
   --file <path>     Read text from a local file that contains W2W3Retest=.
+  --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
   --from <name>     Agent Link sender name. Default: ${defaults.from}
   --send            Post W2W3Retest= and W2H264BoardDiagnosis= to the board.
@@ -42,7 +43,7 @@ Description:
 }
 
 function parseArgs(argv) {
-  const args = { ...defaults, send: false, json: false, boardSummary: false };
+  const args = { ...defaults, send: false, json: false, boardSummary: false, stdin: false };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -66,6 +67,10 @@ function parseArgs(argv) {
       args.boardSummary = true;
       continue;
     }
+    if (token === "--stdin") {
+      args.stdin = true;
+      continue;
+    }
     if (["--text", "--file", "--server", "--from"].includes(token) && next && !next.startsWith("--")) {
       const key = token.slice(2);
       args[key] = next;
@@ -80,7 +85,13 @@ function parseArgs(argv) {
 function readInput(args) {
   if (args.text) return args.text;
   if (args.file) return readFileSync(args.file, "utf8");
-  throw new Error("Missing W2W3Retest input. Use --text or --file.");
+  if (args.stdin) {
+    if (process.stdin.isTTY) {
+      throw new Error("Missing piped stdin input. Pipe text into --stdin, or use --text/--file.");
+    }
+    return readFileSync(0, "utf8");
+  }
+  throw new Error("Missing W2W3Retest input. Use --text, --file, or --stdin.");
 }
 
 function findUnsafeMarker(text) {

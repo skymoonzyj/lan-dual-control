@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W3 复测结果 stdin 上板入口
+- `scripts/windows/post-w2w3-retest-board.mjs` 新增显式 `--stdin`：Windows 用户真实运行 `Run-WinClientRetest.cmd` 后，可把保存或复制出来的终端输出通过管道传给助手，例如 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send`。该入口只在用户明确传 `--stdin` 时读取标准输入，默认仍不挂起；读取后继续复用原有危险标记检查、`W2W3Retest=` 提取、默认 dry-run 和 `--send` 后追加 `W2H264BoardDiagnosis=` 的流程。不请求密码、不认证、不发真实输入事件，不把密码/token/系统账号写上通讯板。
+
 ## 2026-06-21 W2/W3 复测结果脱敏上板助手
 - 新增 `scripts/windows/post-w2w3-retest-board.mjs`：真实运行 `Run-WinClientRetest.cmd` 后，把终端输出里的 `W2W3Retest=...` 一行传给该助手，它会先拒绝 `--password` / `password=` / token / secret / `input_event` / control execution 等危险标记，再在 `--send` 模式下把脱敏 `W2W3Retest=` 发到 Agent Link Board，随后只读运行 `diagnose-w2-h264-board --boardSummary` 并把 `W2H264BoardDiagnosis=` 也发上板。默认不加 `--send` 只做 dry-run；脚本不请求密码、不认证、不发真实输入事件。
 

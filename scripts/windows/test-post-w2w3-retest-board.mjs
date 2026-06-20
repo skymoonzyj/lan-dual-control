@@ -69,7 +69,7 @@ function parseJson(text, label) {
   }
 }
 
-function run(extraArgs, args) {
+function run(extraArgs, args, options = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [script, ...extraArgs], {
       cwd: repoRoot,
@@ -78,7 +78,7 @@ function run(extraArgs, args) {
         LAN_DUAL_PASSWORD: "",
         CODEX_LINK_TOKEN: "",
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
     let stdout = "";
@@ -93,6 +93,11 @@ function run(extraArgs, args) {
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
     });
+    if (options.input !== undefined) {
+      child.stdin.end(String(options.input));
+    } else {
+      child.stdin.end();
+    }
     child.on("error", (error) => {
       clearTimeout(timer);
       resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
@@ -204,6 +209,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `help ${flag}`);
     assertIncludes(result.stdout, "--text", `help ${flag}`);
     assertIncludes(result.stdout, "--file", `help ${flag}`);
+    assertIncludes(result.stdout, "--stdin", `help ${flag}`);
     assertIncludes(result.stdout, "--send", `help ${flag}`);
     assertIncludes(result.stdout, "W2W3Retest", `help ${flag}`);
     assertSecretSafe(result.stdout + result.stderr, `help ${flag}`);
@@ -222,6 +228,20 @@ async function checkDryRunDoesNotPost(args) {
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "dry-run");
     console.log("[OK] W2/W3 retest board-post helper dry-run is no-post and secret-safe");
+  });
+}
+
+async function checkStdinDryRunDoesNotPost(args) {
+  await withFakeBoard(async (board) => {
+    const result = await run(["--server", board.url, "--stdin", "--json"], args, { input: `prefix\n${retestLine}\n` });
+    assert(result.exitCode === 0, `stdin dry-run JSON failed\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "stdin dry-run JSON");
+    assert(payload.ok === true, "stdin dry-run should be ok");
+    assert(payload.send === false, "stdin dry-run should not send by default");
+    assert(payload.retestLine === retestLine, "stdin dry-run should extract the retest line");
+    assert(board.messages.length === 0, `stdin dry-run should not post messages, got ${board.messages.length}`);
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "stdin dry-run");
+    console.log("[OK] W2/W3 retest board-post helper stdin dry-run is no-post and secret-safe");
   });
 }
 
@@ -289,6 +309,7 @@ async function main() {
   const args = parseArgs(process.argv);
   await checkHelp(args);
   await checkDryRunDoesNotPost(args);
+  await checkStdinDryRunDoesNotPost(args);
   await checkSendRetestAndDiagnosis(args);
   await checkRejectsUnsafeInput(args);
   await checkRejectsMissingRetest(args);
