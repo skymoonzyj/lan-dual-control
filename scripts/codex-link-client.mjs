@@ -142,6 +142,9 @@ function printState(state, options = {}) {
 
   console.log(`updatedAt: ${state.updatedAt || ""}`);
   console.log("");
+  console.log("userPresence:");
+  console.log(formatUserPresence(state.userPresence));
+  console.log("");
   console.log("currentCall:");
   console.log(state.currentCall ? formatCall(state.currentCall) : "  none");
   console.log("");
@@ -169,6 +172,15 @@ function formatCall(call) {
     call.ask ? `  ask: ${call.ask}` : "",
     call.blockedBy ? `  blockedBy: ${call.blockedBy}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function formatUserPresence(userPresence) {
+  if (!userPresence || typeof userPresence !== "object") return "  unknown";
+  const status = userPresence.status || "unknown";
+  const label = userPresence.label ? ` (${userPresence.label})` : "";
+  const updatedAt = userPresence.updatedAt ? ` updatedAt=${userPresence.updatedAt}` : "";
+  const updatedBy = userPresence.updatedBy ? ` updatedBy=${userPresence.updatedBy}` : "";
+  return `  ${status}${label}${updatedAt}${updatedBy}`;
 }
 
 function formatEvent(event) {

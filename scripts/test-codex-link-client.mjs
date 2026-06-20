@@ -68,6 +68,14 @@ function makeState() {
       ask: "please inspect",
       updatedAt: "2026-06-20T00:00:45.000Z",
     },
+    userPresence: {
+      status: "away",
+      label: "用户不在",
+      instruction: "do-not-echo-instruction",
+      reason: "do-not-echo-reason",
+      updatedAt: "2026-06-20T00:00:50.000Z",
+      updatedBy: "Supervisor",
+    },
     events: [
       {
         id: "event-1",
@@ -175,6 +183,11 @@ async function checkStateTextStillHumanReadable(args) {
     const result = await run(["--server", serverUrl, "state"], args);
     assert(result.status === 0, `state text should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
     assertIncludes(result.stdout, "updatedAt: 2026-06-20T00:01:00.000Z", "state text");
+    assertIncludes(result.stdout, "userPresence:", "state text");
+    assertIncludes(result.stdout, "away (用户不在)", "state text");
+    assertIncludes(result.stdout, "updatedBy=Supervisor", "state text");
+    assertNotIncludes(result.stdout, "do-not-echo-instruction", "state text");
+    assertNotIncludes(result.stdout, "do-not-echo-reason", "state text");
     assertIncludes(result.stdout, "currentCall:", "state text");
     assertIncludes(result.stdout, "[call] CALLING: coordination smoke", "state text");
     assertIncludes(result.stdout, "Mac Codex: online - ready", "state text");
