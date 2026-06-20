@@ -284,6 +284,19 @@ function assertReverseGrantBoardSummary(text, label, expectedPort = "43770") {
   assertNotIncludes(text, "--password", label);
 }
 
+function assertReverseRehearsalSteps(text, label) {
+  assertIncludes(text, "Step 1:", label);
+  assertIncludes(text, "LAN008/default deny", label);
+  assertIncludes(text, "Step 2:", label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrant", label);
+  assertIncludes(text, "30-second", label);
+  assertIncludes(text, "Windows host loopback", label);
+  assertIncludes(text, "Do not run the grant from Mac", label);
+  assertIncludes(text, "Step 3:", label);
+  assertIncludes(text, "临时授权已使用", label);
+  assertNotIncludes(text, "--password", label);
+}
+
 function assertSecureAuthPath(text, label, expectedPort = "43770", options = {}) {
   if (options.expectBoardLabel) {
     assertIncludes(text, "SecureAuthPath=", label);
@@ -437,6 +450,7 @@ function checkOfflineJson(args) {
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "PowerShell", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "LAN008", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
+  assertReverseRehearsalSteps(payload.runPlan?.commands?.reverseControlRehearsal || "", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "offline reverse grant copy action");
   assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy Node", "offline reverse grant copy action");
   assertSecureAuthPath(payload.runPlan?.commands?.secureAuthPath || "", "offline secure auth path");
@@ -452,6 +466,7 @@ function checkOfflineJson(args) {
   assertMatches(payload.boardSummary || "", /blockers=[^.]*windows-host/, "offline board summary blockers");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline board summary warnings");
   assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
+  assertReverseRehearsalSteps(payload.boardSummary || "", "offline board summary reverse rehearsal");
   assertReverseGrantBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "offline board summary");

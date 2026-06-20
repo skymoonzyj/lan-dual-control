@@ -223,6 +223,19 @@ function assertReverseGrantBoardSummary(text, label, expectedPort) {
   assertNotIncludes(text, "--password", label);
 }
 
+function assertReverseRehearsalSteps(text, label) {
+  assertIncludes(text, "Step 1:", label);
+  assertIncludes(text, "LAN008/default deny", label);
+  assertIncludes(text, "Step 2:", label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrant", label);
+  assertIncludes(text, "30-second", label);
+  assertIncludes(text, "Windows host loopback", label);
+  assertIncludes(text, "Do not run the grant from Mac", label);
+  assertIncludes(text, "Step 3:", label);
+  assertIncludes(text, "临时授权已使用", label);
+  assertNotIncludes(text, "--password", label);
+}
+
 function assertSecureAuthPath(text, label, expectedPort, options = {}) {
   if (options.expectBoardLabel) {
     assertIncludes(text, "SecureAuthPath=", label);
@@ -598,6 +611,7 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "PowerShell", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "LAN008", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "临时授权已使用", "preflight reverse rehearsal");
+        assertReverseRehearsalSteps(preflightPayload.commands?.reverseControlRehearsal || "", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "preflight reverse grant copy action");
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "preflight reverse grant copy action");
         assertSecureAuthPath(preflightPayload.commands?.secureAuthPath || "", "preflight secure auth path", windowsPort);
@@ -645,6 +659,7 @@ async function checkPreflightAndDryRun(args) {
           "preflight board summary Mac input safety plan command",
         );
         assertIncludes(preflightPayload.boardSummary || "", "ReverseGrantCopy=", "preflight board summary");
+        assertReverseRehearsalSteps(preflightPayload.boardSummary || "", "preflight board summary reverse rehearsal");
         assertReverseGrantBoardSummary(preflightPayload.boardSummary || "", "preflight board summary", windowsPort);
         assertIncludes(preflightPayload.boardSummary || "", "Reverse rehearsal after auth", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.ps1", "preflight board summary");

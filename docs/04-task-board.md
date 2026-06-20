@@ -12,6 +12,7 @@
 - [x] 建立双端测试联络规则。
 - [x] 建立局域网 Codex 联络板，支持网页实时收发和命令行收发。
 - [x] Agent Link CLI 状态输出支持机器读取：`codex-link-client state --json` 现在输出纯 `/api/state` JSON，默认 `state` 仍保留人类文本；新增 `scripts/test-codex-link-client.mjs` 覆盖假通讯板 JSON/text 输出，不认证、不请求密码、不发 input/inject。
+- [x] Mac 控 Windows formal/status 反控演练步骤化：`reverseControlRehearsal` / `Reverse rehearsal` 固定 Step 1 请求反控预期 `LAN008/default deny`、Step 2 Windows host 本机 loopback 开 30 秒 `WindowsOpenOneTimeReverseGrant` 且不要从 Mac 端跑授权、Step 3 Mac 重试并确认 `临时授权已使用`；测试覆盖 JSON 和 boardSummary，无密码、无 `input_event`、无 `inject`。
 - [x] Windows 侧联络板 Mac 提醒 watcher 可后台运行：优先 PowerShell 7，Mac 授权/权限/502/blocked/长时间无更新、Mac 发给 Windows 的 active currentCall，以及 Mac 反控请求 `LAN008` 后等待 Windows `ReverseGrant` 临时授权都会弹本机提醒；支持状态/停止/重启、防重复启动和 `-Json` 机器可读输出，并有无弹窗自动回归。
 - [x] Windows Mac 提醒 watcher 状态 JSON 输出最近提醒：`start-mac-alert-watcher.ps1 -Status -Json` 会从 stdout 日志解析 `recentAlerts` / `lastAlert`，不泄露 token，供桌面壳和控制端复制诊断显示最近一条 Mac 授权/权限/值守提醒。
 - [x] Windows Mac 提醒 watcher 识别 Mac 值守风险摘要：`MacUnattendedStatus`、`warnings=`、`blockers=`、LaunchAgent 缺失/未加载、电源或睡眠风险会触发 Windows 本机提醒，方便远控窗口最小化时透传 Mac 值守问题。

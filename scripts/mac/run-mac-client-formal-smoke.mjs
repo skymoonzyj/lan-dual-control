@@ -787,17 +787,17 @@ function makeReverseControlRehearsalText(args) {
   const grantCommand = makeWindowsReverseGrantCommand(args, "grant");
   const nodeFallbackCommand = makeWindowsReverseGrantNodeFallbackCommand(args, "grant");
   return [
-    "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
-    `Windows Codex runs the recommended PowerShell command on the Windows host machine: ${grantCommand}.`,
-    `Node fallback if PowerShell is unavailable: ${nodeFallbackCommand}.`,
+    "Step 1: Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
+    `Step 2: Windows Codex runs the recommended PowerShell command WindowsOpenOneTimeReverseGrant on the Windows host loopback for a 30-second one-time grant: ${grantCommand}. Do not run the grant from Mac.`,
+    `Node fallback if PowerShell is unavailable on Windows: ${nodeFallbackCommand}.`,
     makeReverseGrantCopyAction(),
-    "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
+    "Step 3: Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
     "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
   ].join(" ");
 }
 
 function makeReverseControlRehearsalBoardText() {
-  return "Mac clicks 请求反控 -> expects LAN008/default deny; Windows uses WindowsOpenOneTimeReverseGrant above on loopback; Mac clicks 重试反控 -> accepted plus 临时授权已使用; no password, input_event, or inject.";
+  return "Step 1: Mac clicks 请求反控 -> expects LAN008/default deny. Step 2: Windows uses WindowsOpenOneTimeReverseGrant above on the Windows host loopback for a 30-second one-time grant; Do not run the grant from Mac. Step 3: Mac clicks 重试反控 -> accepted plus 临时授权已使用; no password, input_event, or inject.";
 }
 
 function makeReverseGrantCopyAction() {

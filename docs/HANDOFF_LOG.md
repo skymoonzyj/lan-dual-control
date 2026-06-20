@@ -19,6 +19,37 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac formal 反控授权演练步骤化
+开发端：Mac Codex
+本轮目标：让 Mac 控 Windows formal/status 摘要里的反控请求闭环更适合现场照着做，避免 LAN008 后不清楚授权命令该在哪端运行。
+完成内容：
+- `check-mac-client-formal-status` 和 `run-mac-client-formal-smoke` 的 `reverseControlRehearsal` / `Reverse rehearsal` 文案改成 Step 1/2/3：Mac 先点请求反控并预期 `LAN008/default deny`，Windows 在 Windows host 本机 loopback 跑 `WindowsOpenOneTimeReverseGrant` 开 30 秒一次性授权，Mac 再点重试并确认 `临时授权已使用`。
+- 文案明确 `Do not run the grant from Mac`，并继续保留 PowerShell 首选命令、Node fallback、无密码、无 `input_event`、无 `inject` 的安全边界。
+- 测试新增断言，锁定步骤化提示必须同时出现在 JSON command 和 `--boardSummary` 摘要里。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000` 先失败于 `offline reverse rehearsal command did not include "Step 1:"`。
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 先失败于 `preflight reverse rehearsal did not include "Step 1:"`。
+- 绿灯：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000`
+- 绿灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000`
+遗留问题：
+- 这只是提示和回归加强；真实 Mac 控 Windows 仍需要用户/Windows 在场配合，反控授权只在 Windows 本机 loopback 开临时窗口。
+下一步建议：
+- 下一次真实 Mac 控 Windows 验收如果遇到 LAN008，按 Step 1/2/3 执行；不要从 Mac 端运行 Windows 授权命令，也不要把密码发通讯板。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端拉取后可读到更清楚的摘要。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Agent Link CLI JSON 状态输出
 开发端：Mac Codex
 本轮目标：修复 `codex-link-client state --json` 仍输出人类文本的问题，让双方脚本可直接机器读取通讯板状态。
