@@ -735,6 +735,19 @@ function assertOperatorAction(payload, expected, label) {
   assertSecretSafe(JSON.stringify(payload.operatorAction), `${label} operatorAction`);
 }
 
+function assertManualUxAfterGateCommand(payload, label) {
+  const command = payload.commands?.manualUxAfterGateCommand || "";
+  assertIncludes(command, "node scripts/mac/check-mac-manual-ux-status.mjs", label);
+  assertIncludes(command, "--server", label);
+  assertIncludes(command, "--sendStatus", label);
+  assertIncludes(command, "--sendMessage", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--reconfirmCall", label);
+  assertIncludes(payload.boardSummary || "", `ManualUxAfterGate=${command}`, `${label} boardSummary`);
+  assertSecretSafe(command, label);
+}
+
 async function checkHelp(args) {
   const result = await run(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0. stderr=${result.stderr}`);
@@ -786,6 +799,7 @@ async function checkReadyWhileWindowsPushingAddsManualUxGate(args) {
     assertIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "ready while Windows pushing boardSummary");
     assertIncludes(payload.nextActions?.join("\n") || "", "Wait for Windows Codex to finish push/rebase coordination", "ready while Windows pushing nextActions");
     assertOperatorAction(payload, "wait-windows-codex-push", "ready while Windows pushing JSON");
+    assertManualUxAfterGateCommand(payload, "ready while Windows pushing after-gate command");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only ready status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "ready while Windows pushing JSON");
   });
@@ -1219,6 +1233,21 @@ async function checkSendCallRefusesWhileWindowsIsPushing(args) {
   console.log("[OK] Mac manual UX status refuses --sendCall while Windows is pushing");
 }
 
+async function checkUserAwakeWhileWindowsPushingOffersAfterGateCommand(args) {
+  await withFakeBoard(userAwakeWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `USER_AWAKE while Windows pushing JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "USER_AWAKE while Windows pushing JSON");
+    assert(payload.status === "call-ready", `USER_AWAKE while Windows pushing should stay call-ready, got ${payload.status}`);
+    assert(payload.coordination?.manualUxGate === "wait-windows-codex-push", `USER_AWAKE while Windows pushing gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assertOperatorAction(payload, "wait-windows-codex-push", "USER_AWAKE while Windows pushing JSON");
+    assertManualUxAfterGateCommand(payload, "USER_AWAKE while Windows pushing after-gate command");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only USER_AWAKE while pushing should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "USER_AWAKE while Windows pushing JSON");
+  });
+  console.log("[OK] Mac manual UX status exposes a safe after-gate refresh command while Windows is pushing");
+}
+
 async function checkSendCallRefusesWhenNotCallReady(args) {
   await withFakeBoard(readyBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
@@ -1300,6 +1329,7 @@ async function main() {
   await checkReconfirmRefusesWhileWindowsIsPushing(args);
   await checkReconfirmRefusesWhileWindowsIsCommittingPush(args);
   await checkSendCallRefusesWhileWindowsIsPushing(args);
+  await checkUserAwakeWhileWindowsPushingOffersAfterGateCommand(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);
   await checkUserAwakeSafetyExplanationClearsSleepGate(args);

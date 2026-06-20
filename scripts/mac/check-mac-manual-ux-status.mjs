@@ -613,6 +613,18 @@ function makeManualUxReconfirmCommand(server) {
   ].map(quoteCliArg).join(" ");
 }
 
+function makeManualUxAfterGateCommand(server) {
+  return [
+    "node",
+    "scripts/mac/check-mac-manual-ux-status.mjs",
+    "--server",
+    server,
+    "--sendStatus",
+    "--sendMessage",
+    "--boardSummary",
+  ].map(quoteCliArg).join(" ");
+}
+
 function makeOperatorAction(report) {
   if (report.sentCall?.ok || report.reconfirmedCall?.ok) {
     return {
@@ -738,6 +750,9 @@ function makeReport(state, server) {
       manualUxReconfirmCommand: calling && manualUxCall?.timedOut && manualUxGate === "clear"
         ? makeManualUxReconfirmCommand(server)
         : null,
+      manualUxAfterGateCommand: manualUxGate === "wait-windows-codex-push"
+        ? makeManualUxAfterGateCommand(server)
+        : null,
     },
     manualUxCall,
     coordination: {
@@ -832,6 +847,7 @@ function makeBoardSummary(report) {
   ];
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
   if (report.commands?.manualUxReconfirmCommand) parts.push(`ManualUxReconfirmCommand=${report.commands.manualUxReconfirmCommand}`);
+  if (report.commands?.manualUxAfterGateCommand) parts.push(`ManualUxAfterGate=${report.commands.manualUxAfterGateCommand}`);
   if (report.manualUxCall?.state) {
     parts.push(`ManualUxCall=${report.manualUxCall.state}`);
     if (Number.isFinite(report.manualUxCall.ageMs)) {
