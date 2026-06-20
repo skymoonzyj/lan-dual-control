@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 通讯板诊断严格过滤说明文字
+- `diagnose-w2-h264-board` 现在只把真正含 `W2W3Retest=` 且 `h264=` 段内带 `status/decoded/recv/key/sps/pps/idr/needsKeyframe/lastNal` 等真实字段的文本当作 Windows 复测证据。普通通讯板说明、推送消息或反引号里的 `W2W3Retest=` / `W2W3Retest h264=` 不再会生成全 0 假证据；真实板当前无复测时会输出 `reason=waiting-for-w2w3-retest` 和 `Next=RunWinClientRetest`，同时保留 Mac `h264Key/sps/pps/idr/keyParam` 背景证据。不改协议、不认证、不请求密码、不发 input/inject。
 ## 2026-06-21 W2 Windows H.264 通讯板对照诊断
 - 新增 `scripts/windows/diagnose-w2-h264-board.mjs` 只读诊断入口，用于读取 Agent Link Board `/api/state`，把 Windows `W2W3Retest h264=` 的 `recv/key/sps/pps/idr/lastNal/decoded/needsKeyframe` 与 Mac `MacHostMedia` / readiness / media 摘要里的 `h264Key/sps/pps/idr/firstKeyNal/lastKeyNal/lastNal` 对照，自动给出 `waiting-for-w2w3-retest`、`windows-decode-path`、`windows-receive-missing-keyframe`、`windows-receive-missing-video` 或 `decoded-surface-seen`。`--boardSummary` 输出稳定 `W2H264BoardDiagnosis=` 一行，`--json` 给自动化消费；脚本不打印通讯板原文，只输出解析后的安全字段，不请求密码、不认证、不发 input/inject。
 

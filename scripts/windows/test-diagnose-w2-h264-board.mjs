@@ -244,6 +244,30 @@ async function checkWaitingForRetest(args) {
   console.log("[OK] W2 H.264 board diagnosis asks for WinClientRetest when evidence is missing");
 }
 
+async function checkExplanatoryW2TextIgnored(args) {
+  const explanatoryWindowsText = "Windows 已推送：新增诊断，对照 Windows W2W3Retest h264= 与 Mac h264Key/SPS/PPS/IDR；真实板当前摘要为 windows recv=0 key=0 sps=0 pps=0 idr=0 decoded=0。";
+  await withFakeBoard(makeState({ windowsText: explanatoryWindowsText, macText: macNalEvidence }), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary"], args);
+    assert(result.exitCode === 1, `explanatory W2 text should not be treated as retest evidence\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "status=waiting reason=waiting-for-w2w3-retest", "explanatory W2 boardSummary");
+    assertIncludes(result.stdout, "windows=recv:na key:na sps:na pps:na idr:na decoded:na lastNal:na", "explanatory W2 boardSummary");
+    assertIncludes(result.stdout, "Next=RunWinClientRetest", "explanatory W2 boardSummary");
+    assertSecretSafe(result.stdout + result.stderr, "explanatory W2 boardSummary");
+  });
+  console.log("[OK] W2 H.264 board diagnosis ignores explanatory W2W3Retest mentions");
+}
+async function checkBacktickedRetestLabelIgnored(args) {
+  const explanatoryWindowsText = "准备推送：`W2W3Retest=` 摘要会解析 Windows recv=0 key=0 sps=0 pps=0 idr=0 decoded=0；不要把说明文字中的 W2W3Retest h264= 当作复测证据。";
+  await withFakeBoard(makeState({ windowsText: explanatoryWindowsText, macText: macNalEvidence }), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary"], args);
+    assert(result.exitCode === 1, `backticked W2W3Retest label should not be treated as retest evidence\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "status=waiting reason=waiting-for-w2w3-retest", "backticked W2 boardSummary");
+    assertIncludes(result.stdout, "windows=recv:na key:na sps:na pps:na idr:na decoded:na lastNal:na", "backticked W2 boardSummary");
+    assertIncludes(result.stdout, "Next=RunWinClientRetest", "backticked W2 boardSummary");
+    assertSecretSafe(result.stdout + result.stderr, "backticked W2 boardSummary");
+  });
+  console.log("[OK] W2 H.264 board diagnosis ignores backticked W2W3Retest labels");
+}
 async function checkPlaceholderNalEvidenceIgnored(args) {
   const windowsText = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 needsKeyframe=yes recv=0 key=0 sps=0 pps=0 idr=0 lastNal=na";
   const placeholderMacText = "MacHostMedia=media=ok h264Key=<n> sps=<n> pps=<n> idr=<n> firstKeyNal=<types> firstNal=<types>";
@@ -282,6 +306,8 @@ async function main() {
   await checkHelp(args);
   await checkWindowsDecodePath(args);
   await checkWaitingForRetest(args);
+  await checkExplanatoryW2TextIgnored(args);
+  await checkBacktickedRetestLabelIgnored(args);
   await checkPlaceholderNalEvidenceIgnored(args);
   await checkDecodedSurfaceReady(args);
   console.log("[OK] W2 H.264 board diagnosis regression passed");

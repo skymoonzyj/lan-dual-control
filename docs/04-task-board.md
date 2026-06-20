@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W2 Windows H.264 通讯板诊断严格过滤说明文字：`diagnose-w2-h264-board` 只接受真实 `W2W3Retest=` 摘要中 `h264=` 段内的真实字段；新增回归覆盖普通说明文字 `W2W3Retest h264=`、反引号 `W2W3Retest=` 标签和占位符 `<types>/<n>` 都不会变成假复测证据。真实板无复测时输出 `waiting-for-w2w3-retest`。不改协议、不认证、不请求密码、不发 input/inject。
 - [x] W2 Windows H.264 通讯板对照诊断：新增 `diagnose-w2-h264-board`，只读读取 Agent Link Board `/api/state`，把 Windows `W2W3Retest h264=` 和 Mac `firstKeyNal/lastKeyNal/lastNal` 等发送侧证据对照，输出 `W2H264BoardDiagnosis=` 判断下一步是跑复测、查 Windows WebCodecs 解码路径、查接收关键帧，还是进入人工画面/FPS/声音确认。测试用假通讯板覆盖 `windows-decode-path`、缺复测、已 decoded surface 和秘密样本文本不泄露。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W2 Windows 真连复测密码提示统一：`probe-mac-host --promptPassword` 不再显示英文 `Mac host password:`，而是和 formal/browser runner 一样先说明“当前终端窗口输入 Mac 端当前临时密码、输入不显示、按 Enter 继续、不是卡住、不要输到网页或通讯板”，等待标签也统一为中文；专项回归覆盖源码断言和非交互终端提示。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W2 Windows H.264 接收 NAL 证据补强：控制端收到 H.264 payload 时记录 recv/key/SPS/PPS/IDR/lastNal，页面“现场视频”和 `W2W3Retest h264=` 会显示 `recv/key/sps/pps/idr/lastNal`，可直接和 Mac `firstKeyNal/firstNal` 发送侧证据对照。页面自测先红于接收侧计数全 0，再绿于 `test-windows-client-browser --diagnosticsOnly --boardSummary`。不改协议、不认证、不请求或发送密码、不发 input/inject。

@@ -19,6 +19,18 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 Windows H.264 通讯板诊断严格过滤说明文字
+开发端：Windows Codex
+本轮目标：修复 `diagnose-w2-h264-board` 把通讯板说明文字里的 `W2W3Retest h264=` 或反引号 `W2W3Retest=` 当成真实复测证据的问题。
+完成内容：Windows 证据解析现在先定位真实 `W2W3Retest=`，再只接受其 `h264=` 段内带 `status/decoded/recv/key/sps/pps/idr/needsKeyframe/lastNal` 等字段的摘要；说明文字、推送消息、占位符和普通诊断解释不会生成全 0 假证据。真实通讯板当前输出回到 `waiting-for-w2w3-retest`，Next 为 `RunWinClientRetest`。
+修改文件：scripts/windows/diagnose-w2-h264-board.mjs；scripts/windows/test-diagnose-w2-h264-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯新增回归先失败于反引号 `W2W3Retest=` 说明文字被判成 `windows-receive-missing-video`；绿灯专项回归通过，并在真实通讯板只读输出 `W2H264BoardDiagnosis=status=waiting reason=waiting-for-w2w3-retest ... Next=RunWinClientRetest`。
+遗留问题：仍需要用户跑真实 `WinClientRetest=` 并上板新的 `W2W3Retest=`；本轮只修读板误判。
+下一步建议：等新复测上板后再跑 `diagnose-w2-h264-board --boardSummary`，若仍指向接收/解码路径，再针对真实字段继续修 Windows H.264。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 端保持 H.264 media/readiness 摘要即可。不在通讯板发送密码，不发 input/inject。
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 通讯板对照诊断
 开发端：Windows Codex
 本轮目标：让用户真连后不用人工翻通讯板长日志，直接判断 H.264 黑屏证据更像 Mac 发送、Windows 接收还是 Windows 解码路径。

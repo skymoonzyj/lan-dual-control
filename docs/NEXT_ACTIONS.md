@@ -4,6 +4,7 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
+- W2-H264 诊断证据口径：`diagnose-w2-h264-board` 只承认真实 `W2W3Retest=` 摘要里的 `h264=` 字段；通讯板里的“准备推送/已推送/说明文字”即使提到 `W2W3Retest h264=` 也不会算作复测。看到 `reason=waiting-for-w2w3-retest` 时，不要继续解读旧说明文字，直接让 Windows 跑 `WinClientRetest=` 并把新 `W2W3Retest=` 上板。
 - W2-H264 复测后先跑通讯板对照诊断：用户或 Windows 端把 `W2W3Retest=` 上板后，运行 `node scripts/windows/diagnose-w2-h264-board.mjs --server http://192.168.31.68:17888 --boardSummary`。如果输出 `reason=windows-decode-path`，说明 Mac 侧有 key/NAL 证据且 Windows 已收到 SPS/PPS/IDR 但 `decoded=0`，下一步查 Windows WebCodecs configure/decode/flush/队列；如果是 `waiting-for-w2w3-retest`，先重新跑 `WinClientRetest=`；如果是 `windows-receive-missing-keyframe` 或 `windows-receive-missing-video`，再回查传输窗口、WebSocket video payload 或 Mac host 重启流。该脚本只读 `/api/state`，不请求密码、不认证、不发 input/inject，也不回显通讯板原文。
 - W2 真连复测密码提示最新口径：formal runner、browser runner 和底层 `probe-mac-host --promptPassword` 都会先用中文说明“在当前终端窗口输入 Mac 端当前临时密码，输入不显示，按 Enter 继续，不是卡住，不要输到网页或通讯板”，等待标签统一为 `当前终端输入 Mac 临时密码（输入不显示，回车继续）:`。如果用户看到这个提示，就直接在同一个黑色终端里输入；如果是网页登录，则密码填页面左侧“连接密码”框。不要把密码发通讯板，不发 input/inject。
 

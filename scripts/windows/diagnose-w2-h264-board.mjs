@@ -132,6 +132,10 @@ function parseTokens(text) {
   return tokens;
 }
 
+function hasWindowsH264EvidenceTokens(tokens) {
+  return ["status", "decoded", "recv", "key", "sps", "pps", "idr", "needsKeyframe", "lastNal"].some((key) => tokens[key] !== undefined);
+}
+
 function statusCodeFor(result) {
   if (result.status === "ready") return 0;
   if (result.status === "blocked") return 2;
@@ -208,12 +212,16 @@ function extractWindowsEvidence(entries) {
   for (const entry of ordered) {
     if (!isWindowsEntry(entry)) continue;
     const text = entry.text || "";
-    if (!/W2W3Retest=|h264=/.test(text)) continue;
-    const h264Segment = h264TextSegment(text);
+    const retestIndex = text.lastIndexOf("W2W3Retest=");
+    if (retestIndex < 0) continue;
+    const retestText = text.slice(retestIndex);
+    const h264Segment = h264TextSegment(retestText);
     if (!h264Segment) continue;
+    const h264Tokens = parseTokens(h264Segment);
+    if (!hasWindowsH264EvidenceTokens(h264Tokens)) continue;
     const tokens = {
-      ...parseTokens(text),
-      ...parseTokens(h264Segment),
+      ...parseTokens(retestText),
+      ...h264Tokens,
     };
     const evidence = {
       status: tokens.status ? String(tokens.status) : undefined,
