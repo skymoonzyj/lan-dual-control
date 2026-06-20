@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 消费 MacManualUx TargetSource
+- `check-windows-manual-ux-status --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 现在会安全消费 Mac 上板的 `MacManualUx TargetSource=`，支持 `board`、`mac-host-discovery`、`board-discovery`、`manual`、`agent-link-board`、`current-call` 等白名单来源；手工体验第一屏会输出顶层 `TargetSource=...`，恢复总览的 `MacManualUx=` 摘要会保留 `targetSource=...`。缺失时保持 `unknown`，不把来源当成已连接/已认证证据；仍只读通讯板，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows 防火墙健康口径
 - `check-windows-firewall --json` 现在输出 `firewallHealth`：当 Windows 当前网络配置是 Public，但 Public 防火墙配置本身已关闭时，标记为 `status=nonblocking reason=public-profile-firewall-disabled`。`check-windows-host-readiness --boardSummary` 同步输出 `WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled`，同时保留 `WindowsLanRisk=public-profile` 作为环境事实提醒。该状态表示“Public 网络不是当前连接阻塞点”；只要 Windows host 监听 `0.0.0.0` 且 loopback/LAN TCP 探测可达，就不要把它误判为必须改防火墙或改网络位置。本轮只读查询和摘要格式化，不改系统防火墙、不认证、不请求或发送密码、不发 input/inject。
 

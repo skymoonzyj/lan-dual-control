@@ -235,7 +235,7 @@ function timeoutReconfirmBoardState() {
     statuses: {
       "Mac Heartbeat": {
         status: "online",
-        note: `MacHeartbeat=status=ok; host=192.168.31.122:43770; MacManualUx=status=calling ManualUxChecklist=${defaultChecklist} ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout; MacClientManualChecklist=${macClientManualChecklistAction}`,
+        note: `MacHeartbeat=status=ok; host=192.168.31.122:43770; MacManualUx=status=calling ManualUxChecklist=${defaultChecklist} ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 TargetSource=board Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout; MacClientManualChecklist=${macClientManualChecklistAction}`,
         updatedAt: "2026-06-20T09:09:57.000Z",
       },
       "Mac Unattended": {
@@ -329,6 +329,7 @@ async function checkLoopbackTargetIsNotAdvertised(args) {
     assert(payload.status === "ready", `loopback-only JSON status mismatch: ${payload.status}`);
     assert(payload.target === "unknown", `loopback-only JSON should not advertise 127.0.0.1 as Windows target, got ${payload.target}`);
     assertIncludes(payload.boardSummary, "Target=unknown", "loopback-only boardSummary");
+    assertIncludes(payload.boardSummary, "TargetSource=unknown", "loopback-only boardSummary");
   });
   console.log("[OK] Windows manual UX status does not advertise loopback-only Mac target");
 }
@@ -382,12 +383,16 @@ async function checkTimeoutReconfirmAndMacClientChecklist(args) {
     assert(payload.macManualUx?.status === "calling", "MacManualUx status should be preserved");
     assert(payload.macManualUx?.next === "ReconfirmManualUxCall", "MacManualUx next should request reconfirm");
     assert(payload.macManualUx?.manualUxCall === "timeout", "MacManualUx timeout should be preserved");
+    assert(payload.macManualUx?.targetSource === "board", "MacManualUx targetSource should be preserved");
+    assert(payload.targetSource === "board", "Windows manual UX top-level targetSource should use MacManualUx target source");
     assert(payload.macManualUx?.manualUxReconfirmCommand === macManualUxReconfirmCommand, "MacManualUx safe reconfirm command mismatch");
     assert(payload.macClientManualChecklist?.found === true, "MacClientManualChecklist should be found");
     assert(payload.macClientManualChecklist.action === macClientManualChecklistAction, "MacClientManualChecklist action mismatch");
     assert(payload.macClientManualChecklist.rejectedCount >= 2, "unsafe MacClientManualChecklist candidates should be rejected");
     assertIncludes(payload.boardSummary, "WindowsManualUx=status=reconfirm", "timeout/reconfirm boardSummary");
     assertIncludes(payload.boardSummary, "Next=AskMacReconfirmManualUxCall", "timeout/reconfirm boardSummary");
+    assertIncludes(payload.boardSummary, "TargetSource=board", "timeout/reconfirm boardSummary");
+    assertIncludes(payload.boardSummary, "targetSource=board", "timeout/reconfirm boardSummary MacManualUx");
     assertIncludes(payload.boardSummary, `MacManualUxReconfirm=${macManualUxReconfirmCommand}`, "timeout/reconfirm boardSummary");
     assertIncludes(payload.boardSummary, `MacClientManualChecklist=${macClientManualChecklistAction}`, "timeout/reconfirm boardSummary");
     const combined = JSON.stringify(payload);

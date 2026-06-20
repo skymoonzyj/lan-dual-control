@@ -19,6 +19,37 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 消费 MacManualUx TargetSource
+开发端：Windows Codex
+本轮目标：让 Windows 手工体验第一屏和恢复总览读懂 Mac 上板的 `MacManualUx TargetSource=`，避免目标来源显示为 unknown 或被误判。
+完成内容：
+- `check-windows-manual-ux-status` 解析白名单 `TargetSource=board|mac-host-discovery|board-discovery|manual|agent-link-board|current-call|unknown`，顶层输出 `targetSource`，`--boardSummary` 输出 `TargetSource=...`。
+- `check-windows-resume-status` 同步解析 `MacManualUx targetSource`，在 JSON 和 `MacManualUx=` 简短摘要里保留该安全来源。
+- 回归覆盖 `board` 和 `mac-host-discovery` 两种来源；缺失时仍为 `unknown`。
+修改文件：
+- `scripts/windows/check-windows-manual-ux-status.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-manual-ux-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- `TargetSource` 只是来源说明，不代表已经连接或认证；真实体验仍按 discovery、密码输入位置、视频/音频/剪贴板和 input 安全证据验收。
+下一步建议：
+- Mac 端继续保持 `MacManualUx TargetSource=` 上板；Windows 端看到 `board` 就按 Mac 手工体验摘要来源处理，看到 `unknown` 时只当作来源缺失。
+是否改了协议：否。只扩展 Windows 只读通讯板摘要消费和诊断展示。
+是否需要另一端配合：不需要立即配合；Mac 端后续保持发送无密 `TargetSource=` 即可。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 防火墙健康口径
 开发端：Windows Codex
 本轮目标：避免 Windows 网络位置为 Public 但 Public 防火墙已关闭时，被误判成 Mac 控 Windows 的 LAN 阻塞。

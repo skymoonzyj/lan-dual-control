@@ -1705,6 +1705,7 @@ const macManualUxAllowedNext = new Set(["ManualUxTest", "WaitForPostPassOrManual
 const macManualUxAllowedSafety = new Set(["no-password", "no-input-inject"]);
 const macManualUxAllowedCallStates = new Set(["active", "near-timeout", "timeout"]);
 const macManualUxAllowedGates = new Set(["clear", "wait-windows-codex-push", "wait-windows-codex-commit"]);
+const macManualUxAllowedTargetSources = new Set(["unknown", "mac-host-discovery", "board-discovery", "board", "manual", "agent-link-board", "current-call"]);
 const macManualUxSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌/i;
 
 function splitMacManualUxSegments(text) {
@@ -1792,6 +1793,10 @@ function isSafeMacManualUxTarget(value) {
   return target === "unknown" || /^(?:localhost|127(?:\.\d{1,3}){3}|(?:\d{1,3}\.){3}\d{1,3}):\d{1,5}$/i.test(target);
 }
 
+function isSafeMacManualUxTargetSource(value) {
+  return macManualUxAllowedTargetSources.has(String(value || "unknown"));
+}
+
 function parseMacManualUxSegment(segment, source = "text") {
   const value = String(segment || "");
   if (macManualUxSecretPattern.test(value)) return null;
@@ -1800,6 +1805,7 @@ function parseMacManualUxSegment(segment, source = "text") {
   const labels = extractMacManualUxField(value, "ManualUxLabels") || extractMacManualUxField(value, "labels");
   const signalsRaw = extractMacManualUxField(value, "Signals") || extractMacManualUxField(value, "signals") || "none";
   const target = extractMacManualUxField(value, "Target") || extractMacManualUxField(value, "target") || "unknown";
+  const targetSource = extractMacManualUxField(value, "TargetSource") || extractMacManualUxField(value, "targetSource") || "unknown";
   const next = extractMacManualUxField(value, "Next") || extractMacManualUxField(value, "next");
   const safetyRaw = extractMacManualUxField(value, "Safety") || extractMacManualUxField(value, "safety");
   const noFormalE2ERerunRaw = extractMacManualUxField(value, "NoFormalE2ERerun") || extractMacManualUxField(value, "noFormalE2ERerun");
@@ -1822,7 +1828,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     !macManualUxAllowedStatuses.has(status) ||
     checklist !== macManualUxChecklist ||
     !labels || macManualUxSecretPattern.test(labels) || /\s/.test(labels) ||
-    !signals.ok || !isSafeMacManualUxTarget(target) ||
+    !signals.ok || !isSafeMacManualUxTarget(target) || !isSafeMacManualUxTargetSource(targetSource) ||
     !macManualUxAllowedNext.has(next) ||
     !validSafety ||
     noFormalE2ERerunRaw !== "true" ||
@@ -1844,6 +1850,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     `labels=${labels}`,
     `signals=${signals.values.length ? signals.values.join(",") : "none"}`,
     `target=${target}`,
+    ...(targetSource !== "unknown" ? [`targetSource=${targetSource}`] : []),
     `next=${next}`,
     `safety=${safety.join(",")}`,
     "noFormalE2ERerun=true",
@@ -1865,6 +1872,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     labels,
     signals: signals.values,
     target,
+    targetSource,
     next,
     safety,
     noFormalE2ERerun: true,

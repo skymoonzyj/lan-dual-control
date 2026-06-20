@@ -42,6 +42,7 @@ const macClientManualChecklistAllowedActions = new Set([
 const allowedMacManualUxStatus = new Set(["ready", "waiting", "call-ready", "calling"]);
 const allowedMacManualUxNext = new Set(["ManualUxTest", "WaitForPostPassOrManualUxStandby", "SendManualUxCall", "WaitForManualUxConfirmation", "ReconfirmManualUxCall"]);
 const allowedMacManualUxCall = new Set(["active", "near-timeout", "timeout"]);
+const allowedMacManualUxTargetSource = new Set(["unknown", "mac-host-discovery", "board-discovery", "board", "manual", "agent-link-board", "current-call"]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -329,6 +330,7 @@ function parseMacManualUxSegment(fragment) {
   const labels = extractMacManualUxField(value, "ManualUxLabels") || extractMacManualUxField(value, "labels");
   const signals = extractMacManualUxField(value, "Signals") || extractMacManualUxField(value, "signals");
   const target = extractMacManualUxField(value, "Target") || extractMacManualUxField(value, "target");
+  const targetSource = extractMacManualUxField(value, "TargetSource") || extractMacManualUxField(value, "targetSource") || "unknown";
   const next = extractMacManualUxField(value, "Next") || extractMacManualUxField(value, "next");
   const safety = extractMacManualUxField(value, "Safety") || extractMacManualUxField(value, "safety");
   const noFormalE2ERerun = extractMacManualUxField(value, "NoFormalE2ERerun") || extractMacManualUxField(value, "noFormalE2ERerun");
@@ -337,6 +339,7 @@ function parseMacManualUxSegment(fragment) {
   const blockers = extractMacManualUxField(value, "blockers");
   const manualUxReconfirmCommand = extractMacManualUxCommandField(value, "ManualUxReconfirmCommand");
   if (!allowedMacManualUxStatus.has(status) || (next && !allowedMacManualUxNext.has(next))) return null;
+  if (!allowedMacManualUxTargetSource.has(targetSource)) return null;
   if (safety && safety !== "no-password,no-input-inject") return null;
   if (noFormalE2ERerun && noFormalE2ERerun !== "true") return null;
   if (manualUxCall && !allowedMacManualUxCall.has(manualUxCall)) return null;
@@ -345,6 +348,7 @@ function parseMacManualUxSegment(fragment) {
   if (checklist) summaryParts.push(`checklist=${checklist}`);
   if (signals) summaryParts.push(`signals=${signals}`);
   if (target) summaryParts.push(`target=${target}`);
+  if (targetSource !== "unknown") summaryParts.push(`targetSource=${targetSource}`);
   if (next) summaryParts.push(`next=${next}`);
   if (safety) summaryParts.push(`safety=${safety}`);
   if (manualUxCall) summaryParts.push(`manualUxCall=${manualUxCall}`);
@@ -358,6 +362,7 @@ function parseMacManualUxSegment(fragment) {
     labels,
     signals,
     target,
+    targetSource,
     next,
     safety,
     noFormalE2ERerun,
@@ -426,7 +431,8 @@ function makeReport(state, server) {
     status,
     server,
     checkedAt: new Date().toISOString(),
-    target: firstPrivateEndpoint(texts, server),
+    target: macManualUx.target && macManualUx.target !== "unknown" ? macManualUx.target : firstPrivateEndpoint(texts, server),
+    targetSource: macManualUx.targetSource || "unknown",
     signals,
     macManualUx,
     macClientManualChecklist,
@@ -482,6 +488,7 @@ function makeBoardSummary(report) {
     `ManualUxLabels=${report.manualChecklist.labels.join("/")}`,
     `Signals=${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(",") || "none"}`,
     `Target=${report.target}`,
+    `TargetSource=${report.targetSource || "unknown"}`,
     `Next=${nextByStatus[report.status] || "WaitForPostPassOrManualUxStandby"}`,
     "Safety=no-password,no-input-inject",
     "NoFormalE2ERerun=true",
@@ -497,7 +504,7 @@ function makeBoardSummary(report) {
 function printHuman(report) {
   const prefix = report.status === "ready" ? "OK" : "WAIT";
   console.log(`[${prefix}] Windows manual UX status: ${report.status}`);
-  console.log(`[INFO] Target: ${report.target}`);
+  console.log(`[INFO] Target: ${report.target} (${report.targetSource || "unknown"})`);
   console.log(`[INFO] Checklist: ${report.manualChecklist.labels.join(" / ")} (${report.manualChecklist.summary})`);
   console.log(`[INFO] Signals: ${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(", ") || "none"}`);
   if (report.macManualUx?.found) console.log(`[INFO] MacManualUx: ${report.macManualUx.summary}`);
@@ -519,6 +526,7 @@ function makeOfflineReport(server, error) {
     server,
     checkedAt: new Date().toISOString(),
     target: "unknown",
+    targetSource: "unknown",
     signals: {
       realTestPass: false,
       postPassNext: false,
