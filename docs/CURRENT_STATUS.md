@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Mac H.264 discovery idle state
+- `check-mac-resume-status` 和 `check-mac-host-readiness` 不再把 `/discovery` 里的 `h264Stream=true` + `capturePipeline=background-jpeg` 误报为 `h264-fallback` warning。Mac host 的 discovery 在没有客户端协商 H.264 会话前会报告后台 JPEG 空闲态；这不等于 H.264 失败。摘要仍保留 `h264=on pipeline=background-jpeg` 事实，真正长测前的 H.264/PCM 质量仍按 `MacHostMedia=... --probeMedia --promptPassword --boardSummary`、browser/formal smoke 或实际会话诊断验证；不改协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-20 Mac Windows host discovery call
 - `discover-windows-hosts` 现在支持显式 `--sendCall`：当 Mac discovery 没找到 Windows host 或 scanner timeout 时，可直接向 Agent Link Board 发送/刷新 `Start or refresh Windows host for Mac-control-Windows preflight` 呼叫，正文包含 `WindowsHostStatus=`、`WindowsHostReadiness=`、`ScannerWarning=timeout` 等无密证据；JSON 同步暴露 `windowsHostReadinessCall`。默认仍只读不上板；`--sendCall` 发送前会实时读取 currentCall，只允许刷新同一个 Mac -> Windows readiness call，遇到其它 active call 会 fail-closed，不覆盖对方任务。该入口不认证、不请求或发送密码、不连接 WebSocket、不发 input_event/inject。
 - `check-mac-resume-status --checkBoard --json/--boardSummary` 现在也会输出 `commands.macClientDiscoverWindowsCallCommand` / `MacClientDiscoverWindowsCall=`，固定为 `node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary`。这只是第一屏可复制的显式刷新 call 命令；默认 resume 检查仍不发送 call、不连接 Windows、不认证、不请求或发送密码、不发 input_event/inject。

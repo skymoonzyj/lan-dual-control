@@ -651,6 +651,8 @@ function isH264CapturePipelineActive(capabilities) {
 function h264FallbackPipelineWarning(capabilities) {
   const safeCapabilities = capabilities || {};
   if (safeCapabilities.h264Stream !== true || isH264CapturePipelineActive(safeCapabilities)) return "";
+  // Discovery reports background-jpeg before any client negotiates an H.264 session.
+  if (normalizedText(safeCapabilities.capturePipeline).toLowerCase() === "background-jpeg") return "";
   return `H.264 is advertised but current capture pipeline is ${safeCapabilities.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 validation`;
 }
 

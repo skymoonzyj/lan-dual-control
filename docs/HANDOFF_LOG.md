@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac H.264 discovery 空闲态误报修正
+开发端：Mac Codex
+本轮目标：修正 Mac resume/readiness 把 `/discovery` 的 `h264Stream=true` + `capturePipeline=background-jpeg` 当成 H.264 fallback warning 的误导口径。
+完成内容：
+- `check-mac-resume-status` 不再为 discovery 空闲态 `background-jpeg` 生成 `h264-fallback` recommendation。
+- `check-mac-host-readiness` 不再为同一空闲态生成 H.264 fallback warning。
+- 摘要仍保留 `h264=on pipeline=background-jpeg` 事实；真正 H.264/PCM 长测仍以 `MacHostMedia --probeMedia --promptPassword`、browser/formal smoke 或实际会话诊断为准。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败于仍生成 `h264-fallback` recommendation。
+- 红灯：`node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 12000` 先失败于 helper 仍返回 fallback warning。
+- 绿灯：两条测试均通过；真实 `check-mac-resume-status --checkBoard --boardSummary` 已不再显示 `warnings=h264-fallback`。
+遗留问题：
+- 当前 Agent Link Board active call 仍是 Windows host readiness，需要 Windows 端处理；本轮没有刷新或覆盖该 call。
+下一步建议：
+- Mac 端继续保持 host/client/heartbeat 在线；需要真正验证 H.264/PCM 时，用户在场并按 `MacHostMedia` 或 formal/browser smoke 路径输入本地临时密码。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 代码修改；Windows host readiness call 仍需 Windows 端按原 call 处理。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac heartbeat 暴露 discovery readiness call 命令
 开发端：Mac Codex
 本轮目标：让最新 `Mac Heartbeat` 行也能直接给出显式刷新 Windows host readiness call 的安全命令，避免白天接手时只看最新心跳却找不到可复制入口。

@@ -563,6 +563,11 @@ function isH264CapturePipelineActive(capabilities = {}) {
   return pipeline.includes("h264");
 }
 
+function isIdleDiscoveryCapturePipeline(capabilities = {}) {
+  // Discovery reports background-jpeg before any client negotiates an H.264 session.
+  return normalizedText(capabilities.capturePipeline).toLowerCase() === "background-jpeg";
+}
+
 function getLanAddresses(port) {
   const addresses = [];
   for (const [name, entries] of Object.entries(os.networkInterfaces())) {
@@ -1355,7 +1360,7 @@ function buildRecommendations({ git, host, board, macHeartbeatWatcher, args }) {
       text: "Input Monitoring is not confirmed; keyboard edge cases may need manual permission review.",
     });
   }
-  if (host.capabilities?.h264Stream === true && !isH264CapturePipelineActive(host.capabilities)) {
+  if (host.capabilities?.h264Stream === true && !isH264CapturePipelineActive(host.capabilities) && !isIdleDiscoveryCapturePipeline(host.capabilities)) {
     recommendations.push({
       level: "warning",
       id: "h264-fallback",

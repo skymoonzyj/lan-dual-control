@@ -1264,7 +1264,7 @@ async function checkStaleBuildSuggestedAction(args) {
   print("OK", "Resume status suggests a safe restart action when Mac host runtime files changed");
 }
 
-async function checkH264FallbackPipelineWarning(args) {
+async function checkDiscoveryBackgroundJpegDoesNotWarn(args) {
   await withFakeMacHost(async (macHost) => {
     const result = await runAsync(args, [
       "--json",
@@ -1275,18 +1275,16 @@ async function checkH264FallbackPipelineWarning(args) {
       "--timeoutMs",
       "1200",
     ]);
-    const payload = parseJson(result.stdout, "fallback pipeline resume status");
-    assert(result.status === 0, `fallback pipeline warning should not fail resume status\n${result.stdout}\n${result.stderr}`);
-    assert(payload.host?.online === true, "fallback pipeline payload should report host online");
-    assert(payload.host?.capabilities?.capturePipeline === "background-jpeg", "fallback pipeline payload should preserve capturePipeline");
-    assert(payload.recommendations.some((item) => item.id === "h264-fallback" && item.level === "warning" && /current capture pipeline is background-jpeg/.test(item.text)), "fallback pipeline should create a warning recommendation");
-    assert(String(payload.boardSummary || "").includes("attention="), "fallback pipeline boardSummary should include attention");
-    assert(String(payload.boardSummary || "").includes("blockers=none"), "fallback pipeline boardSummary should explicitly report no blockers");
-    assert(/warnings=[^.]*h264-fallback/.test(String(payload.boardSummary || "")), "fallback pipeline boardSummary should include warning IDs");
-    assert(!String(payload.boardSummary || "").includes("attention=none"), "fallback pipeline boardSummary should not say attention=none");
-    assertNoPasswordLeak(result, "fallback pipeline resume status");
+    const payload = parseJson(result.stdout, "discovery background JPEG resume status");
+    assert(result.status === 0, `discovery background JPEG should not fail resume status\n${result.stdout}\n${result.stderr}`);
+    assert(payload.host?.online === true, "discovery background JPEG payload should report host online");
+    assert(payload.host?.capabilities?.h264Stream === true, "discovery background JPEG payload should preserve H.264 capability");
+    assert(payload.host?.capabilities?.capturePipeline === "background-jpeg", "discovery background JPEG payload should preserve capturePipeline");
+    assert(!payload.recommendations.some((item) => item.id === "h264-fallback"), "discovery background JPEG should not create a fallback warning recommendation");
+    assert(!/warnings=[^.]*h264-fallback/.test(String(payload.boardSummary || "")), "discovery background JPEG boardSummary should not include h264-fallback");
+    assertNoPasswordLeak(result, "discovery background JPEG resume status");
   });
-  print("OK", "Resume status warns when H.264 is advertised but current pipeline is JPEG fallback");
+  print("OK", "Resume status treats discovery background JPEG as an idle capability state");
 }
 
 function checkPasswordRedaction(args) {
@@ -2044,7 +2042,7 @@ async function main() {
   checkOnlineBoardSummary(args);
   await checkMaxFpsPlanWarning(args);
   await checkStaleBuildSuggestedAction(args);
-  await checkH264FallbackPipelineWarning(args);
+  await checkDiscoveryBackgroundJpegDoesNotWarn(args);
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
   await checkPostPassManualUxStandby(args);

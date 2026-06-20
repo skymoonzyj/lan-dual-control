@@ -891,13 +891,12 @@ function checkStaleBuildSuggestedActionFormatting() {
   print("OK", "Mac host readiness suggests a safe restart action for stale runtime builds only");
 }
 
-function checkH264FallbackPipelineFormatting() {
-  const fallbackWarning = h264FallbackPipelineWarningFixture({
+function checkDiscoveryBackgroundJpegFormatting() {
+  const discoveryWarning = h264FallbackPipelineWarningFixture({
     h264Stream: true,
     capturePipeline: "background-jpeg",
   });
-  assert(/current capture pipeline is background-jpeg/.test(fallbackWarning), "fallback pipeline warning should name the current pipeline");
-  assert(/media baseline/.test(fallbackWarning), "fallback pipeline warning should recommend refreshing the media baseline");
+  assert(discoveryWarning === "", "discovery background JPEG is an idle capability state and should not create a fallback warning");
   assert(
     h264FallbackPipelineWarningFixture({ h264Stream: true, capturePipeline: "screencapturekit-h264" }) === "",
     "active H.264 pipeline should not create a fallback warning",
@@ -937,7 +936,7 @@ function checkH264FallbackPipelineFormatting() {
     }) === "",
     "offline host media board summary should stay compact",
   );
-  print("OK", "Mac host readiness highlights H.264 fallback pipeline state");
+  print("OK", "Mac host readiness avoids discovery background JPEG H.264 false warnings");
 }
 
 function checkMaxScreenFpsWarningFormatting() {
@@ -1299,7 +1298,7 @@ async function main() {
   checkUsableEntryCallKeepsManualUxStandby();
   checkHostBuildBoardSummaryFormatting();
   checkStaleBuildSuggestedActionFormatting();
-  checkH264FallbackPipelineFormatting();
+  checkDiscoveryBackgroundJpegFormatting();
   checkMaxScreenFpsWarningFormatting();
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
