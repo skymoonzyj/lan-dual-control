@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Mac Codex
+
+日期：2026-06-21 M20 Mac readiness foreign currentCall 降噪
+开发端：Mac Codex
+本轮目标：让 Mac host readiness 在当前 W2/W3 等 Windows 复测的 active call 下保持信息可见，但不误报 Mac 侧 `agent-link-board-currentcall` warning。
+完成内容：新增 active currentCall 责任归属分类：`need` / `owner` 明确为 Windows 且不含 Mac 时，`call=active(...)` 仍显示在摘要中，但不进入 warnings；`need/owner` 含 Mac、Windows 呼叫 Mac、或归属不明的 active call 仍保守提示先协调。这样当前 `from=Mac Codex need/owner=Windows Codex` 的复测 call 不会让 Mac readiness 看起来有待 Mac 处理。
+修改文件：scripts/mac/check-mac-host-readiness.mjs；scripts/mac/test-mac-host-readiness-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 30000` 先失败于 Windows-owned active call 仍产生 `agent-link-board-currentcall`；绿灯同命令通过，并保留 Windows->Mac active call warning。收尾验证：`node --check` 两项通过；真实 `check-mac-host-readiness --checkBoard --boardSummary` 输出当前 W2/W3 call 下 `attention=none` / `warnings=none` 且保留 `call=active(...)`；`git diff --check` 和行首冲突标记扫描通过。
+遗留问题：W2/W3 真实复测仍等待 Windows/用户运行 `Run-WinClientRetest-And-Post.cmd` 并上板新的 `W2W3Retest=`。
+下一步建议：Mac 侧保持 host 在线；若 readiness 摘要仍显示 `call=active(...)` 但 `warnings=none`，表示当前 call 只是等待 Windows 行动，不要因它重启 Mac host 或补 H.264 证据。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续真实复测；本轮 Mac 改动不需要 Windows 改代码。
+
 ## 2026-06-21 Windows Codex
 
 日期：2026-06-21 W2/W3 H.264 surface 摘要上板

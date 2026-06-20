@@ -1262,6 +1262,43 @@ async function checkActiveBoardCall(args) {
   print("OK", "Mac host readiness surfaces active Agent Link Board currentCall safely");
 }
 
+async function checkWindowsOwnedActiveBoardCallIsInformational(args) {
+  const call = {
+    status: "CALLING",
+    goal: "Run real WinClientRetest for W2/W3",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    owner: "Windows Codex",
+    ask: "Please run the prepared WinClientRetest entry on Windows and post W2W3Retest. Do not post passwords; do not run real input/inject.",
+  };
+  await withFakeBoard(call, async (server) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "5000",
+      "--skipCurrentBuildCheck",
+    ], args);
+    const payload = parseJson(result.stdout, "Windows-owned active board readiness JSON");
+    assert(payload.board?.checked === true, "Windows-owned call JSON should mark board checked");
+    assert(payload.board?.activeCall === true, "Windows-owned call JSON should still detect active call");
+    assert(String(payload.boardSummary || "").includes("call=active"), "Windows-owned call boardSummary should mention active call");
+    assert(String(payload.boardSummary || "").includes(call.goal), "Windows-owned call boardSummary should include call goal");
+    assert(!String(payload.boardSummary || "").includes("agent-link-board-currentcall"), "Windows-owned call should not create a Mac readiness warning id");
+    const boardStep = payload.results.find((item) => item.label === "Agent Link Board currentCall");
+    assert(boardStep, "Windows-owned call should keep the Agent Link Board currentCall result");
+    assert(boardStep.warnings.length === 0, `Windows-owned call should stay informational, got warnings: ${JSON.stringify(boardStep.warnings)}`);
+    assertNoSecretLikeText(payload.boardSummary, "Windows-owned active board summary");
+  });
+  print("OK", "Mac host readiness treats Windows-owned active currentCall as informational");
+}
+
 async function checkDoneBoardCall(args) {
   const call = {
     status: "DONE",
@@ -1463,6 +1500,7 @@ async function main() {
   checkProbeMediaBoardSummary(args);
   checkPlainOutputIncludesLaunchAgentPlan(args);
   await checkActiveBoardCall(args);
+  await checkWindowsOwnedActiveBoardCallIsInformational(args);
   await checkDoneBoardCall(args);
   await checkBoardMacHostAuthPath(args);
   await checkBoardSummary(args);

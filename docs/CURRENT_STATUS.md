@@ -7,6 +7,9 @@
 ## 2026-06-21 W2/W3 H.264 surface 摘要上板
 - `test-windows-client-browser --boardSummary` 的短 `W2W3Retest h264=` 现在会直接携带 `canvas=true|false` 和 `image=true|false`，并把 `h264=` 压缩上限放宽到 260 字符，避免新增 surface 字段后挤掉 `sps/pps/idr/lastNal`。`diagnose-w2-h264-board` 同步解析这两个 token，并在 `W2H264BoardDiagnosis=` 输出 `surface=canvas:<true|false|na> image:<true|false|na>`。下一次真实复测若仍黑屏，可以一行看到“已收到 SPS/PPS/IDR、decoded 数、needsKeyframe、canvas/image surface”是否一致；脚本仍只读诊断，不请求密码、不认证、不发 input/inject。
 
+## 2026-06-21 M20 Mac readiness foreign active call is info-only
+- `check-mac-host-readiness --checkBoard --boardSummary` 现在会继续显示 `call=active(...)`，但只有 active currentCall 的 `need` / `owner` / `from` 表明需要 Mac 处理时，才把它计入 `warnings=agent-link-board-currentcall`。像当前 W2/W3 这种 `from=Mac Codex`、`need/owner=Windows Codex` 的真实复测呼叫，只表示 Mac 等 Windows 执行，不再让 Mac host readiness 看起来有 Mac 侧 warning；归属不明或 Windows 呼叫 Mac 的场景仍保守 warning。本轮只改只读 readiness 分类和回归测试，不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
 - 用户真实复测已经证明 Mac 侧和网络不是当前主因：Windows 连接成功，H.264 实收约 58 FPS，收到 2588 帧，其中关键帧 22，SPS/PPS/IDR=22/22/22，lastNal=1，但 Windows 控制端仍显示“等待关键帧”且 canvas/image 没有出画面。本轮定位到 Windows 控制端 `renderH264VideoFrame` 先因当前帧是 SPS/PPS/IDR 关键帧而清掉 `h264DecoderNeedsKeyFrame`，随后首次创建/重建 WebCodecs decoder 时 `resetVideoDecoder()` 又把同一标记设回 true，导致收到有效关键帧后仍被诊断为 `needsKeyframe=yes`。现在 `ensureH264Decoder(frame, { currentFrameIsKeyFrame })` 会在当前帧为关键帧且 decoder 配置成功后保留门禁解锁状态；delta 等待关键帧、队列背压重同步、H.264 恢复和 JPEG fallback 路径保持原有安全逻辑。回归测试先红于 `h264DecoderNeedsKeyFrame=true`，绿灯 `test-windows-client-browser --diagnosticsOnly` 与 `--boardSummary` 均通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

@@ -817,6 +817,23 @@ function formatBoardCallSummary(board) {
   return `call=${board.activeCall ? "active" : "done"}(${formatBoardCallOneLine(board.currentCall)})`;
 }
 
+function actorMentionsMac(value) {
+  return /\bmac\s*codex\b|\bmac\s*端\b|\bmac\s*side\b/i.test(normalizedText(value));
+}
+
+function actorMentionsWindows(value) {
+  return /\bwindows\s*codex\b|\bwindows\s*端\b|\bwindows\s*side\b/i.test(normalizedText(value));
+}
+
+function activeBoardCallNeedsMacAction(call) {
+  if (!call?.active) return false;
+  const target = [call.need, call.owner].map(normalizedText).filter(Boolean).join(" ");
+  if (actorMentionsMac(target)) return true;
+  if (target && actorMentionsWindows(target) && !actorMentionsMac(target)) return false;
+  if (actorMentionsWindows(call.from)) return true;
+  return true;
+}
+
 function boardCallSearchText(call) {
   if (!call || typeof call !== "object") return "";
   return [
@@ -1287,6 +1304,7 @@ async function getBoardStatus(args) {
     }
     const state = text ? JSON.parse(text) : {};
     const currentCall = normalizeBoardCall(state.currentCall);
+    const currentCallNeedsMacAction = activeBoardCallNeedsMacAction(currentCall);
     return {
       checked: true,
       ok: true,
@@ -1295,6 +1313,7 @@ async function getBoardStatus(args) {
         : "no currentCall",
       currentCall,
       activeCall: Boolean(currentCall?.active),
+      currentCallNeedsMacAction,
       macHostAuthPath: collectMacHostAuthPath(state),
       updatedAt: normalizedText(state.updatedAt),
     };
@@ -1487,7 +1506,7 @@ async function checkBoard(args) {
     };
   }
   const warnings = [];
-  if (board.activeCall) {
+  if (board.activeCall && board.currentCallNeedsMacAction !== false) {
     warnings.push(`Agent Link Board has an active call: ${formatBoardCallOneLine(board.currentCall)}. Coordinate before starting another formal test.`);
   }
   return {
