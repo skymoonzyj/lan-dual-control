@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows host 构建状态摘要
+- `start-windows-host --status --boardSummary` 在线时现在会输出 `WindowsHostBuildStatus=`：`metadata-stale` 表示运行中 host 的 build metadata 旧但 Windows host 运行源码未变，`hostRuntimeChanges=0`，Mac 端不应把它当作连接阻塞；`restart-required` 表示 Windows host 运行源码已变化，需要 Windows 用户本机用 `Start-Windows-Host.cmd` 重启并输入临时密码；`unknown` 表示本地 git 无法检查旧 build。该字段同步保留 `runtimeBuild`、`currentBuild` 和 `hostRuntimeChanges`，不启动 host、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows host 双击启动入口
 - 仓库根目录新增 `Start-Windows-Host.cmd`：用户可直接双击启动 Windows 被控端，入口会优先使用 PowerShell 7 调用 `scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword`，只在 Windows 本机终端隐藏输入临时密码。`.\Start-Windows-Host.cmd -Help` 只打印安全帮助，不启动 host、不认证、不请求或打印密码、不发 input/inject；`start-windows-host --status` 的 JSON、普通输出和 `--boardSummary` 现在同步暴露 `WindowsHostUserEntry=Start-Windows-Host.cmd` / `windowsHostUserEntryCommand`，方便通讯板和 Mac 端提示用户走双击入口；自测已覆盖入口存在、帮助快速退出、状态字段和不包含明文密码参数。
 

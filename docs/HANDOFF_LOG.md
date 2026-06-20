@@ -19,6 +19,32 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows host 构建状态摘要
+开发端：Windows Codex
+本轮目标：让 Mac/Windows 联调能区分 Windows host 运行时 metadata 旧和真正需要重启。
+完成内容：
+- `start-windows-host --status` 在线 JSON 新增 `windowsHostBuildStatus`，`--boardSummary` 新增 `WindowsHostBuildStatus=metadata-stale|restart-required|unknown`。
+- `metadata-stale hostRuntimeChanges=0` 表示 Windows host 运行源码未变，不应阻塞 Mac 控 Windows 只读 preflight；`restart-required` 才提示 Windows 用户本机双击 `Start-Windows-Host.cmd` 重启。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 20000` 先失败于缺少 `WindowsHostBuildStatus`。
+- 绿灯：同一测试通过，在线临时 host 摘要包含 `WindowsHostBuildStatus=unknown runtimeBuild=... currentBuild=...`。
+遗留问题：
+- 当前真实 Windows host 若要使用最新脚本逻辑，仍需要用户本机重启；但 `metadata-stale hostRuntimeChanges=0` 不应阻塞只读 Mac preflight。
+下一步建议：
+- Mac 端继续跑 `check-mac-client-formal-status --host 192.168.31.68 --port 43770 --boardSummary`，若只看到 metadata-stale/0 可继续，不必要求 Windows 立即重启。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端按新摘要继续只读 formal/status 检查。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows host 双击启动入口
 开发端：Windows Codex
 本轮目标：把当前 Windows host readiness call 的本机启动动作变成用户可双击执行的最短入口。

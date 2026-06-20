@@ -878,6 +878,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.boardSummary || "").includes("Windows host readiness: online") || !String(parsed.boardSummary || "").includes("Do not send passwords")) {
           throw new Error(`Online JSON status did not include expected board summary.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.boardSummary || "").includes(`WindowsHostBuildStatus=unknown runtimeBuild=${runtimeBuildId}`) || !String(parsed.boardSummary || "").includes(`currentBuild=${parsed.currentBuildId}`)) {
+          throw new Error(`Online JSON board summary did not include WindowsHostBuildStatus for uninspectable stale runtime metadata.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.windowsSecureAuthPath || "").includes(`node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`)) {
           throw new Error(`Online JSON status did not include Windows secure auth path.\n${jsonResult.stdout}`);
         }
@@ -1017,6 +1020,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
           throw new Error(`Online board summary status check failed.\n${boardOutput}\nHost output:\n${output}`);
         }
         assertIncludes(boardResult.stdout, "Windows host readiness: online", "online board summary");
+        assertIncludes(boardResult.stdout, `WindowsHostBuildStatus=unknown runtimeBuild=${runtimeBuildId}`, "online board summary build status");
         assertIncludes(boardResult.stdout, "reverse=deny-confirm", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "online board summary secure auth path");
         assertIncludes(boardResult.stdout, `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`, "online board summary secure auth command");

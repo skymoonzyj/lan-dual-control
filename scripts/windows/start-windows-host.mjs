@@ -641,6 +641,36 @@ function windowsHostUserEntrySummary(status = {}) {
   return status.windowsHostUserEntryCommand ? `WindowsHostUserEntry=${status.windowsHostUserEntryCommand}` : "";
 }
 
+function makeWindowsHostBuildStatus(status = {}) {
+  const buildDiff = status.buildDiff;
+  if (!buildDiff) return null;
+  const runtimeBuild = String(status.runtime?.buildId || buildDiff.fromBuildId || "").trim() || "unknown";
+  const currentBuild = String(status.currentBuildId || buildDiff.toBuildId || "").trim() || "unknown";
+  const hostRuntimeChanges = buildDiff.checked && Array.isArray(buildDiff.changedFiles)
+    ? buildDiff.changedFiles.length
+    : "unknown";
+  let state = "unknown";
+  if (buildDiff.checked && buildDiff.changed === false) {
+    state = "metadata-stale";
+  } else if (buildDiff.checked && buildDiff.changed === true) {
+    state = "restart-required";
+  }
+  return {
+    status: state,
+    runtimeBuild,
+    currentBuild,
+    hostRuntimeChanges,
+    restartEntry: state === "restart-required" ? windowsHostUserEntryCommand() : "",
+  };
+}
+
+function windowsHostBuildStatusSummary(status = {}) {
+  const buildStatus = status.windowsHostBuildStatus || makeWindowsHostBuildStatus(status);
+  if (!buildStatus) return "";
+  const restart = buildStatus.restartEntry ? ` restartEntry=${buildStatus.restartEntry}` : "";
+  return `WindowsHostBuildStatus=${buildStatus.status} runtimeBuild=${buildStatus.runtimeBuild} currentBuild=${buildStatus.currentBuild} hostRuntimeChanges=${buildStatus.hostRuntimeChanges}${restart}`;
+}
+
 function windowsHostStartAction(args = {}) {
   return {
     status: "needs-local-password-prompt",
@@ -842,7 +872,9 @@ function makeBoardSummary(status) {
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
   const userEntry = windowsHostUserEntrySummary(status);
   const userEntryText = userEntry ? ` ${userEntry}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  const buildStatus = windowsHostBuildStatusSummary(status);
+  const buildStatusText = buildStatus ? ` ${buildStatus}.` : "";
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"};${buildStatusText} screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -884,6 +916,7 @@ function applyDiscoveryStatus(status, discovery, args) {
     status.buildDiff = inspectBuildDiff(runtime.buildId, args.buildId);
     status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
   }
+  status.windowsHostBuildStatus = makeWindowsHostBuildStatus(status);
   status.macClientReadinessCommands = macReadinessTargets(status);
   status.windowsHostStartAction = windowsHostOnlineAction(status);
   status.boardSummary = makeBoardSummary(status);
@@ -904,6 +937,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     capabilities: null,
     lanAddresses: getLanAddresses(),
     buildDiff: null,
+    windowsHostBuildStatus: null,
     macClientReadinessCommands: [],
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
     windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommand(),
