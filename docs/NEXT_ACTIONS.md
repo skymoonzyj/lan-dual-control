@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W2 视频最新口径补充：Windows 控制端 H.264 背压后等待关键帧时，如果连续跳过 90 个 delta 仍没有关键帧，会主动请求 MJPEG/JPEG fallback，诊断显示 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。现场若看到这条，优先理解为 Windows 为恢复画面主动兜底；下一步查 Mac H.264 关键帧恢复速度、采集端 GOP/keyframe 策略或网络导致关键帧长期不到达。
 - W3 音频最新口径补充：Windows 控制端现在保留首次低水位 80ms 补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，并在“现场声音”里输出 `稳缓冲 <n>` 与 `原因 queue-underrun-stable-prebuffer`。现场声音若 `补缓冲` 增长但 `稳缓冲` 很少，说明只是偶发供流间歇；若 `稳缓冲` 持续增长，优先查 Mac 采集/网络音频供流抖动或下一步做更完整 jitter buffer。
 
 - W3 音频最新口径补充：Windows 控制端现在会在 WebAudio 队列低于 70ms 并补到 80ms 时输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。现场声音若主要是 `补缓冲` 增长，优先查 Mac 采集/网络供流间歇；若主要是 `重同步` 和 `queue-overflow-flush-old`，优先查 Windows 本地播放队列持续溢出或突发堆积。

@@ -18,6 +18,32 @@
 ```
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W2 Windows H.264 等关键帧超时恢复
+开发端：Windows Codex
+本轮目标：避免 H.264 背压重同步后长时间等不到关键帧导致远控画面像卡死。
+完成内容：
+- 新增 `h264KeyFrameWaitFallbackSkippedDeltas=90` 阈值。
+- 等待关键帧期间连续跳过 90 个 delta 后，复用现有 `requestJpegVideoFallback` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`。
+- JPEG fallback 会保留 `videoLastDropReason=keyframe-wait-timeout-fallback`，现场视频诊断可看到 `解码 JPEG 回退`。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `keyFrameWaitFallback=false`，fallbackSettings 为空。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 输出 `H.264 latency queue guard: dropped=10 keyFallback=yes reason=keyframe-wait-timeout-fallback`。
+遗留问题：真实体验如果频繁 fallback，应让 Mac 端查 H.264 关键帧/GOP 恢复速度或网络关键帧丢失。
+下一步建议：继续 W2 可推动 Mac host 关键帧请求/更短 GOP；若声音仍主要痛点则继续 W3 jitter buffer。
+是否改了协议：否；只复用已有 `display_settings` 能力请求 MJPEG fallback。
+是否需要另一端配合：暂不需要；真实体验复测时可请 Mac 端同步 H.264/媒体基线。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
 开发端：Windows Codex
 本轮目标：减少连续低水位 underrun 时的声音断续，同时保持首次补缓冲低延迟。

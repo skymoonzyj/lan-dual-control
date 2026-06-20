@@ -163,6 +163,7 @@ const audioStableUnderrunBufferSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
+const h264KeyFrameWaitFallbackSkippedDeltas = 90;
 const videoStutterGapThresholdMs = 120;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
@@ -8327,13 +8328,14 @@ function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "
   });
 }
 
-function requestJpegVideoFallback(reason) {
+function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
   if (state.h264FallbackActive) {
     return;
   }
 
   const errorCount = state.h264DecoderErrorCount;
   const lastError = state.h264DecoderLastError;
+  const fallbackDropReason = String(dropReason || "").trim();
   state.h264FallbackActive = true;
   state.h264FallbackReason = reason || "H.264 解码失败";
   state.h264DecoderStatus = "fallback";
@@ -8341,6 +8343,9 @@ function requestJpegVideoFallback(reason) {
   state.h264DecoderStatus = "fallback";
   state.h264DecoderErrorCount = errorCount;
   state.h264DecoderLastError = lastError;
+  if (fallbackDropReason) {
+    state.videoLastDropReason = fallbackDropReason;
+  }
   updateH264DecoderDiagnostics();
   addLog("视频回退", `${state.h264FallbackReason}，已请求 JPEG 兜底`);
 
@@ -8509,6 +8514,13 @@ async function renderH264VideoFrame(frame) {
       elements.remoteStatusText.textContent = `等待 H.264 关键帧，已跳过 delta #${frame.frameId ?? state.videoFrames}`;
       if (state.h264SkippedDeltaFrames % 30 === 0) {
         addLog("H.264 等待关键帧", `跳过 delta 帧 #${frame.frameId ?? state.videoFrames}`);
+      }
+      if (state.h264SkippedDeltaFrames >= h264KeyFrameWaitFallbackSkippedDeltas) {
+        requestJpegVideoFallback(
+          `H.264 等待关键帧超时，已跳过 ${state.h264SkippedDeltaFrames} 帧`,
+          { dropReason: "keyframe-wait-timeout-fallback" },
+        );
+        elements.remoteStatusText.textContent = "H.264 等待关键帧超时，正在切换 JPEG 兜底";
       }
       return;
     }

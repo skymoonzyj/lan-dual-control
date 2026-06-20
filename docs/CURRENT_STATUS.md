@@ -3,6 +3,8 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+## 2026-06-20 W2 Windows H.264 等关键帧超时恢复
+- Windows 控制端 H.264 背压重同步后，如果连续跳过 90 个 delta 仍没有等到关键帧，会触发已有 JPEG/MJPEG fallback 请求，避免画面长时间停在“等待关键帧”。fallback 会通过 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，并在现场视频诊断里留下 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `keyFrameWaitFallback=false`，绿灯确认 `keyFallback=yes`。本轮只改 Windows 控制端本地 H.264 恢复逻辑和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
 - Windows 控制端 WebAudio 仍保持首次低水位 80ms 低延迟补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，记录 `audioStablePrebufferCount` 和 `audioLastBufferReason=queue-underrun-stable-prebuffer`。复制/导出诊断“现场声音”会在既有 `补缓冲 <n>` 外新增 `稳缓冲 <n>`，用于判断声音断续是否已经进入连续 underrun 稳定模式。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯第二次仍为 80ms，绿灯确认 `Audio buffer guards ... stable=1`。本轮只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 

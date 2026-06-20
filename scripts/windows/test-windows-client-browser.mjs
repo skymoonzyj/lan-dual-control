@@ -5017,6 +5017,14 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalNeedsKeyFrame = state.h264DecoderNeedsKeyFrame;
       const originalSkippedDelta = state.h264SkippedDeltaFrames;
       const originalDecodedFrames = state.h264DecodedFrames;
+      const originalFallbackActive = state.h264FallbackActive;
+      const originalFallbackReason = state.h264FallbackReason;
+      const originalConnected = state.connected;
+      const originalClient = state.client;
+      const originalVideoFrames = state.videoFrames;
+      const originalVideoFrameTimes = Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [];
+      const originalRemoteFrameWidth = state.remoteFrameWidth;
+      const originalRemoteFrameHeight = state.remoteFrameHeight;
       const originalDroppedStale = state.videoDroppedStaleFrames;
       const originalQueueMs = state.videoDecoderQueueMs;
       const originalLastDropReason = state.videoLastDropReason;
@@ -5166,11 +5174,63 @@ async function verifyH264LatencyQueueGuard(session) {
           webCodecsQueueExportText.includes("本地过期丢帧 10") &&
           webCodecsQueueExportText.includes("原因 queue-overflow-wait-keyframe");
 
+        const fallbackSettings = [];
+        const makeDeltaPayload = () => {
+          const bytes = new Uint8Array([0, 0, 0, 1, 0x41, 0, 0, 0]);
+          let binary = "";
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          return btoa(binary);
+        };
+        state.connected = true;
+        state.client = {
+          sendDisplaySettings(message) {
+            fallbackSettings.push(message);
+          },
+        };
+        state.h264Decoder = null;
+        state.h264DecoderQueue = [];
+        state.h264DecoderStatus = "waiting-keyframe";
+        state.h264DecoderKey = "";
+        state.h264DecoderCodec = "";
+        state.h264DecoderNeedsKeyFrame = true;
+        state.h264SkippedDeltaFrames = 89;
+        state.h264FallbackActive = false;
+        state.h264FallbackReason = "";
+        state.videoLastDropReason = "";
+        state.videoDroppedStaleFrames = 0;
+        state.videoFrames = 0;
+        state.videoFrameTimes = [];
+        await renderH264VideoFrame({
+          payload: makeDeltaPayload(),
+          encoding: "annexb-base64",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 390,
+          keyFrame: false,
+        });
+        const keyFrameWaitFallbackExportText = getVideoPerformanceExportStatus();
+        const keyFrameWaitFallback =
+          state.h264FallbackActive === true &&
+          state.h264DecoderStatus === "fallback" &&
+          state.h264FallbackReason.includes("关键帧") &&
+          state.videoLastDropReason === "keyframe-wait-timeout-fallback" &&
+          fallbackSettings.length === 1 &&
+          fallbackSettings[0]?.preferredVideoCodec === "mjpeg" &&
+          fallbackSettings[0]?.preferredVideoEncoding === "data-url" &&
+          keyFrameWaitFallbackExportText.includes("原因 keyframe-wait-timeout-fallback") &&
+          keyFrameWaitFallbackExportText.includes("解码 JPEG 回退");
+
         return {
-          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure,
+          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback,
           deltaOk,
           keyPreserved,
           webCodecsQueueBackpressure,
+          keyFrameWaitFallback,
+          keyFrameWaitFallbackExportText,
+          fallbackSettings,
+          fallbackReason: state.h264FallbackReason,
+          queueBackpressureDropped: webCodecsQueueResync?.droppedFrames ?? 0,
           webCodecsQueueResync,
           webCodecsQueueExportText,
           resync,
@@ -5199,6 +5259,14 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264DecoderNeedsKeyFrame = originalNeedsKeyFrame;
         state.h264SkippedDeltaFrames = originalSkippedDelta;
         state.h264DecodedFrames = originalDecodedFrames;
+        state.h264FallbackActive = originalFallbackActive;
+        state.h264FallbackReason = originalFallbackReason;
+        state.connected = originalConnected;
+        state.client = originalClient;
+        state.videoFrames = originalVideoFrames;
+        state.videoFrameTimes = originalVideoFrameTimes;
+        state.remoteFrameWidth = originalRemoteFrameWidth;
+        state.remoteFrameHeight = originalRemoteFrameHeight;
         state.videoDroppedStaleFrames = originalDroppedStale;
         state.videoDecoderQueueMs = originalQueueMs;
         state.videoLastDropReason = originalLastDropReason;
@@ -6643,7 +6711,7 @@ async function run() {
     summary.checks.push("h264-latency-queue");
     print(
       "OK",
-      `H.264 latency queue guard: dropped=${latencyQueueCheck.droppedStale} reason=${latencyQueueCheck.lastDropReason}`,
+      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} keyFallback=${latencyQueueCheck.keyFrameWaitFallback ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
     );
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");
