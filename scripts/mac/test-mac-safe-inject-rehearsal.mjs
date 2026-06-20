@@ -158,7 +158,21 @@ async function withFakeMacHost(discoveryPayload, callback) {
 }
 
 async function withFakeAgentLinkBoard(state, callback) {
+  const posts = [];
   const server = createServer((request, response) => {
+    if (request.url === "/api/status" && request.method === "POST") {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        posts.push({ path: request.url, body: JSON.parse(body || "{}") });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
     if (request.url !== "/api/state") {
       response.writeHead(404).end("not found");
       return;
@@ -173,7 +187,7 @@ async function withFakeAgentLinkBoard(state, callback) {
   try {
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : 0;
-    await callback(`http://127.0.0.1:${port}`);
+    await callback(`http://127.0.0.1:${port}`, posts);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -385,6 +399,38 @@ async function checkPermissionBlocker(args) {
   print("OK", "Missing input permissions block safe inject rehearsal commands");
 }
 
+async function checkSendStatusPublishesPlanOnlyReadiness(args) {
+  await withFakeMacHost(baseDiscovery(), async ({ host, port }) => {
+    await withFakeAgentLinkBoard(presentBoardState(), async (serverUrl, posts) => {
+      const result = await runAsync([
+        "--boardSummary",
+        "--host",
+        host,
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1000",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+        "--sendStatus",
+      ], args);
+      assert(result.status === 0, `sendStatus ready rehearsal should exit 0\n${outputOf(result)}`);
+      assert(posts.length === 1, `sendStatus should post one status: ${JSON.stringify(posts)}`);
+      const statusPost = posts[0];
+      assert(statusPost.path === "/api/status", `sendStatus should post /api/status: ${JSON.stringify(posts)}`);
+      assert(statusPost.body.device === "Mac Safe Inject Rehearsal", `status device mismatch: ${JSON.stringify(statusPost.body)}`);
+      assert(statusPost.body.role === "Mac 端", `status role mismatch: ${JSON.stringify(statusPost.body)}`);
+      assert(statusPost.body.status === "call-ready", `status value mismatch: ${JSON.stringify(statusPost.body)}`);
+      assertIncludes(statusPost.body.note || "", "MacSafeInjectRehearsal=status=call-ready", "sendStatus ready note");
+      assertIncludes(statusPost.body.note || "", "Safety=plan-only,no-password,no-auth-now,no-input-now,no-inject-now", "sendStatus ready note");
+      assertIncludes(result.stdout, "MacSafeInjectRehearsal=status=call-ready", "sendStatus ready stdout");
+      assertSafeOutput(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus ready rehearsal");
+    });
+  });
+  print("OK", "Mac safe inject rehearsal can publish plan-only readiness to Agent Link Board");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -400,6 +446,7 @@ async function main() {
   await checkAwayBlocksCommands(args);
   await checkInjectActiveBlocksCommands(args);
   await checkPermissionBlocker(args);
+  await checkSendStatusPublishesPlanOnlyReadiness(args);
   print("OK", "Mac safe inject rehearsal self-test passed");
 }
 
