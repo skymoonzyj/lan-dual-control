@@ -572,6 +572,14 @@ const state = {
   h264DecoderNeedsKeyFrame: true,
   h264SkippedDeltaFrames: 0,
   h264DecodedFrames: 0,
+  h264ReceivedFrames: 0,
+  h264ReceivedKeyFrames: 0,
+  h264ReceivedDeltaFrames: 0,
+  h264ReceivedSps: 0,
+  h264ReceivedPps: 0,
+  h264ReceivedIdr: 0,
+  h264LastNalTypes: "",
+  h264LastKeyFrameId: "",
   h264FallbackActive: false,
   h264FallbackReason: "",
   h264FallbackRecoveryDueAt: 0,
@@ -678,6 +686,14 @@ const state = {
     videoDecoderQueue: 0,
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
+    h264ReceivedFrames: 0,
+    h264ReceivedKeyFrames: 0,
+    h264ReceivedDeltaFrames: 0,
+    h264ReceivedSps: 0,
+    h264ReceivedPps: 0,
+    h264ReceivedIdr: 0,
+    h264LastNalTypes: "",
+    h264LastKeyFrameId: "",
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -898,6 +914,14 @@ function getEmptyHostDiagnostics() {
     videoDecoderQueue: 0,
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
+    h264ReceivedFrames: 0,
+    h264ReceivedKeyFrames: 0,
+    h264ReceivedDeltaFrames: 0,
+    h264ReceivedSps: 0,
+    h264ReceivedPps: 0,
+    h264ReceivedIdr: 0,
+    h264LastNalTypes: "",
+    h264LastKeyFrameId: "",
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -1172,10 +1196,32 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const latency = Number(diagnostics.h264DecoderLatencyMs);
   const droppedStaleFrames = Number(diagnostics.videoDroppedStaleFrames);
   const lastDropReason = String(diagnostics.videoLastDropReason || "").trim();
+  const receivedFrames = Number(diagnostics.h264ReceivedFrames);
+  const receivedKeyFrames = Number(diagnostics.h264ReceivedKeyFrames);
+  const receivedSps = Number(diagnostics.h264ReceivedSps);
+  const receivedPps = Number(diagnostics.h264ReceivedPps);
+  const receivedIdr = Number(diagnostics.h264ReceivedIdr);
+  const lastNalTypes = String(diagnostics.h264LastNalTypes || "").trim();
   const parts = [status, codec].filter(Boolean);
 
   if (Number.isFinite(decodedFrames) && decodedFrames > 0) {
     parts.push(`已绘制 ${decodedFrames}`);
+  }
+  if (Number.isFinite(receivedFrames) && receivedFrames > 0) {
+    parts.push(`收到 ${receivedFrames}`);
+  }
+  if (Number.isFinite(receivedKeyFrames) && receivedKeyFrames > 0) {
+    parts.push(`关键帧 ${receivedKeyFrames}`);
+  }
+  if (
+    (Number.isFinite(receivedSps) && receivedSps > 0) ||
+    (Number.isFinite(receivedPps) && receivedPps > 0) ||
+    (Number.isFinite(receivedIdr) && receivedIdr > 0)
+  ) {
+    parts.push(`SPS/PPS/IDR ${Math.max(0, receivedSps || 0)}/${Math.max(0, receivedPps || 0)}/${Math.max(0, receivedIdr || 0)}`);
+  }
+  if (lastNalTypes) {
+    parts.push(`NAL ${lastNalTypes}`);
   }
   if (Number.isFinite(queue) && queue > 0) {
     parts.push(`队列 ${queue}`);
@@ -3049,6 +3095,17 @@ function resetVideoFrameStats() {
   elements.metricLatency.textContent = "-- ms";
 }
 
+function resetH264ReceiveEvidence() {
+  state.h264ReceivedFrames = 0;
+  state.h264ReceivedKeyFrames = 0;
+  state.h264ReceivedDeltaFrames = 0;
+  state.h264ReceivedSps = 0;
+  state.h264ReceivedPps = 0;
+  state.h264ReceivedIdr = 0;
+  state.h264LastNalTypes = "";
+  state.h264LastKeyFrameId = "";
+}
+
 function resetVideoDecoder({ resetFallback = false } = {}) {
   if (state.h264Decoder && state.h264Decoder.state !== "closed") {
     try {
@@ -3073,6 +3130,7 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264SkippedDeltaFrames = 0;
   state.h264DecodedFrames = 0;
   if (resetFallback) {
+    resetH264ReceiveEvidence();
     state.h264FallbackActive = false;
     state.h264FallbackReason = "";
     state.h264FallbackRecoveryDueAt = 0;
@@ -5079,6 +5137,12 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const fallbackRecoveryPauseCount = Number(state.h264FallbackRecoveryPauseCount || state.hostDiagnostics?.h264FallbackRecoveryPauseCount) || 0;
   const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
+  const receivedFrames = Number(state.h264ReceivedFrames || state.hostDiagnostics?.h264ReceivedFrames) || 0;
+  const receivedKeyFrames = Number(state.h264ReceivedKeyFrames || state.hostDiagnostics?.h264ReceivedKeyFrames) || 0;
+  const receivedSps = Number(state.h264ReceivedSps || state.hostDiagnostics?.h264ReceivedSps) || 0;
+  const receivedPps = Number(state.h264ReceivedPps || state.hostDiagnostics?.h264ReceivedPps) || 0;
+  const receivedIdr = Number(state.h264ReceivedIdr || state.hostDiagnostics?.h264ReceivedIdr) || 0;
+  const lastNalTypes = String(state.h264LastNalTypes || state.hostDiagnostics?.h264LastNalTypes || "").trim();
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
   const streamStallStatus = firstFrameWaitStatus.waiting ? { stalled: false } : getVideoStreamStallStatus(now);
@@ -5105,6 +5169,12 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   parts.push(`帧 ${frameCount}`);
   if (droppedFrames > 0) parts.push(`远端丢帧 ${droppedFrames}`);
+  if (receivedFrames > 0) parts.push(`H.264收到 ${receivedFrames}`);
+  if (receivedKeyFrames > 0) parts.push(`关键帧 ${receivedKeyFrames}`);
+  if (receivedSps > 0 || receivedPps > 0 || receivedIdr > 0) {
+    parts.push(`SPS/PPS/IDR ${receivedSps}/${receivedPps}/${receivedIdr}`);
+  }
+  if (lastNalTypes) parts.push(`NAL ${lastNalTypes}`);
   if (decoderQueue > 0) parts.push(`解码队列 ${decoderQueue}`);
   if (decoderQueueMs > 0) parts.push(`本机队列 ${Math.round(decoderQueueMs)} ms`);
   if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
@@ -8810,6 +8880,14 @@ function updateH264DecoderDiagnostics(extra = {}) {
     videoDecoderQueue: decoderQueueMetrics.queueLength,
     h264DecodedFrames: state.h264DecodedFrames,
     h264DecoderLatencyMs: state.h264DecoderLatencyMs,
+    h264ReceivedFrames: state.h264ReceivedFrames,
+    h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
+    h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
+    h264ReceivedSps: state.h264ReceivedSps,
+    h264ReceivedPps: state.h264ReceivedPps,
+    h264ReceivedIdr: state.h264ReceivedIdr,
+    h264LastNalTypes: state.h264LastNalTypes,
+    h264LastKeyFrameId: state.h264LastKeyFrameId,
     videoDecoderQueueMs: state.videoDecoderQueueMs,
     videoDroppedStaleFrames: state.videoDroppedStaleFrames,
     videoLastDropReason: state.videoLastDropReason,
@@ -9174,12 +9252,40 @@ function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
   return nalTypes;
 }
 
-function isH264KeyFramePayload(bytes, encoding) {
+function getH264PayloadNalTypes(bytes, encoding) {
   const normalizedEncoding = String(encoding ?? "").toLowerCase();
-  const nalTypes = normalizedEncoding.includes("annexb")
+  return normalizedEncoding.includes("annexb")
     ? getAnnexBNalTypes(bytes)
     : getLengthPrefixedNalTypes(bytes);
+}
+
+function isH264KeyFrameNalTypes(nalTypes) {
   return nalTypes.includes(5) || nalTypes.includes(7) || nalTypes.includes(8);
+}
+
+function isH264KeyFramePayload(bytes, encoding) {
+  return isH264KeyFrameNalTypes(getH264PayloadNalTypes(bytes, encoding));
+}
+
+function countH264NalType(nalTypes, type) {
+  return nalTypes.filter((nalType) => nalType === type).length;
+}
+
+function recordH264ReceiveEvidence({ frame = {}, nalTypes = [], isKeyFrame = false } = {}) {
+  const normalizedNalTypes = nalTypes
+    .map((nalType) => Number(nalType))
+    .filter((nalType) => Number.isInteger(nalType) && nalType >= 0);
+  state.h264ReceivedFrames = (Number(state.h264ReceivedFrames) || 0) + 1;
+  if (isKeyFrame) {
+    state.h264ReceivedKeyFrames = (Number(state.h264ReceivedKeyFrames) || 0) + 1;
+    state.h264LastKeyFrameId = String(frame.frameId ?? state.videoFrames ?? "");
+  } else {
+    state.h264ReceivedDeltaFrames = (Number(state.h264ReceivedDeltaFrames) || 0) + 1;
+  }
+  state.h264ReceivedSps = (Number(state.h264ReceivedSps) || 0) + countH264NalType(normalizedNalTypes, 7);
+  state.h264ReceivedPps = (Number(state.h264ReceivedPps) || 0) + countH264NalType(normalizedNalTypes, 8);
+  state.h264ReceivedIdr = (Number(state.h264ReceivedIdr) || 0) + countH264NalType(normalizedNalTypes, 5);
+  state.h264LastNalTypes = normalizedNalTypes.length ? normalizedNalTypes.slice(0, 8).join("/") : "";
 }
 
 async function renderH264VideoFrame(frame) {
@@ -9225,7 +9331,9 @@ async function renderH264VideoFrame(frame) {
 
   try {
     const payloadBytes = base64ToUint8Array(frame.payload);
-    const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
+    const nalTypes = getH264PayloadNalTypes(payloadBytes, frame.encoding);
+    const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFrameNalTypes(nalTypes);
+    recordH264ReceiveEvidence({ frame, nalTypes, isKeyFrame });
     const latencyResync = maybeResyncH264DecoderQueueForLatency({
       isKeyFrame,
       frameId: frame.frameId ?? state.videoFrames,

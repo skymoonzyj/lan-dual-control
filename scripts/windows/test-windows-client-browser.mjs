@@ -313,6 +313,12 @@ function makeH264RetestSummary(value = {}) {
   const reason = String(value.h264LastDropReason ?? value.lastDropReason ?? value.reason ?? "").trim();
   const recovery = positiveInteger(value.h264FallbackRecoveryCount ?? value.fallbackRecoveryCount);
   const pause = positiveInteger(value.h264FallbackRecoveryPauseCount ?? value.fallbackRecoveryPauseCount);
+  const received = positiveInteger(value.h264ReceivedFrames ?? value.received ?? value.recv);
+  const keyFrames = positiveInteger(value.h264ReceivedKeyFrames ?? value.keyFrames ?? value.key);
+  const sps = positiveInteger(value.h264ReceivedSps ?? value.sps);
+  const pps = positiveInteger(value.h264ReceivedPps ?? value.pps);
+  const idr = positiveInteger(value.h264ReceivedIdr ?? value.idr);
+  const lastNal = String(value.h264LastNalTypes ?? value.lastNal ?? "").trim();
 
   if (status) parts.push(`status=${status}`);
   if (status || decoded > 0) parts.push(`decoded=${decoded}`);
@@ -322,6 +328,12 @@ function makeH264RetestSummary(value = {}) {
   if (queueMs > 0) parts.push(`queueMs=${queueMs}`);
   if (staleDrops > 0) parts.push(`staleDrops=${staleDrops}`);
   if (reason) parts.push(`reason=${reason}`);
+  if (received > 0) parts.push(`recv=${received}`);
+  if (keyFrames > 0) parts.push(`key=${keyFrames}`);
+  if (sps > 0) parts.push(`sps=${sps}`);
+  if (pps > 0) parts.push(`pps=${pps}`);
+  if (idr > 0) parts.push(`idr=${idr}`);
+  if (lastNal) parts.push(`lastNal=${lastNal}`);
   if (recovery > 0) parts.push(`recovery=${recovery}`);
   if (pause > 0) parts.push(`pause=${pause}`);
   return parts.join(" ");
@@ -358,7 +370,22 @@ function makeBoardSummary(summary) {
 }
 
 function verifyW2W3RetestH264Summary() {
-  const h264 = "status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe";
+  const h264 = makeH264RetestSummary({
+    status: "waiting-keyframe",
+    decoded: 0,
+    skippedDelta: 68,
+    needsKeyFrame: true,
+    queue: 9,
+    queueMs: 900,
+    staleDrops: 68,
+    reason: "queue-overflow-wait-keyframe",
+    h264ReceivedFrames: 68,
+    h264ReceivedKeyFrames: 1,
+    h264ReceivedSps: 1,
+    h264ReceivedPps: 1,
+    h264ReceivedIdr: 1,
+    h264LastNalTypes: "1",
+  });
   const text = makeBoardSummary({
     status: "passed",
     mode: "connect",
@@ -375,7 +402,13 @@ function verifyW2W3RetestH264Summary() {
     text.includes("h264=status=waiting-keyframe") &&
     text.includes("skippedDelta=68") &&
     text.includes("needsKeyframe=yes") &&
-    text.includes("reason=queue-overflow-wait-keyframe");
+    text.includes("reason=queue-overflow-wait-keyframe") &&
+    text.includes("recv=68") &&
+    text.includes("key=1") &&
+    text.includes("sps=1") &&
+    text.includes("pps=1") &&
+    text.includes("idr=1") &&
+    text.includes("lastNal=1");
   return { ok, text, h264 };
 }
 
@@ -459,6 +492,14 @@ function windowsClientSnapshotExpression() {
       h264LastDropReason: window.state?.videoLastDropReason ?? "",
       h264FallbackRecoveryCount: window.state?.h264FallbackRecoveryCount ?? 0,
       h264FallbackRecoveryPauseCount: window.state?.h264FallbackRecoveryPauseCount ?? 0,
+      h264ReceivedFrames: window.state?.h264ReceivedFrames ?? 0,
+      h264ReceivedKeyFrames: window.state?.h264ReceivedKeyFrames ?? 0,
+      h264ReceivedDeltaFrames: window.state?.h264ReceivedDeltaFrames ?? 0,
+      h264ReceivedSps: window.state?.h264ReceivedSps ?? 0,
+      h264ReceivedPps: window.state?.h264ReceivedPps ?? 0,
+      h264ReceivedIdr: window.state?.h264ReceivedIdr ?? 0,
+      h264LastNalTypes: window.state?.h264LastNalTypes ?? "",
+      h264LastKeyFrameId: window.state?.h264LastKeyFrameId ?? "",
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
       liveVideo: exportLine("- 现场视频：") || exportLine("- 现场视频统计："),
@@ -5079,9 +5120,14 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
 async function verifyH264KeyFrameDetection(session) {
   const result = await evaluate(
     session,
-    `(() => {
-      if (typeof isH264KeyFramePayload !== "function") {
-        return { ok: false, reason: "missing H.264 key frame helper" };
+    `(async () => {
+      if (
+        typeof isH264KeyFramePayload !== "function" ||
+        typeof renderH264VideoFrame !== "function" ||
+        typeof getVideoPerformanceExportStatus !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing H.264 key frame/evidence helpers" };
       }
       const annexbKey = new Uint8Array([
         0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f,
@@ -5090,15 +5136,208 @@ async function verifyH264KeyFrameDetection(session) {
       ]);
       const annexbDelta = new Uint8Array([0, 0, 0, 1, 0x41, 0x9a, 0x22]);
       const avcKey = new Uint8Array([0, 0, 0, 3, 0x65, 0x88, 0x84]);
-      return {
-        ok:
-          isH264KeyFramePayload(annexbKey, "annexb-base64") &&
-          !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
-          isH264KeyFramePayload(avcKey, "avc"),
-        annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
-        annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
-        avcKey: isH264KeyFramePayload(avcKey, "avc"),
+      const makeBase64 = (bytes) => {
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return btoa(binary);
       };
+      const original = {
+        h264Decoder: state.h264Decoder,
+        h264DecoderQueue: Array.isArray(state.h264DecoderQueue) ? state.h264DecoderQueue.slice() : [],
+        h264DecoderStatus: state.h264DecoderStatus,
+        h264DecoderKey: state.h264DecoderKey,
+        h264DecoderCodec: state.h264DecoderCodec,
+        h264DecoderLatencyMs: state.h264DecoderLatencyMs,
+        h264DecoderErrorCount: state.h264DecoderErrorCount,
+        h264DecoderWarned: state.h264DecoderWarned,
+        h264DecoderLastError: state.h264DecoderLastError,
+        h264DecoderNeedsKeyFrame: state.h264DecoderNeedsKeyFrame,
+        h264SkippedDeltaFrames: state.h264SkippedDeltaFrames,
+        h264DecodedFrames: state.h264DecodedFrames,
+        h264ReceivedFrames: state.h264ReceivedFrames,
+        h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
+        h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
+        h264ReceivedSps: state.h264ReceivedSps,
+        h264ReceivedPps: state.h264ReceivedPps,
+        h264ReceivedIdr: state.h264ReceivedIdr,
+        h264LastNalTypes: state.h264LastNalTypes,
+        h264LastKeyFrameId: state.h264LastKeyFrameId,
+        videoFrames: state.videoFrames,
+        videoFrameTimes: Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [],
+        videoDecoderQueueMs: state.videoDecoderQueueMs,
+        videoDroppedStaleFrames: state.videoDroppedStaleFrames,
+        videoLastDropReason: state.videoLastDropReason,
+        remoteFrameWidth: state.remoteFrameWidth,
+        remoteFrameHeight: state.remoteFrameHeight,
+        requestedFps: state.requestedFps,
+        negotiatedFps: state.negotiatedFps,
+        hostDiagnostics: { ...(state.hostDiagnostics || {}) },
+        videoDecoderDescriptor: Object.getOwnPropertyDescriptor(window, "VideoDecoder"),
+        encodedVideoChunkDescriptor: Object.getOwnPropertyDescriptor(window, "EncodedVideoChunk"),
+      };
+
+      class FakeVideoDecoder {
+        static async isConfigSupported() {
+          return { supported: true };
+        }
+        constructor(options = {}) {
+          this.options = options;
+          this.state = "configured";
+          this.decodeQueueSize = 0;
+        }
+        configure(config) {
+          this.config = config;
+        }
+        decode() {
+          this.decodeQueueSize = 0;
+        }
+        close() {
+          this.state = "closed";
+        }
+      }
+      class FakeEncodedVideoChunk {
+        constructor(init = {}) {
+          this.type = init.type;
+          this.timestamp = init.timestamp;
+          this.duration = init.duration;
+          this.data = init.data;
+        }
+      }
+
+      try {
+        Object.defineProperty(window, "VideoDecoder", {
+          configurable: true,
+          value: FakeVideoDecoder,
+        });
+        Object.defineProperty(window, "EncodedVideoChunk", {
+          configurable: true,
+          value: FakeEncodedVideoChunk,
+        });
+        state.h264Decoder = null;
+        state.h264DecoderQueue = [];
+        state.h264DecoderStatus = "idle";
+        state.h264DecoderKey = "";
+        state.h264DecoderCodec = "";
+        state.h264DecoderLatencyMs = 0;
+        state.h264DecoderErrorCount = 0;
+        state.h264DecoderWarned = false;
+        state.h264DecoderLastError = "";
+        state.h264DecoderNeedsKeyFrame = true;
+        state.h264SkippedDeltaFrames = 0;
+        state.h264DecodedFrames = 0;
+        state.h264ReceivedFrames = 0;
+        state.h264ReceivedKeyFrames = 0;
+        state.h264ReceivedDeltaFrames = 0;
+        state.h264ReceivedSps = 0;
+        state.h264ReceivedPps = 0;
+        state.h264ReceivedIdr = 0;
+        state.h264LastNalTypes = "";
+        state.h264LastKeyFrameId = "";
+        state.videoFrames = 0;
+        state.videoFrameTimes = [];
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.hostDiagnostics = {};
+
+        await renderH264VideoFrame({
+          payload: makeBase64(annexbDelta),
+          encoding: "annexb-base64",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 41,
+          keyFrame: false,
+        });
+        await renderH264VideoFrame({
+          payload: makeBase64(annexbKey),
+          encoding: "annexb-base64",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 42,
+          keyFrame: false,
+        });
+
+        const exportText = getVideoPerformanceExportStatus();
+        const h264EvidenceRecorded =
+          state.h264ReceivedFrames === 2 &&
+          state.h264ReceivedDeltaFrames === 1 &&
+          state.h264ReceivedKeyFrames === 1 &&
+          state.h264ReceivedSps === 1 &&
+          state.h264ReceivedPps === 1 &&
+          state.h264ReceivedIdr === 1 &&
+          state.h264LastNalTypes === "7/8/5" &&
+          String(state.h264LastKeyFrameId) === "42" &&
+          exportText.includes("H.264收到 2") &&
+          exportText.includes("关键帧 1") &&
+          exportText.includes("SPS/PPS/IDR 1/1/1") &&
+          exportText.includes("NAL 7/8/5");
+
+        return {
+          ok:
+            isH264KeyFramePayload(annexbKey, "annexb-base64") &&
+            !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
+            isH264KeyFramePayload(avcKey, "avc") &&
+            h264EvidenceRecorded,
+          annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
+          annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
+          avcKey: isH264KeyFramePayload(avcKey, "avc"),
+          h264EvidenceRecorded,
+          h264ReceivedFrames: state.h264ReceivedFrames,
+          h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
+          h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
+          h264ReceivedSps: state.h264ReceivedSps,
+          h264ReceivedPps: state.h264ReceivedPps,
+          h264ReceivedIdr: state.h264ReceivedIdr,
+          h264LastNalTypes: state.h264LastNalTypes,
+          h264LastKeyFrameId: state.h264LastKeyFrameId,
+          exportText,
+        };
+      } finally {
+        state.h264Decoder = original.h264Decoder;
+        state.h264DecoderQueue = original.h264DecoderQueue;
+        state.h264DecoderStatus = original.h264DecoderStatus;
+        state.h264DecoderKey = original.h264DecoderKey;
+        state.h264DecoderCodec = original.h264DecoderCodec;
+        state.h264DecoderLatencyMs = original.h264DecoderLatencyMs;
+        state.h264DecoderErrorCount = original.h264DecoderErrorCount;
+        state.h264DecoderWarned = original.h264DecoderWarned;
+        state.h264DecoderLastError = original.h264DecoderLastError;
+        state.h264DecoderNeedsKeyFrame = original.h264DecoderNeedsKeyFrame;
+        state.h264SkippedDeltaFrames = original.h264SkippedDeltaFrames;
+        state.h264DecodedFrames = original.h264DecodedFrames;
+        state.h264ReceivedFrames = original.h264ReceivedFrames;
+        state.h264ReceivedKeyFrames = original.h264ReceivedKeyFrames;
+        state.h264ReceivedDeltaFrames = original.h264ReceivedDeltaFrames;
+        state.h264ReceivedSps = original.h264ReceivedSps;
+        state.h264ReceivedPps = original.h264ReceivedPps;
+        state.h264ReceivedIdr = original.h264ReceivedIdr;
+        state.h264LastNalTypes = original.h264LastNalTypes;
+        state.h264LastKeyFrameId = original.h264LastKeyFrameId;
+        state.videoFrames = original.videoFrames;
+        state.videoFrameTimes = original.videoFrameTimes;
+        state.videoDecoderQueueMs = original.videoDecoderQueueMs;
+        state.videoDroppedStaleFrames = original.videoDroppedStaleFrames;
+        state.videoLastDropReason = original.videoLastDropReason;
+        state.remoteFrameWidth = original.remoteFrameWidth;
+        state.remoteFrameHeight = original.remoteFrameHeight;
+        state.requestedFps = original.requestedFps;
+        state.negotiatedFps = original.negotiatedFps;
+        state.hostDiagnostics = original.hostDiagnostics;
+        if (original.videoDecoderDescriptor) {
+          Object.defineProperty(window, "VideoDecoder", original.videoDecoderDescriptor);
+        } else {
+          delete window.VideoDecoder;
+        }
+        if (original.encodedVideoChunkDescriptor) {
+          Object.defineProperty(window, "EncodedVideoChunk", original.encodedVideoChunkDescriptor);
+        } else {
+          delete window.EncodedVideoChunk;
+        }
+      }
     })()`,
   );
   if (!result?.ok) {
@@ -7340,6 +7579,12 @@ async function run() {
       h264LastDropReason: latencyQueueCheck.lastDropReason,
       h264FallbackRecoveryCount: latencyQueueCheck.fallbackRecoveryCount,
       h264FallbackRecoveryPauseCount: latencyQueueCheck.fallbackRecoveryPauseCount,
+      h264ReceivedFrames: keyFrameCheck.h264ReceivedFrames,
+      h264ReceivedKeyFrames: keyFrameCheck.h264ReceivedKeyFrames,
+      h264ReceivedSps: keyFrameCheck.h264ReceivedSps,
+      h264ReceivedPps: keyFrameCheck.h264ReceivedPps,
+      h264ReceivedIdr: keyFrameCheck.h264ReceivedIdr,
+      h264LastNalTypes: keyFrameCheck.h264LastNalTypes,
     });
     summary.checks.push("h264-latency-queue");
     print(

@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 接收 NAL 证据补强
+- Windows 控制端现在会在收到每个 H.264 payload 后记录收到侧 NAL 证据：`h264ReceivedFrames`、`h264ReceivedKeyFrames`、`h264ReceivedSps`、`h264ReceivedPps`、`h264ReceivedIdr`、`h264LastNalTypes` 和 `h264LastKeyFrameId`。页面“现场视频”会显示 `H.264收到 <n>`、`关键帧 <n>`、`SPS/PPS/IDR a/b/c` 和 `NAL <types>`；`test-windows-client-browser --boardSummary` 的 `W2W3Retest h264=` 会追加 `recv/key/sps/pps/idr/lastNal`。这用于和 Mac M6/M7 的 `firstKeyNal/firstNal` 发送侧证据对照：若 Windows 已收到 `sps/pps/idr` 但 `decoded=0`，优先查 WebCodecs configure/decode/队列；若 Mac 侧有 key NAL 而 Windows 侧没有，则再查传输/重启窗口。不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-21 M5 Mac H.264 keyframe 证据上板
 - `observe-mac-video` 现在会解析 H.264 Annex B NAL 类型，并在 JSON 里输出 `h264.keyFrames/spsFrames/ppsFrames/idrFrames/keyFramesWithParameterSets`；`--requireH264Keyframe` 会要求至少一个同时包含 SPS/PPS/IDR 的关键帧，否则失败。`observe-mac-media` 默认随 H.264 基线启用该强校验，`check-mac-host-readiness --probeMedia --boardSummary` 的 `media=ok` 后会追加 `h264Key=<n> sps=<n> pps=<n> idr=<n> keyParam=<n>`。本轮真机只读验证：`MacHostMedia` 60Hz/20000kbps/5000ms 输出 `media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3`，说明当前 Mac host 会话能发带参数集的 IDR；无密码上板，不发 input/inject，不改 WebSocket 协议。
 
