@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac client safe formal smoke
+开发端：Mac Codex
+本轮目标：让 Mac 控 Windows 真机 smoke 在 Windows host 真实输入模式下也能先安全验证连接/媒体，不误发鼠标键盘输入。
+完成内容：
+- `run-mac-client-formal-smoke` 新增 `--skipInput`，并把该参数传给底层 browser runner；prompt-password 复跑命令和 JSON/boardSummary 会保留该参数。
+- `test-mac-client-browser` 新增 `--skipInput`：跳过 pointer/key `input_event`、`input_ack` 等待和 Command-to-Ctrl 键盘映射检查，board summary 标记 `input=skipped`。
+- 修正浏览器自测音频判定：真实 PCM 二进制音频缺少文本 payload 字段时，使用页面诊断里的 `pcm-f32le`、level 和播放状态作为有效证据；播放用时也读取音频播放状态栏。
+- 已对 `192.168.31.68:43770` 跑通 `--promptPassword --skipInput` 真机安全 smoke；密码只本机隐藏输入/环境传递，未发通讯板，未发送鼠标/键盘输入，`inject` 未执行。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 先失败于 help 缺少 `--skipInput`。
+- 绿灯：语法检查、formal smoke 单测、本地 mock 音频+skipInput 浏览器自测、真机 `run-mac-client-formal-smoke --promptPassword --skipInput` 均通过；最终推送前会重跑收尾验证。
+遗留问题：
+- 真实鼠标/键盘 input_ack 与 inject 验收仍需用户明确确认正在看 Windows 屏幕后单独执行。
+下一步建议：
+- 白天继续时先读通讯板；若 Windows host 在线，可先用 `--skipInput` 安全 smoke 复核，再根据用户在场情况安排真实输入验收。
+是否改了协议：否。
+是否需要另一端配合：不需要立即配合；真实输入验收时需要 Windows/User 明确看屏确认。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows host 会话诊断

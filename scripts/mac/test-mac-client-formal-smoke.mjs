@@ -202,6 +202,7 @@ function assertPromptPasswordSmokeCommand(command, label, options = {}) {
   if (options.expectedPort) assertIncludes(command, `--port ${options.expectedPort}`, label);
   if (options.expectedServer) assertIncludes(command, `--server ${options.expectedServer}`, label);
   if (options.expectedClientPort) assertIncludes(command, `--clientPort ${options.expectedClientPort}`, label);
+  if (options.expectedSkipInput) assertIncludes(command, "--skipInput", label);
   assertNotIncludes(command, "--preflightOnly", label);
   assertNotIncludes(command, "--sendCall", label);
   assertNotIncludes(command, "--forceCall", label);
@@ -498,6 +499,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--promptPassword", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--skipInput", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "Machine-readable JSON fields", `${script} ${flag}`);
@@ -763,6 +765,7 @@ async function checkPreflightAndDryRun(args) {
         "--json",
         "--skipBoard",
         "--dryRun",
+        "--skipInput",
         "--host",
         "127.0.0.1",
         "--port",
@@ -792,10 +795,16 @@ async function checkPreflightAndDryRun(args) {
       assert(dryRunPayload.commands?.discoverPreflight?.includes("--discover"), "dryRun should expose safe discovery command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
+      assert(dryRunPayload.commands?.browserSmoke?.includes("--skipInput"), "dryRun should preserve skipInput in child command");
       assertPromptPasswordSmokeCommand(
         dryRunPayload.commands?.promptPasswordSmoke || "",
         "dryRun prompt-password smoke command",
-        { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedClientPort: String(clientPort) },
+        {
+          expectedHost: "127.0.0.1",
+          expectedPort: String(windowsPort),
+          expectedClientPort: String(clientPort),
+          expectedSkipInput: true,
+        },
       );
       assertMacClientBrowserSelfTestCommand(
         dryRunPayload.commands?.macClientBrowserSelfTest || "",

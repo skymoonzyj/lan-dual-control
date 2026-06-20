@@ -38,6 +38,7 @@ const defaults = {
   syntheticAudioBurstFrames: 36,
   requireAudio: false,
   expectReconnect: false,
+  skipInput: false,
   maxInitialVideoMs: 0,
   maxReconnectRestoreMs: 0,
   maxAudioFrameMs: 0,
@@ -118,6 +119,7 @@ Options:
   --maxAudioFrameMs <ms>           Maximum first audio frame time. Default: off
   --maxAudioPlaybackMs <ms>        Maximum playback count time. Default: off
   --expectReconnect                Kill/restart temporary host and require auto-reconnect.
+  --skipInput                      Do not send pointer/key input events or wait for input_ack.
   --maxReconnectRestoreMs <ms>     Maximum reconnect restore time. Default: off
   --maxInitialVideoMs <ms>         Maximum initial visible video time. Default: off
   --observeVideoMs <ms>            Observe sustained video after connect. Default: off
@@ -258,6 +260,10 @@ function parseArgs(argv) {
     }
     if (key === "expectReconnect") {
       args.expectReconnect = true;
+      continue;
+    }
+    if (key === "skipInput") {
+      args.skipInput = true;
       continue;
     }
     if (key === "testReconnectNow") {
@@ -429,6 +435,7 @@ function makeBoardSummary(report = lastBoardSummaryReport || {}, args = lastBoar
     parts.push(`audio=${compactBoardText(report.audio || (args.enableAudio ? "requested" : "not-requested"), 90)}`);
     if (report.reverseControl) parts.push(`reverse=${compactBoardText(report.reverseControl, 100)}`);
     if (report.input) parts.push(`input=${compactBoardText(report.input, 90)}`);
+    if (args.skipInput && !report.input) parts.push("input=skipped");
     if (report.clipboardText) parts.push(`clipboardText=${compactBoardText(report.clipboardText, 90)}`);
     parts.push(`fileClipboard=${compactBoardText(report.clipboardFile || (args.testFileClipboard ? "not-run" : "skipped"), 90)}`);
   }
@@ -1508,7 +1515,10 @@ function buildSnapshotExpression() {
         };
       })(),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
-      audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
+      audioPlayedFrames: (() => {
+        const audioTexts = [text("#audioStatus"), text("#audioPlaybackStatus")].join(" ");
+        return Number((audioTexts.match(/(?:播放|接收)\\s*(\\d+)\\s*帧?/) || [])[1] || 0);
+      })(),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
       audioFrameMs: (() => {
         const timings = window.__lanDualTimings || {};
@@ -1524,7 +1534,8 @@ function buildSnapshotExpression() {
       })(),
       audioPlaybackMs: (() => {
         const timings = window.__lanDualTimings || {};
-        const playedFrames = Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0);
+        const audioTexts = [text("#audioStatus"), text("#audioPlaybackStatus")].join(" ");
+        const playedFrames = Number((audioTexts.match(/(?:播放|接收)\\s*(\\d+)\\s*帧?/) || [])[1] || 0);
         if (!timings.connectClickedAt || playedFrames <= 0) return 0;
         return Math.round(performance.now() - timings.connectClickedAt);
       })(),
@@ -3671,6 +3682,9 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         check: async (value) => {
           const hasFrame = value.audioFrameCount > 0 || value.audio.includes("接收") || value.audio.includes("level");
           const hasPayload = Boolean(value.lastAudioFrame?.payloadLength || value.lastAudioFrame?.payloadBytes);
+          const hasBinaryPcmDiagnostics = value.audioFrameCount > 0 &&
+            /pcm/i.test(`${value.audio} ${value.audioPlayback}`) &&
+            (value.audio.includes("level") || value.audioFlowMetric.includes("接收"));
           const frame = value.lastAudioFrame;
           const realPcmOk = !args.requireAudio || (
             String(frame?.codec || "").toLowerCase().includes("pcm-f32le") &&
@@ -3678,7 +3692,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
             Number(frame?.sampleRate || 0) === 48000 &&
             Number(frame?.channels || 0) === 2
           );
-          const payloadOk = !args.expectAudioPayload || hasPayload;
+          const payloadOk = !args.expectAudioPayload || hasPayload || hasBinaryPcmDiagnostics;
           return hasFrame && payloadOk && realPcmOk ? value : null;
         },
       }).catch((error) => {
@@ -3860,110 +3874,117 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
     print("OK", `Recent clear: ${recentClearSnapshot.recentConnection}`);
 
-    await evaluate(
-      session,
-      `(() => {
-        const viewport = document.querySelector("#remoteViewport");
-        const image = document.querySelector("#remoteImage");
-        const rect = image.getBoundingClientRect();
-        const clientX = rect.left + rect.width / 2;
-        const clientY = rect.top + rect.height / 2;
-        viewport.focus();
-        viewport.dispatchEvent(new PointerEvent("pointermove", {
-          bubbles: true,
-          clientX,
-          clientY,
-          pointerType: "mouse",
-          button: 0,
-        }));
-        viewport.dispatchEvent(new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX,
-          clientY,
-          pointerType: "mouse",
-          button: 0,
-        }));
-        viewport.dispatchEvent(new PointerEvent("pointerup", {
-          bubbles: true,
-          clientX,
-          clientY,
-          pointerType: "mouse",
-          button: 0,
-        }));
-        viewport.dispatchEvent(new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "a",
-          code: "KeyA",
-        }));
-        return true;
-      })()`,
-    );
+    if (args.skipInput) {
+      lastBoardSummaryReport.input = "skipped";
+      print("OK", "Input: skipped (--skipInput)");
+    } else {
+      await evaluate(
+        session,
+        `(() => {
+          const viewport = document.querySelector("#remoteViewport");
+          const image = document.querySelector("#remoteImage");
+          const rect = image.getBoundingClientRect();
+          const clientX = rect.left + rect.width / 2;
+          const clientY = rect.top + rect.height / 2;
+          viewport.focus();
+          viewport.dispatchEvent(new PointerEvent("pointermove", {
+            bubbles: true,
+            clientX,
+            clientY,
+            pointerType: "mouse",
+            button: 0,
+          }));
+          viewport.dispatchEvent(new PointerEvent("pointerdown", {
+            bubbles: true,
+            clientX,
+            clientY,
+            pointerType: "mouse",
+            button: 0,
+          }));
+          viewport.dispatchEvent(new PointerEvent("pointerup", {
+            bubbles: true,
+            clientX,
+            clientY,
+            pointerType: "mouse",
+            button: 0,
+          }));
+          viewport.dispatchEvent(new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            key: "a",
+            code: "KeyA",
+          }));
+          return true;
+        })()`,
+      );
 
-    const inputSnapshot = await waitFor(
-      async () => {
-        const value = await evaluate(session, buildSnapshotExpression());
-        lastSnapshot = value;
-        return value.input.includes("已确认") ? value : null;
-      },
-      args.timeoutMs,
-      "Mac client input ack",
-    );
+      const inputSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          return value.input.includes("已确认") ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client input ack",
+      );
 
-    print("OK", `Input: ${inputSnapshot.input}`);
-    lastBoardSummaryReport.input = inputSnapshot.input;
-    if (inputSnapshot.logs.length > 0) {
-      print("INFO", `Recent logs: ${inputSnapshot.logs.join(" | ")}`);
+      print("OK", `Input: ${inputSnapshot.input}`);
+      lastBoardSummaryReport.input = inputSnapshot.input;
+      if (inputSnapshot.logs.length > 0) {
+        print("INFO", `Recent logs: ${inputSnapshot.logs.join(" | ")}`);
+      }
     }
 
-    await evaluate(
-      session,
-      `(() => {
-        const viewport = document.querySelector("#remoteViewport");
-        viewport.focus();
-        viewport.dispatchEvent(new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "c",
-          code: "KeyC",
-          metaKey: true,
-        }));
-        return true;
-      })()`,
-    );
+    if (!args.skipInput) {
+      await evaluate(
+        session,
+        `(() => {
+          const viewport = document.querySelector("#remoteViewport");
+          viewport.focus();
+          viewport.dispatchEvent(new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            key: "c",
+            code: "KeyC",
+            metaKey: true,
+          }));
+          return true;
+        })()`,
+      );
 
-    const shortcutSnapshot = await waitFor(
-      async () => {
-        const value = await evaluate(
-          session,
-          `(() => {
-            const shortcut = [...(window.__lanDualSentMessages || [])]
-              .reverse()
-              .find((message) => message.type === "input_event" && message.event === "key" && message.code === "KeyC");
-            if (!shortcut) return null;
-            const logs = [...document.querySelectorAll("#eventLog li")]
-              .slice(0, 10)
-              .map((item) => item.innerText.replace(/\\s+/g, " "));
-            return {
-              shortcut,
-              input: document.querySelector("#inputStatus")?.textContent || "",
-              hint: document.querySelector("#viewportHint")?.textContent || "",
-              logs,
-            };
-          })()`,
-        );
-        if (!value?.shortcut) return null;
-        const shortcut = value.shortcut;
-        const mappedToCtrl = shortcut.ctrlKey === true && shortcut.metaKey === false && shortcut.modifiers?.includes("ctrl");
-        const preservedLocalMeta = shortcut.localMetaKey === true && shortcut.shortcutProfile === "mac_command_to_windows_ctrl";
-        const hintVisible = value.hint.includes("Command") && value.hint.includes("Ctrl");
-        const logVisible = value.logs.some((line) => line.includes("Command→Ctrl+C"));
-        return mappedToCtrl && preservedLocalMeta && hintVisible && logVisible ? value : null;
-      },
-      args.timeoutMs,
-      "Mac client Command-to-Ctrl shortcut mapping",
-    );
-    print("OK", `Shortcut: Command+C -> ctrlKey=${shortcutSnapshot.shortcut.ctrlKey}, metaKey=${shortcutSnapshot.shortcut.metaKey}`);
+      const shortcutSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(
+            session,
+            `(() => {
+              const shortcut = [...(window.__lanDualSentMessages || [])]
+                .reverse()
+                .find((message) => message.type === "input_event" && message.event === "key" && message.code === "KeyC");
+              if (!shortcut) return null;
+              const logs = [...document.querySelectorAll("#eventLog li")]
+                .slice(0, 10)
+                .map((item) => item.innerText.replace(/\\s+/g, " "));
+              return {
+                shortcut,
+                input: document.querySelector("#inputStatus")?.textContent || "",
+                hint: document.querySelector("#viewportHint")?.textContent || "",
+                logs,
+              };
+            })()`,
+          );
+          if (!value?.shortcut) return null;
+          const shortcut = value.shortcut;
+          const mappedToCtrl = shortcut.ctrlKey === true && shortcut.metaKey === false && shortcut.modifiers?.includes("ctrl");
+          const preservedLocalMeta = shortcut.localMetaKey === true && shortcut.shortcutProfile === "mac_command_to_windows_ctrl";
+          const hintVisible = value.hint.includes("Command") && value.hint.includes("Ctrl");
+          const logVisible = value.logs.some((line) => line.includes("Command→Ctrl+C"));
+          return mappedToCtrl && preservedLocalMeta && hintVisible && logVisible ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client Command-to-Ctrl shortcut mapping",
+      );
+      print("OK", `Shortcut: Command+C -> ctrlKey=${shortcutSnapshot.shortcut.ctrlKey}, metaKey=${shortcutSnapshot.shortcut.metaKey}`);
+    }
 
     const clipboardText = `Windows self-test clipboard ${Date.now()}`;
     await evaluate(

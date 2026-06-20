@@ -35,6 +35,7 @@ const defaults = {
   requirePassword: true,
   allowDemoPassword: false,
   skipAudio: false,
+  skipInput: false,
   skipFileClipboard: false,
   allowClipboardFallback: process.platform !== "win32",
   headed: false,
@@ -88,6 +89,7 @@ Options:
   --noRequirePassword            Allow missing password only for local non-formal diagnostics.
   --allowDemoPassword            Allow demo-password for local fake-host tests only.
   --skipAudio                    Do not require audio payload/playback in browser smoke.
+  --skipInput                    Do not send pointer/key input events or wait for input_ack.
   --skipFileClipboard            Skip file clipboard checks.
   --allowClipboardFallback       Allow temp/memory clipboard fallback. Default: ${defaults.allowClipboardFallback}
   --headed                       Run browser headed instead of headless.
@@ -225,6 +227,7 @@ function parseArgs(argv) {
       token === "--discoverNoLocalSubnets" ||
       token === "--allowDemoPassword" ||
       token === "--skipAudio" ||
+      token === "--skipInput" ||
       token === "--skipFileClipboard" ||
       token === "--allowClipboardFallback" ||
       token === "--headed" ||
@@ -528,6 +531,7 @@ function makeBrowserArgs(args) {
       String(args.maxAudioPlaybackMs),
     );
   }
+  if (args.skipInput) browserArgs.push("--skipInput");
   if (args.skipFileClipboard) browserArgs.push("--skipFileClipboard");
   if (args.allowClipboardFallback) browserArgs.push("--allowClipboardFallback");
   if (args.headed) browserArgs.push("--headed");
@@ -567,6 +571,7 @@ function makePromptPasswordSmokeCommand(args) {
   if (args.maxAudioFrameMs !== defaults.maxAudioFrameMs) command.push("--maxAudioFrameMs", String(args.maxAudioFrameMs));
   if (args.maxAudioPlaybackMs !== defaults.maxAudioPlaybackMs) command.push("--maxAudioPlaybackMs", String(args.maxAudioPlaybackMs));
   if (args.skipAudio) command.push("--skipAudio");
+  if (args.skipInput) command.push("--skipInput");
   if (args.skipFileClipboard) command.push("--skipFileClipboard");
   if (args.headed) command.push("--headed");
   if (args.allowPreflightWarnings) command.push("--allowPreflightWarnings");
@@ -1169,6 +1174,7 @@ function makeReport(args, preflight) {
       sendCall: args.sendCall,
       forceCall: args.forceCall,
       skipAudio: args.skipAudio,
+      skipInput: args.skipInput,
       skipFileClipboard: args.skipFileClipboard,
       allowClipboardFallback: args.allowClipboardFallback,
     },
