@@ -16,6 +16,40 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 M1 Mac remote audio first-screen follow-up
+开发端：Mac Codex
+本轮目标：让远端独占声音只读状态门禁不只出现在 resume，也能在 heartbeat/unattended 第一屏直接看到。
+完成内容：
+- `check-mac-heartbeat --boardSummary` 新增 `MacRemoteAudioStatus=node scripts/mac/check-mac-remote-audio-status.mjs --host <host> --port <port> --boardSummary`。
+- `check-mac-unattended-status --boardSummary` 新增同一 `MacRemoteAudioStatus=` 入口。
+- 两条入口都只给出可复制的只读检查命令，不改系统音量、不切输出设备、不请求密码、不认证、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000` 先失败于缺少 `MacRemoteAudioStatus=`
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macRemoteAudioStatus`
+- 绿灯：`node --check scripts/mac/check-mac-heartbeat.mjs`
+- 绿灯：`node --check scripts/mac/test-mac-heartbeat.mjs`
+- 绿灯：`node --check scripts/mac/check-mac-unattended-status.mjs`
+- 绿灯：`node --check scripts/mac/test-mac-unattended-status.mjs`
+- 绿灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000`
+- 绿灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000`
+- 真机只读抽样：`check-mac-heartbeat --checkBoard --boardSummary` 和 `check-mac-unattended-status --boardSummary` 均输出 `MacRemoteAudioStatus=...check-mac-remote-audio-status...`
+遗留问题：该入口只提升可见性，不等于 remote-only 已成立；当前 `Mac Remote Audio` 状态仍显示本机 audible，需要用户同意后再处理静音/输出设备/product toggle。
+下一步建议：后续 Windows 或 Mac 开工第一屏若看到 `MacRemoteAudioStatus=`，先运行它判断当前本机是否仍会出声，再决定是否进入用户同意的 remote-only 路线。
+是否改了协议：否；只改 Mac 状态脚本输出和测试。
+是否需要另一端配合：暂不需要；Windows 端当前 W2 视频工作可继续，不需要消费新字段才能运行。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W2 Windows H.264 等关键帧超时恢复

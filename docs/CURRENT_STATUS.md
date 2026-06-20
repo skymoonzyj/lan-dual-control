@@ -11,6 +11,9 @@
 ## 2026-06-20 W3 Windows 音频低水位补缓冲诊断
 - Windows 控制端 WebAudio 播放队列低于 70ms 并自动补到 80ms 时，现在会记录 `audioUnderrunCount` 和 `audioLastBufferReason=queue-underrun-prebuffer`；复制/导出诊断“现场声音”同步输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。这样用户反馈声音断续时，可以区分“本地队列溢出后 flush 重同步”和“采集/网络供流间歇导致低水位补缓冲”。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `underrunPrebufferDiagnosed=false`，绿灯确认 `Audio buffer guards ... underrun=1 ...`。本轮只改 Windows 控制端本地 WebAudio 诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
+## 2026-06-20 M1 Mac remote audio first-screen follow-up
+- `MacRemoteAudioStatus=` 只读入口现在已接入 Mac `resume`、`heartbeat` 和 `unattended` 三个第一屏。`check-mac-heartbeat --checkBoard --boardSummary`、`check-mac-resume-status --checkBoard --boardSummary` 和 `check-mac-unattended-status --boardSummary` 都会给出 `node scripts/mac/check-mac-remote-audio-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`。该入口只检查 `system-pcm` 采集和当前 output volume/mute，不改音量、不切输出设备、不请求密码、不认证、不发送 input/inject；看到 `local-playback-active` 时仍表示 remote-only 未成立。
+
 ## 2026-06-20 M1 Mac remote audio status gate
 - `check-mac-remote-audio-status --host <Mac host> --port <port> --boardSummary` 现在提供只读 `MacRemoteAudioStatus=`：先请求 Mac host `/discovery` 确认 `capture=system-pcm`，再读取当前 macOS output volume/mute 状态，用 `local-playback-active` 明确表示 Mac 本机仍会出声，用 `local-output-muted` 表示用户手动静音候选但仍需音频 smoke 和恢复路径。`check-mac-resume-status --boardSummary` 同屏新增 `MacRemoteAudioStatus=node scripts/mac/check-mac-remote-audio-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`，方便开工第一屏直接检查。当前真机只读结果为 `status=local-playback-active localOutput=audible volume=71 muted=false remoteOnly=not-active`；脚本不改音量、不切输出设备、不请求密码、不认证、不发送 input/inject。
 
