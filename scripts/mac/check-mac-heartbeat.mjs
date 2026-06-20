@@ -10,6 +10,13 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const launchAgentLabel = "com.lan-dual-control.mac-host";
 const launchAgentPath = join(homedir(), "Library", "LaunchAgents", `${launchAgentLabel}.plist`);
 const formalTargetMaxScreenFps = 60;
+const formalMediaProbeArgs = [
+  "--probeMediaFps 60",
+  "--probeMediaBandwidthKbps 20000",
+  "--probeMediaVideoDurationMs 5000",
+  "--probeMediaAudioDurationMs 5000",
+  "--probeMediaVideoMinFps 50",
+];
 const macUnattendedFreshnessStaleMs = 600000;
 const hostRuntimePaths = [
   "apps/mac-host/Package.swift",
@@ -888,7 +895,7 @@ function buildCommands(args) {
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     macMaxFpsSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port} --maxScreenFps ${formalTargetMaxScreenFps}`,
     macHostReadinessCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
-    macHostMediaCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`,
+    macHostMediaCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --probeMedia --probeMediaResourceSample ${formalMediaProbeArgs.join(" ")} --promptPassword --boardSummary`,
     macUnattendedStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macUnattendedSendStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --server ${args.server} --sendStatus --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,

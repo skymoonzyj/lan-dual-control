@@ -310,6 +310,11 @@ function assertMediaReadinessCommand(command, label) {
   assert(command.includes("--checkBoard"), `${label} should read Agent Link Board`);
   assert(command.includes("--probeMedia"), `${label} should probe media`);
   assert(command.includes("--probeMediaResourceSample"), `${label} should request resource sampling`);
+  assert(command.includes("--probeMediaFps 60"), `${label} should request the formal 60Hz media baseline`);
+  assert(command.includes("--probeMediaBandwidthKbps 20000"), `${label} should request the formal 20Mbps media baseline`);
+  assert(command.includes("--probeMediaVideoDurationMs 5000"), `${label} should request the formal 5s video window`);
+  assert(command.includes("--probeMediaAudioDurationMs 5000"), `${label} should request the formal 5s audio window`);
+  assert(command.includes("--probeMediaVideoMinFps 50"), `${label} should enforce a useful 60Hz minimum FPS`);
   assert(command.includes("--promptPassword"), `${label} should use a visible password prompt`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);

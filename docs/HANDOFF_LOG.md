@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Mac Codex
 
+日期：2026-06-21 M4 Mac 第一屏媒体基线统一 60Hz
+开发端：Mac Codex
+本轮目标：让 Mac heartbeat/resume 第一屏里的 `MacHostMedia=` 不再回到默认媒体探测，直接指向当前 W2/W3 复测需要的正式 60Hz H.264/PCM 基线。
+完成内容：`check-mac-heartbeat` 和 `check-mac-resume-status` 生成的 `MacHostMedia=` 命令新增 `--probeMediaFps 60 --probeMediaBandwidthKbps 20000 --probeMediaVideoDurationMs 5000 --probeMediaAudioDurationMs 5000 --probeMediaVideoMinFps 50`。
+修改文件：scripts/mac/check-mac-heartbeat.mjs；scripts/mac/check-mac-resume-status.mjs；scripts/mac/test-mac-heartbeat.mjs；scripts/mac/test-mac-resume-status.mjs；CURRENT_STATUS/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 heartbeat/resume 的媒体命令缺少 `--probeMediaFps 60`；绿灯 `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`、`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 20000` 通过。
+遗留问题：真实 Windows 5200 页面 60Hz/H.264 复测仍需要用户在 Windows 本机输入 Mac 临时密码；本轮只修第一屏可复制命令的一致性。
+下一步建议：Windows 端继续运行 `WinClientRetest=`，结束后把 `W2W3Retest=` 一行发通讯板；Mac 保持 host `192.168.31.122:43770` / `inputMode=log` / `maxScreenFps=60` 在线。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/User 做真实 60Hz/H.264 页面复测；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Mac Codex
+
 日期：2026-06-21 M3 Mac readiness 媒体探测参数化
 开发端：Mac Codex
 本轮目标：把上一轮 Mac 60Hz/H.264/PCM 基线从一次性命令沉淀到正式 readiness 入口，方便后续和 Windows `W2W3Retest=` 对照。

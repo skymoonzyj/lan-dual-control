@@ -23,6 +23,18 @@ const defaults = {
   boardSummary: false,
 };
 const formalTargetMaxScreenFps = 60;
+const formalMediaProbeArgs = [
+  "--probeMediaFps",
+  "60",
+  "--probeMediaBandwidthKbps",
+  "20000",
+  "--probeMediaVideoDurationMs",
+  "5000",
+  "--probeMediaAudioDurationMs",
+  "5000",
+  "--probeMediaVideoMinFps",
+  "50",
+];
 const heartbeatFreshnessStaleMs = 120000;
 const macCodexStaleThresholdMs = 300000;
 const macUnattendedFreshnessStaleMs = 600000;
@@ -1515,6 +1527,7 @@ function makeMediaReadinessBoardSummaryCommand(args) {
     "--checkBoard",
     "--probeMedia",
     "--probeMediaResourceSample",
+    ...formalMediaProbeArgs,
     "--promptPassword",
     "--boardSummary",
   ].join(" ");

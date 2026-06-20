@@ -481,6 +481,11 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHostMediaCommand || "", "--checkBoard", label);
   assertIncludes(commands?.macHostMediaCommand || "", "--probeMedia", label);
   assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaResourceSample", label);
+  assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaFps 60", label);
+  assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaBandwidthKbps 20000", label);
+  assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaVideoDurationMs 5000", label);
+  assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaAudioDurationMs 5000", label);
+  assertIncludes(commands?.macHostMediaCommand || "", "--probeMediaVideoMinFps 50", label);
   assertIncludes(commands?.macHostMediaCommand || "", "--promptPassword", label);
   assertIncludes(commands?.macHostMediaCommand || "", "--boardSummary", label);
   assertNotIncludes(commands?.macHostMediaCommand || "", "--password", label);
