@@ -461,7 +461,7 @@ function buildChecklist(resume, args) {
     checklist.push(blockItem("build", "Runtime Build", formatBuildDiff(buildDiff), "", "Restart Mac host before deploy-style validation."));
   } else if (args.requireCurrentBuildId && buildDiff.differs) {
     checklist.push(blockItem("build", "Runtime Build", formatBuildDiff(buildDiff), "", "Restart Mac host so runtime build matches current git."));
-  } else if (buildDiff.differs) {
+  } else if (buildDiff.differs && buildDiff.severity !== "stale-metadata") {
     checklist.push(warnItem("build", "Runtime Build", formatBuildDiff(buildDiff), buildDiff.message || "", "OK for coordination if hostRuntimeChanges=0; restart before strict deploy-current-build validation."));
   } else {
     checklist.push(okItem("build", "Runtime Build", formatBuildDiff(buildDiff)));

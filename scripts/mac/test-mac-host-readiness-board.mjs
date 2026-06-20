@@ -357,6 +357,9 @@ function formatReadinessFindingsFixture(results) {
     functionBlock(source, "normalizedText"),
     functionBlock(source, "readinessResultId"),
     functionBlock(source, "summarizeReadinessResultIds"),
+    functionBlock(source, "isMetadataOnlyBuildDiff"),
+    functionBlock(source, "isMetadataOnlyBuildWarningText"),
+    functionBlock(source, "isMetadataOnlyBuildWarning"),
     functionBlock(source, "isMacHostBuildStaleWarning"),
     functionBlock(source, "readinessWarningResultIds"),
     functionBlock(source, "summarizeReadinessWarningResultIds"),
@@ -385,6 +388,9 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatHostMediaBoardSummary"),
     functionBlock(source, "readinessResultId"),
     functionBlock(source, "summarizeReadinessResultIds"),
+    functionBlock(source, "isMetadataOnlyBuildDiff"),
+    functionBlock(source, "isMetadataOnlyBuildWarningText"),
+    functionBlock(source, "isMetadataOnlyBuildWarning"),
     functionBlock(source, "isMacHostBuildStaleWarning"),
     functionBlock(source, "readinessWarningResultIds"),
     functionBlock(source, "summarizeReadinessWarningResultIds"),
@@ -727,6 +733,26 @@ function checkReadinessFindingsFormatting() {
       },
     ]) === "blockers=none warnings=mac-host-discovery,mac-host-build-stale",
     "stale Mac host runtime warning should expose a stable mac-host-build-stale id",
+  );
+  assert(
+    formatReadinessFindingsFixture([
+      {
+        label: "Mac host discovery",
+        ok: true,
+        summary: "Mac host is online and runtime build metadata is stale only",
+        warnings: [
+          "running host build 0180451 differs from current git bc8aea9; no Mac host runtime source changes since 0180451; the running service behavior is likely current, but build metadata is stale; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build",
+        ],
+        details: {
+          buildDiff: {
+            differs: true,
+            comparable: true,
+            changedHostRuntimeFileCount: 0,
+          },
+        },
+      },
+    ]) === "blockers=none warnings=none",
+    "metadata-only Mac host build drift should remain info-only and not emit mac-host-build-stale",
   );
   assert(
     formatReadinessFindingsFixture([{ label: "Node.js", ok: true, warnings: [] }]) === "blockers=none warnings=none",

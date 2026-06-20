@@ -32,6 +32,19 @@
 
 ## 2026-06-21 Mac Codex
 
+日期：2026-06-21 M19 Mac metadata-only build drift 降噪
+开发端：Mac Codex
+本轮目标：让 Mac readiness/formal E2E 第一屏不要把 `hostRuntimeChanges=0` 的 build id 元数据差异误报成需要重启的旧 build warning，避免 W2/W3 真复测前多余重启。
+完成内容：`check-mac-host-readiness` 新增通用 metadata-only build diff 判断，支持 `severity=stale-metadata` 和真实 `/discovery` 形状 `comparable=true + changedHostRuntimeFileCount=0`；默认不再把这类结果加入 warnings / `mac-host-build-stale`。`check-mac-formal-e2e-status` 对同类 build diff 保持 build checklist ok，但摘要继续保留 `runtimeBuild=... stale metadata only, hostRuntimeChanges=0`。`restart-recommended` 和显式 `--requireCurrentBuildId` 行为不放宽。
+修改文件：scripts/mac/check-mac-host-readiness.mjs；scripts/mac/test-mac-host-readiness-board.mjs；scripts/mac/check-mac-formal-e2e-status.mjs；scripts/mac/test-mac-formal-e2e-status.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：TDD 红灯 1：readiness fixture 先失败于 metadata-only 仍输出 `mac-host-build-stale`；红灯 2：formal E2E 先失败于 build checklist 仍为 warning。绿灯后专项回归通过，真实 `check-mac-host-readiness --checkBoard --boardSummary` 输出 `warnings=agent-link-board-currentcall`，不再包含 `mac-host-build-stale`；formal 在 dirty 工作区下仍只显示 repo blocker，warnings 为 `video,auth`，不再包含 build。
+遗留问题：真实 `W2W3Retest=` 仍未上板；当前 active call 仍要求 Windows 运行 `Run-WinClientRetest.cmd`。Mac formal 的 `video` warning 是 discovery 空闲 `background-jpeg`/需媒体基线，不等于 metadata-only build 问题。
+下一步建议：Windows 端继续真实复测并上板 `W2W3Retest=`；Mac 端只有看到 `hostRuntimeChanges>0`、`restart recommended` 或进入显式 `--requireCurrentBuildId` 部署强校验时才安排重启 host。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 改代码；需要 Windows 继续 W2/W3 真复测。未请求密码、未认证、未发 input/inject、未改系统设置。
+
+## 2026-06-21 Mac Codex
+
 日期：2026-06-21 M1 Mac remote audio status consent/restore gate
 开发端：Mac Codex
 本轮目标：让当前 `MacRemoteAudioStatus=` 状态摘要本身也明确携带用户同意与恢复路径门禁，避免只看 status 时误以为 blocked/candidate 可以直接执行静音或切输出。

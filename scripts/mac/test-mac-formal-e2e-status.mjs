@@ -544,6 +544,18 @@ function getBuildBeforeLatestMacHostRuntimeChange() {
   return gitOutput(["rev-parse", "--short", `${latestRuntimeChange}^`], "git rev-parse previous Mac host runtime build");
 }
 
+function getLatestMacHostRuntimeBuildId() {
+  const latestRuntimeChange = gitOutput([
+    "log",
+    "-1",
+    "--format=%H",
+    "--",
+    "apps/mac-host/Package.swift",
+    "apps/mac-host/Sources",
+  ], "git log latest Mac host runtime change");
+  return gitOutput(["rev-parse", "--short", latestRuntimeChange], "git rev-parse latest Mac host runtime build");
+}
+
 async function withFakeMacHost(callback, options = {}) {
   const runtimeBuildId = options.runtimeBuildId || getCurrentBuildId() || "test-build";
   const discovery = {
@@ -1189,6 +1201,31 @@ async function checkFallbackPipelineVideoWarning(args) {
   }, { capturePipeline: "background-jpeg" });
 }
 
+async function checkMetadataOnlyBuildDoesNotWarn(args) {
+  await withFakeMacHost(async (macHost) => {
+    const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+    const result = await runAsync(args, [
+      "--json",
+      "--allowDirty",
+      "--skipBoard",
+      "--host",
+      macHost.host,
+      "--port",
+      String(macHost.port),
+      "--timeoutMs",
+      localTimeoutMs,
+    ]);
+    const payload = parseJson(result.stdout, "metadata-only formal E2E status");
+    assert(result.status === 0, `metadata-only runtime build should not fail formal status:\n${result.stdout}\n${result.stderr}`);
+    const build = payload.checklist?.find((entry) => entry.id === "build");
+    assert(build?.status === "ok", "metadata-only runtime build drift should keep the build checklist item ok");
+    assert(/stale metadata only/.test(build?.summary || ""), "metadata-only build summary should preserve stale metadata evidence");
+    assert(!/warnings=[^.]*build/.test(payload.boardSummary || ""), "metadata-only runtime build drift should not add build to boardSummary warnings");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "metadata-only formal E2E status");
+    print("OK", "Formal E2E treats metadata-only runtime build drift as info, not a warning");
+  }, { runtimeBuildId: getLatestMacHostRuntimeBuildId() });
+}
+
 async function checkBoardValidationEvidence(args) {
   const events = [
     {
@@ -1652,6 +1689,7 @@ async function main() {
   await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
   await checkFallbackPipelineVideoWarning(args);
+  await checkMetadataOnlyBuildDoesNotWarn(args);
   await checkBoardValidationEvidence(args);
   await checkBoardStatusValidationEvidence(args);
   await checkBoardStableTagValidationEvidence(args);

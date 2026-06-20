@@ -940,12 +940,34 @@ function summarizeReadinessWarningResultIds(items) {
 }
 
 function readinessWarningResultIds(item) {
+  if (isMetadataOnlyBuildWarning(item)) return [];
   const id = readinessResultId(item?.label || item?.id || "unknown");
   const ids = [id];
   if (id === "mac-host-discovery" && isMacHostBuildStaleWarning(item)) {
     ids.push("mac-host-build-stale");
   }
   return ids.filter(Boolean);
+}
+
+function isMetadataOnlyBuildWarning(item) {
+  const buildDiff = item?.details?.buildDiff || {};
+  const warnings = Array.isArray(item?.warnings) ? item.warnings : [];
+  return isMetadataOnlyBuildDiff(buildDiff)
+    && warnings.length > 0
+    && warnings.every((warning) => isMetadataOnlyBuildWarningText(warning));
+}
+
+function isMetadataOnlyBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.differs !== true) return false;
+  if (buildDiff.severity === "stale-metadata") return true;
+  return buildDiff.comparable === true && Number(buildDiff.changedHostRuntimeFileCount || 0) === 0;
+}
+
+function isMetadataOnlyBuildWarningText(text) {
+  const normalized = normalizedText(text).toLowerCase();
+  return normalized.includes("stale metadata only")
+    || normalized.includes("hostruntimechanges=0")
+    || (normalized.includes("no mac host runtime source changes") && normalized.includes("build metadata is stale"));
 }
 
 function isMacHostBuildStaleWarning(item) {
@@ -1513,7 +1535,7 @@ async function checkDiscovery(args) {
     if (args.requireCurrentBuildId && !runtime.buildId) {
       errors.push("runtime.buildId is required to check the running host against current git");
     }
-    if (!args.skipCurrentBuildCheck && buildDiff.differs === true) {
+    if (!args.skipCurrentBuildCheck && buildDiff.differs === true && (!isMetadataOnlyBuildDiff(buildDiff) || args.requireCurrentBuildId)) {
       const message = buildMismatchMessage(buildDiff);
       warnings.push(message);
       if (args.requireCurrentBuildId) {
