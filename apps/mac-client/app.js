@@ -1059,7 +1059,7 @@ function formatManualChecklistStatus() {
     : "音频未开启";
   const clipboardText = [
     elements.clipboardStatus.textContent || "",
-    elements.fileClipboardStatus.textContent || "",
+    elements.localClipboardStatus.textContent || "",
   ].join(" ");
   let clipboard = "剪贴板待测";
   if (/确认超时|写入失败|发送失败|对端拒绝|失败|文件过大|不可用/.test(clipboardText)) {
@@ -1069,14 +1069,45 @@ function formatManualChecklistStatus() {
   } else if (/已写入|已读取|监听发送|已确认/.test(clipboardText)) {
     clipboard = "剪贴板已确认";
   }
+  const fileClipboard = formatManualFileChecklistStatus(elements.fileClipboardStatus.textContent || "");
+  const windowStatus = document.visibilityState === "hidden" ? "窗口后台" : "窗口已打开";
+  const fullscreenStatus = document.fullscreenElement ? "全屏已进入" : "全屏待测";
+  const originalStatus = "原画待测";
   const inputText = elements.inputStatus.textContent || "";
   const inputAck = inputText.includes("已确认")
     ? "input_ack已确认"
     : inputText.includes("被拒绝")
       ? "input_ack被拒绝"
       : "input_ack待测";
-  const diagnostics = elements.copyLogButton.disabled ? "诊断不可复制" : "诊断可复制";
-  return [connection, video, audio, clipboard, inputAck, diagnostics].join(" · ");
+  const diagnostics = elements.copyLogButton.disabled ? "复制诊断不可用" : "复制诊断可用";
+  return [
+    connection,
+    video,
+    audio,
+    clipboard,
+    fileClipboard,
+    windowStatus,
+    fullscreenStatus,
+    originalStatus,
+    inputAck,
+    diagnostics,
+  ].join(" · ");
+}
+
+function formatManualFileChecklistStatus(text) {
+  if (/确认超时|写入失败|发送失败|对端拒绝|失败|文件过大|不可用/.test(text)) {
+    return "文件需重试";
+  }
+  if (/等待确认|已发送|发送\s|对端接收|对端准备|准备发送|发送中|\d+%/.test(text)) {
+    return "文件等待回执";
+  }
+  if (/已写入|已保存|已确认/.test(text)) {
+    return "文件已确认";
+  }
+  if (/\d+\s*个/.test(text)) {
+    return "文件已选择";
+  }
+  return text.includes("未选择") ? "文件未选择" : "文件待测";
 }
 
 function reconnectDelayForAttempt(attempt) {
@@ -3495,6 +3526,8 @@ elements.reverseControlButton.addEventListener("click", sendReverseControlReques
 elements.copyReverseControlGrantCommandButton.addEventListener("click", copyReverseControlGrantCommand);
 elements.copyReverseControlGrantFallbackCommandButton.addEventListener("click", copyReverseControlGrantFallbackCommand);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
+document.addEventListener("visibilitychange", renderSessionDiagnostics);
+document.addEventListener("fullscreenchange", renderSessionDiagnostics);
 elements.copyLogButton.addEventListener("click", copyDiagnosticsReport);
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {

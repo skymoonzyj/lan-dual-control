@@ -3038,8 +3038,12 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       !defaultSettingsSnapshot.manualChecklist.includes("视频") ||
       !defaultSettingsSnapshot.manualChecklist.includes("音频") ||
       !defaultSettingsSnapshot.manualChecklist.includes("剪贴板") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("文件") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("窗口") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("全屏") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("原画") ||
       !defaultSettingsSnapshot.manualChecklist.includes("input_ack") ||
-      !defaultSettingsSnapshot.manualChecklist.includes("诊断") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("复制诊断") ||
       !defaultSettingsSnapshot.sendClipboardButtonDisabled ||
       !defaultSettingsSnapshot.sendClipboardFilesButtonDisabled
     ) {
@@ -3225,7 +3229,18 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
     const expectedAudioChecklist = args.enableAudio ? "音频等待" : "音频未开启";
-    for (const expected of ["连接已认证", "视频已出帧", expectedAudioChecklist, "剪贴板", "input_ack待测", "诊断可复制"]) {
+    for (const expected of [
+      "连接已认证",
+      "视频已出帧",
+      expectedAudioChecklist,
+      "剪贴板",
+      "文件",
+      "窗口",
+      "全屏",
+      "原画",
+      "input_ack待测",
+      "复制诊断可用",
+    ]) {
       if (!videoSnapshot.manualChecklist.includes(expected)) {
         throw new Error(`Mac client manual checklist missing ${expected}: ${videoSnapshot.manualChecklist}`);
       }
