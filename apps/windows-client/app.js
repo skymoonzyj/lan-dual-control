@@ -166,7 +166,8 @@ const audioFirstFrameWaitThresholdMs = 3000;
 const audioStreamStallThresholdMs = 2500;
 const audioStreamStallPollMs = 1000;
 const videoFirstFrameWaitThresholdMs = 3000;
-const videoFirstFrameWaitPollMs = 1000;
+const videoStreamStallThresholdMs = 2500;
+const videoStreamStatusPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -541,6 +542,7 @@ const state = {
   activePort: "",
   videoFrames: 0,
   videoWaitingSince: 0,
+  videoLastFrameAt: 0,
   videoFrameTimes: [],
   lastVideoFrameAgeMs: null,
   lastVideoFrameTimestamp: "",
@@ -2939,6 +2941,7 @@ function dispatchControlEvent(element, eventName = "change") {
 
 function resetVideoFrameStats() {
   state.videoWaitingSince = 0;
+  state.videoLastFrameAt = 0;
   state.videoFrameTimes = [];
   state.actualVideoFps = 0;
   state.lastVideoFrameAgeMs = null;
@@ -2989,6 +2992,7 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
 function recordVideoFrameTime() {
   state.videoWaitingSince = 0;
   const now = performance.now();
+  state.videoLastFrameAt = now;
   state.videoFrameTimes.push(now);
   const cutoff = now - 2000;
   while (state.videoFrameTimes.length > 0 && state.videoFrameTimes[0] < cutoff) {
@@ -3330,6 +3334,33 @@ function renderVideoFirstFrameWaitStatus(now = performance.now()) {
   const waitStatus = getVideoFirstFrameWaitStatus(now);
   if (!waitStatus.waiting) return false;
   elements.remoteStatusText.textContent = `画面：等待视频首帧 · 已等待 ${waitStatus.ageSeconds}s`;
+  syncFloatingControlStatus();
+  return true;
+}
+
+function getVideoStreamStallStatus(now = performance.now()) {
+  const frameCount = Number(state.videoFrames) || 0;
+  const lastFrameAt = Number(state.videoLastFrameAt) || 0;
+  if (!state.connected || frameCount <= 0 || !Number.isFinite(lastFrameAt) || lastFrameAt <= 0) {
+    return { stalled: false, ageMs: 0, ageSeconds: 0, frameCount };
+  }
+  const ageMs = Math.max(0, now - lastFrameAt);
+  if (ageMs < videoStreamStallThresholdMs) {
+    return { stalled: false, ageMs, ageSeconds: 0, frameCount };
+  }
+  return {
+    stalled: true,
+    ageMs,
+    ageSeconds: Math.max(1, Math.round(ageMs / 1000)),
+    frameCount,
+  };
+}
+
+function renderVideoStreamStallStatus(now = performance.now()) {
+  if (renderVideoFirstFrameWaitStatus(now)) return true;
+  const stallStatus = getVideoStreamStallStatus(now);
+  if (!stallStatus.stalled) return false;
+  elements.remoteStatusText.textContent = `画面：视频断流 · 最后收到 ${stallStatus.ageSeconds}s 前 · 接收 ${stallStatus.frameCount} 帧`;
   syncFloatingControlStatus();
   return true;
 }
@@ -4799,11 +4830,15 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
+  const streamStallStatus = firstFrameWaitStatus.waiting ? { stalled: false } : getVideoStreamStallStatus(now);
   const parts = [];
   parts.push(actual > 0 ? `实收 ${actual.toFixed(1)} FPS` : "实收 -- FPS");
   if (firstFrameWaitStatus.waiting) {
     parts.push("等待视频首帧");
     parts.push(`已等待 ${firstFrameWaitStatus.ageSeconds}s`);
+  } else if (streamStallStatus.stalled) {
+    parts.push("视频断流");
+    parts.push(`最后收到 ${streamStallStatus.ageSeconds}s 前`);
   }
   if (requested) parts.push(`请求 ${requested} Hz`);
   if (negotiated) parts.push(`协商 ${negotiated} Hz`);
@@ -9456,7 +9491,7 @@ document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(renderAudioStreamStallStatus, audioStreamStallPollMs);
-setInterval(renderVideoFirstFrameWaitStatus, videoFirstFrameWaitPollMs);
+setInterval(renderVideoStreamStallStatus, videoStreamStatusPollMs);
 setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
 setInterval(expirePendingOutgoingFileResult, remoteFileTransferSweepIntervalMs);
 applyPreferences();

@@ -15,7 +15,7 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
-
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频断流可见性：远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 ## 高冲突区域
 
 - `shared/protocol`
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频断流可见性：远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频首帧等待可见性：远程画面状态行和复制/导出诊断显示 `等待视频首帧` / `已等待 <秒>s`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频首帧等待可见性：页面声音状态行和复制/导出诊断显示 `等待音频首帧` / `已等待 <秒>s`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频断流可见性：页面声音状态行和复制/导出诊断显示 `音频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |

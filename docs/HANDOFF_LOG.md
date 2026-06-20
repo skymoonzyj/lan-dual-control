@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W2 Windows 视频断流可见性
+开发端：Windows Codex
+本轮目标：让 Windows 控制端在画面曾经收到、后来停帧时，直接提示视频断流，而不是停留在最后一次“正在接收”。
+完成内容：新增 `videoLastFrameAt`；任意视频帧到达时记录最后到达时间；连接中且已收到过视频帧后，超过 2.5 秒未收到新帧时，远程画面状态行和复制/导出诊断显示 `视频断流` / `最后收到 <秒>s 前`；首帧未到时仍沿用上一轮 `等待视频首帧`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `videoStreamStallVisible=false` / `streamStallRendered=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 端可见性，不改变 Mac 采集、H.264 编码、网络传输或输入控制。
+下一步建议：真实观感复测时，若显示 `视频断流`，先查 Mac 是否继续发送 video frame 和 WebSocket 是否继续到达；若只是帧率低或卡顿，继续看 `实收 FPS`、`卡顿`、`本机队列`、`恢复暂停`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实观感仍需要用户现场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows 视频首帧等待可见性
 开发端：Windows Codex
 本轮目标：让 Windows 控制端在已连接但一直没有收到第一帧视频时，直接提示首帧等待，而不是只显示已连接或上一次状态。
