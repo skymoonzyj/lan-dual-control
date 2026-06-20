@@ -106,10 +106,11 @@ If Agent Link Board already has a MacHeartbeat= status, the report also emits
 MacHeartbeatFreshness= from the newest checkedAt= timestamp, with checked,
 Mac Codex, and board ages, so old heartbeat status is visible in the first
 Windows resume line.
-If Agent Link Board already has stable MacHeartbeatHealth=, MacPowerHealth=, or
-MacUnattendedHealth= fields, the report also emits the latest safe health
-status separately from freshness, so ok and blocked/warning states cannot be
-confused with stale timestamps.
+If Agent Link Board already has stable MacHeartbeatHealth=, MacCodexHealth=,
+MacPowerHealth=, or MacUnattendedHealth= fields, the report also emits
+the latest safe health status separately from freshness, including Mac Codex
+codexStatus/updatedAt/ageMs/thresholdMs when present, so ok and
+blocked/warning states cannot be confused with stale timestamps.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -688,6 +689,10 @@ function emptyMacHealth(source = "none", textCount = 0, rejectedCount = 0) {
     reason: "",
     checkedAt: "",
     checked: "",
+    codexStatus: "",
+    updatedAt: "",
+    ageMs: null,
+    thresholdMs: null,
     blockers: [],
     warnings: [],
     summary: "not-seen",
@@ -696,6 +701,10 @@ function emptyMacHealth(source = "none", textCount = 0, rejectedCount = 0) {
 }
 
 function emptyMacHeartbeatHealth(source = "none", textCount = 0, rejectedCount = 0) {
+  return emptyMacHealth(source, textCount, rejectedCount);
+}
+
+function emptyMacCodexHealth(source = "none", textCount = 0, rejectedCount = 0) {
   return emptyMacHealth(source, textCount, rejectedCount);
 }
 
@@ -1015,6 +1024,21 @@ function isSafeMacHealthToken(value) {
   return true;
 }
 
+function normalizeMacHealthTimestamp(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length > 48 || !/^[0-9T:Z.+-]+$/i.test(text)) return "";
+  return Number.isFinite(Date.parse(text)) ? text : "";
+}
+
+function parseMacHealthInteger(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (!/^\d{1,12}$/.test(text)) return null;
+  const parsed = Number(text);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function parseMacHealthList(segment, label) {
   const raw = extractLabeledValue(segment, label);
   if (!raw || /^none$/i.test(raw)) return { ok: true, values: [] };
@@ -1046,11 +1070,27 @@ function parseMacHealthSegment(segment, source, fieldName) {
 
   const checkedAt = extractLabeledValue(segment, "checkedAt");
   const checked = extractLabeledValue(segment, "checked");
+  const codexStatusRaw = extractLabeledValue(segment, "codexStatus");
+  if (codexStatusRaw && !isSafeMacHealthToken(codexStatusRaw)) return null;
+  const codexStatus = codexStatusRaw || "";
+  const updatedAtRaw = extractLabeledValue(segment, "updatedAt");
+  const updatedAt = normalizeMacHealthTimestamp(updatedAtRaw);
+  if (updatedAtRaw && !updatedAt) return null;
+  const ageMsRaw = extractLabeledValue(segment, "ageMs");
+  const ageMs = parseMacHealthInteger(ageMsRaw);
+  if (ageMsRaw && ageMs === null) return null;
+  const thresholdMsRaw = extractLabeledValue(segment, "thresholdMs");
+  const thresholdMs = parseMacHealthInteger(thresholdMsRaw);
+  if (thresholdMsRaw && thresholdMs === null) return null;
   const checkedTime = Date.parse(checkedAt);
   const summary = [
     status,
     checkedAt ? `checkedAt=${checkedAt}` : checked ? `checked=${checked}` : "",
     `reason=${reason}`,
+    codexStatus ? `codexStatus=${codexStatus}` : "",
+    updatedAt ? `updatedAt=${updatedAt}` : "",
+    ageMs !== null ? `ageMs=${ageMs}` : "",
+    thresholdMs !== null ? `thresholdMs=${thresholdMs}` : "",
     `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
     `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
   ].filter(Boolean).join(" ");
@@ -1061,6 +1101,10 @@ function parseMacHealthSegment(segment, source, fieldName) {
     reason,
     checkedAt,
     checked,
+    codexStatus,
+    updatedAt,
+    ageMs,
+    thresholdMs,
     blockers: blockers.values,
     warnings: warnings.values,
     summary,
@@ -1102,6 +1146,10 @@ function extractMacHeartbeatHealthFromTexts(texts, source = "text") {
   return extractMacHealthFromTexts(texts, "MacHeartbeatHealth", source);
 }
 
+function extractMacCodexHealthFromTexts(texts, source = "text") {
+  return extractMacHealthFromTexts(texts, "MacCodexHealth", source);
+}
+
 function extractMacPowerHealthFromTexts(texts, source = "text") {
   return extractMacHealthFromTexts(texts, "MacPowerHealth", source);
 }
@@ -1115,6 +1163,20 @@ function extractMacHeartbeatHealthFromBoardState(state) {
   const allResult = extractMacHeartbeatHealthFromTexts(allTexts, "api-state");
   const statusTexts = collectStringValues(state?.statuses);
   const statusResult = extractMacHeartbeatHealthFromTexts(statusTexts, "api-state");
+  if (!statusResult.found) return allResult;
+  return {
+    ...statusResult,
+    textCount: allResult.textCount,
+    segmentCount: allResult.segmentCount,
+    rejectedCount: allResult.rejectedCount,
+  };
+}
+
+function extractMacCodexHealthFromBoardState(state) {
+  const allTexts = collectStringValues(state);
+  const allResult = extractMacCodexHealthFromTexts(allTexts, "api-state");
+  const statusTexts = collectStringValues(state?.statuses);
+  const statusResult = extractMacCodexHealthFromTexts(statusTexts, "api-state");
   if (!statusResult.found) return allResult;
   return {
     ...statusResult,
@@ -1155,6 +1217,11 @@ function extractMacUnattendedHealthFromBoardState(state) {
 function extractMacHeartbeatHealthFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacHeartbeatHealthFromTexts(value ? [value] : [], source);
+}
+
+function extractMacCodexHealthFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacCodexHealthFromTexts(value ? [value] : [], source);
 }
 
 function extractMacPowerHealthFromText(text, source = "text") {
@@ -3516,6 +3583,7 @@ async function getBoardSnapshot(args) {
       macHeartbeatStop: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStop", "stop"),
       macHeartbeatFreshness: extractMacHeartbeatFreshnessFromBoardState(stateResult.state),
       macHeartbeatHealth: extractMacHeartbeatHealthFromBoardState(stateResult.state),
+      macCodexHealth: extractMacCodexHealthFromBoardState(stateResult.state),
       macPowerHealth: extractMacPowerHealthFromBoardState(stateResult.state),
       macUnattendedHealth: extractMacUnattendedHealthFromBoardState(stateResult.state),
       macEvidence: extractMacEvidenceFromBoardState(stateResult.state),
@@ -3566,6 +3634,7 @@ async function getBoardSnapshot(args) {
     macHeartbeatStop: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStop", "stop", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatFreshness: extractMacHeartbeatFreshnessFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatHealth: extractMacHeartbeatHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macCodexHealth: extractMacCodexHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macPowerHealth: extractMacPowerHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macUnattendedHealth: extractMacUnattendedHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macEvidence: extractMacEvidenceFromText(output, result.ok ? "codex-link-client" : "unavailable"),
@@ -4650,6 +4719,9 @@ function makeBoardSummary(report) {
         `MacCodexStaleCall=${report.board.macCodexStaleAction.callCommand}.`,
       ]
       : []),
+    ...(report.board.macCodexHealth?.found
+      ? [`MacCodexHealth=${report.board.macCodexHealth.summary}.`]
+      : []),
     ...(report.board.macPowerHealth?.found
       ? [`MacPowerHealth=${report.board.macPowerHealth.summary}.`]
       : []),
@@ -5095,6 +5167,9 @@ function printHuman(report) {
     if (report.board.macCodexStaleAction?.found) {
       console.log(`  MacCodexStaleAction=${report.board.macCodexStaleAction.summary}`);
       console.log(`  MacCodexStaleCall=${report.board.macCodexStaleAction.callCommand}`);
+    }
+    if (report.board.macCodexHealth?.found) {
+      console.log(`  MacCodexHealth=${report.board.macCodexHealth.summary}`);
     }
     if (report.board.macPowerHealth?.found) {
       console.log(`  MacPowerHealth=${report.board.macPowerHealth.summary}`);

@@ -6,9 +6,12 @@
 
 ## 2026-06-20 MacCodexHealth 稳定短字段
 - `check-mac-heartbeat --checkBoard --boardSummary` 现在会在原有 `codex=...` / `MacHeartbeatHealth=` 之外输出稳定 `MacCodexHealth=<ok|warning|blocked|unknown> reason=<ok|codex-reconnect-signal|codex-reconnect-stuck|mac-codex-stale|...> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...>`；JSON 同步提供 `macCodexHealth`。`check-mac-resume-status --boardSummary` 会从 heartbeat watcher 最近一次心跳派生并显示同一短字段。该字段只包含短 token、时间戳和年龄阈值，不回显 Mac Codex note 原文；不认证、不请求或发送密码、不发 call/input/inject。
+## 2026-06-20 Windows 消费 MacCodexHealth
+- `check-windows-resume-status --checkBoard` 现在会安全消费 Agent Link Board 上的 `MacCodexHealth=`，输出 JSON `board.macCodexHealth`、普通输出和 `--boardSummary` 的 `MacCodexHealth=<status> checkedAt=<...> reason=<reason> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...> blockers=<...> warnings=<...>`。该字段专门表示 Mac Codex 自己的工作/心跳状态，用来区分 “Mac Codex stale/blocked” 和 “Mac host / Mac client / 手工体验链路” 的真实状态；只接受短安全 token，拒绝 password/token/secret、命令形态和 input/inject 候选，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 Windows mac-codex-stale 动作提示
 - `check-windows-resume-status --checkBoard --boardSummary` 现在在只读通讯板时，如果最新 `MacHeartbeatHealth=` 的 `reason`、`blockers` 或 `warnings` 明确包含 `mac-codex-stale`，会额外输出 `MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex` 和无密 `MacCodexStaleCall=node scripts/codex-link-client.mjs ... call ...`。该命令只用于需要 Mac Codex 配合时手动复制发起呼叫；默认不自动发送 call、不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。Mac 心跳恢复 `ok` 时该字段不显示。
+
 ## 2026-06-20 Windows 消费 MacManualUx TargetSource
 - `check-windows-manual-ux-status --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 现在会安全消费 Mac 上板的 `MacManualUx TargetSource=`，支持 `board`、`mac-host-discovery`、`board-discovery`、`manual`、`agent-link-board`、`current-call` 等白名单来源；手工体验第一屏会输出顶层 `TargetSource=...`，恢复总览的 `MacManualUx=` 摘要会保留 `targetSource=...`。缺失时保持 `unknown`，不把来源当成已连接/已认证证据；仍只读通讯板，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 

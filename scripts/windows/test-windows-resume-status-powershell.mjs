@@ -820,6 +820,8 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
   const okCheckedAt = new Date(Date.now() - 20_000).toISOString();
   const blockedCheckedAt = new Date(Date.now() - 25_000).toISOString();
   const olderBlockedCheckedAt = new Date(Date.now() - 90_000).toISOString();
+  const currentCodexCheckedAt = new Date(Date.now() - 15_000).toISOString();
+  const currentCodexUpdatedAt = new Date(Date.now() - 30_000).toISOString();
 
   await withMockHost(async (port) => {
     await withMockLinkBoard(async (board) => {
@@ -890,21 +892,30 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
       assert(payload.board?.macHeartbeatHealth?.found === true, "PowerShell current MacHeartbeatHealth should be found");
       assert(payload.board.macHeartbeatHealth.status === "ok", "PowerShell current MacHeartbeatHealth status without checkedAt should win over older event");
       assert(payload.board.macHeartbeatHealth.checkedAt === "", "PowerShell current MacHeartbeatHealth should preserve missing checkedAt");
+      assert(payload.board?.macCodexHealth?.found === true, "PowerShell current MacCodexHealth should be found");
+      assert(payload.board.macCodexHealth.status === "ok", "PowerShell current MacCodexHealth status mismatch");
+      assert(payload.board.macCodexHealth.reason === "ok", "PowerShell current MacCodexHealth reason mismatch");
+      assert(payload.board.macCodexHealth.codexStatus === "coding", "PowerShell current MacCodexHealth codexStatus mismatch");
+      assert(payload.board.macCodexHealth.updatedAt === currentCodexUpdatedAt, "PowerShell current MacCodexHealth updatedAt mismatch");
+      assert(payload.board.macCodexHealth.ageMs === 15000, "PowerShell current MacCodexHealth ageMs mismatch");
+      assert(payload.board.macCodexHealth.thresholdMs === 300000, "PowerShell current MacCodexHealth thresholdMs mismatch");
+      assert(payload.board.macCodexHealth.checkedAt === currentCodexCheckedAt, "PowerShell current MacCodexHealth checkedAt mismatch");
       assertIncludes(payload.boardSummary, "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none.", "PowerShell current MacHeartbeatHealth board summary");
+      assertIncludes(payload.boardSummary, `MacCodexHealth=ok checkedAt=${currentCodexCheckedAt} reason=ok codexStatus=coding updatedAt=${currentCodexUpdatedAt} ageMs=15000 thresholdMs=300000 blockers=none warnings=none.`, "PowerShell current MacCodexHealth board summary");
       assertNotIncludes(payload.boardSummary, "mac-codex-stale", "PowerShell current MacHeartbeatHealth board summary should not use older event");
     }, {
       statuses: {
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
           status: "online",
-          note: "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none",
+          note: `MacHeartbeatHealth=ok reason=ok blockers=none warnings=none MacCodexHealth=ok reason=ok codexStatus=coding updatedAt=${currentCodexUpdatedAt} ageMs=15000 thresholdMs=300000 checkedAt=${currentCodexCheckedAt}`,
         },
       },
       events: [
         {
           type: "status",
           from: "Mac Heartbeat",
-          text: `MacHeartbeatHealth=blocked checkedAt=${olderBlockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+          text: `MacHeartbeatHealth=blocked checkedAt=${olderBlockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none MacCodexHealth=blocked checkedAt=${olderBlockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
         },
       ],
     });
@@ -926,6 +937,7 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth blocked board summary failed\n${output}`);
       assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none.`, "PowerShell MacHeartbeatHealth blocked board summary");
+      assertIncludes(output, `MacCodexHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none.`, "PowerShell MacCodexHealth blocked board summary");
       assertIncludes(output, "MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex", "PowerShell MacCodexStaleAction board summary");
       assertIncludes(output, "MacCodexStaleCall=node scripts/codex-link-client.mjs", "PowerShell MacCodexStaleAction call command");
       assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth blocked board summary should not leak rejected candidates");
@@ -934,14 +946,14 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
           status: "blocked",
-          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none MacCodexHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
         },
       },
       events: [
         {
           type: "message",
           from: "Mac Codex",
-          text: "MacHeartbeatHealth=warning reason=secret-value --password secret-value blockers=none warnings=none",
+          text: "MacHeartbeatHealth=warning reason=secret-value --password secret-value blockers=none warnings=none MacCodexHealth=warning reason=secret-value --password secret-value blockers=none warnings=none",
         },
       ],
     });
@@ -962,6 +974,7 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth human output failed\n${output}`);
       assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`, "PowerShell MacHeartbeatHealth human output");
+      assertIncludes(output, `MacCodexHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`, "PowerShell MacCodexHealth human output");
       assertIncludes(output, "MacCodexStaleAction=status=blocked reason=mac-codex-stale", "PowerShell MacCodexStaleAction human output");
       assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth human output should not leak rejected candidates");
       console.log("[OK] PowerShell resume status extracts Mac heartbeat health from Agent Link Board safely");
@@ -970,7 +983,7 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
           status: "blocked",
-          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none MacCodexHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
         },
       },
     });

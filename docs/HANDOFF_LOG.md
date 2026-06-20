@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 消费 MacCodexHealth
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏直接读懂 Mac Codex 自身健康状态，避免把 Mac Codex stale/blocked 和 Mac host/client 远控链路混在一起。
+完成内容：
+- `check-windows-resume-status` 新增安全 `MacCodexHealth=` 解析，优先使用 Agent Link Board 当前 status，输出 JSON、普通输出和 `--boardSummary`，并保留 `codexStatus/updatedAt/ageMs/thresholdMs`。
+- `MacCodexHealth` 只表示 Mac Codex 状态；`MacHeartbeatHealth`、`MacPowerHealth`、`MacUnattendedHealth`、`MacManualUx` 仍分别表示 host/client/电源/值守/手工体验链路。
+- Node 与 PowerShell wrapper 回归覆盖当前 status 优先、blocked 摘要、人类输出和敏感候选拒绝。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于缺少 `MacCodexHealth`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 该字段只读展示，不自动刷新 Mac Codex，也不代表 Mac host/client 离线；需要配合时仍通过通讯板无密 call 协调。
+下一步建议：
+- 下次开工先看 `MacCodexHealth=`、`MacHeartbeatHealth=` 和 `MacManualUx=` 三类字段分别定位：Codex 协作状态、host/client 健康、手工体验窗口。
+是否改了协议：否。只扩展 Windows 只读通讯板摘要消费。
+是否需要另一端配合：不需要立即配合；Mac 端继续稳定上报 `MacCodexHealth=` 即可。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 MacCodexHealth 稳定短字段
