@@ -1403,6 +1403,7 @@ function buildSnapshotExpression() {
       reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
       passwordSafety: text("#passwordSafetyStatus"),
       passwordLocationHint: text("#passwordLocationHint"),
+      passwordDescribedBy: document.querySelector("#passwordInput")?.getAttribute("aria-describedby") || "",
       copyLogButtonDisabled: document.querySelector("#copyLogButton")?.disabled || false,
       logCopyStatus: text("#logCopyStatus"),
       exportLogButtonDisabled: document.querySelector("#exportLogButton")?.disabled || false,
@@ -2854,6 +2855,16 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     ) {
       throw new Error(`Mac client password location hint mismatch: ${JSON.stringify({
         passwordLocationHint: defaultSettingsSnapshot.passwordLocationHint,
+      })}`);
+    }
+    if (
+      !defaultSettingsSnapshot.passwordDescribedBy.split(/\s+/).includes("passwordSafetyStatus") ||
+      !defaultSettingsSnapshot.passwordDescribedBy.split(/\s+/).includes("passwordLocationHint") ||
+      defaultSettingsSnapshot.passwordDescribedBy.includes(args.clientPassword || "demo-password") ||
+      /demo-password/i.test(defaultSettingsSnapshot.passwordDescribedBy)
+    ) {
+      throw new Error(`Mac client password aria description mismatch: ${JSON.stringify({
+        passwordDescribedBy: defaultSettingsSnapshot.passwordDescribedBy,
       })}`);
     }
     if (args.enableAudio) {
