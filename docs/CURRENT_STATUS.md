@@ -3,6 +3,9 @@
 最后更新：2026-06-21
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
+## 2026-06-21 W2 H.264 恢复后队列宽限防循环
+- 针对最新真实复测中 `queue≈533ms`、`decode≈256ms`、`needsKeyframe=yes`、原因反复回到 `queue-overflow-wait-keyframe` 的 W2 视频恢复循环，Windows 控制端新增 H.264 恢复后短队列宽限：刚通过 `keyframe-wait-h264-recovery` / `visibility-return-h264-recovery` 重新请求关键帧后的约 `1600ms` 内，只要本机队列不是极端堆积（最旧帧不超过约 `1200ms`、帧数受刷新率上限约束），不会立刻再次关 decoder 触发 `queue-overflow-wait-keyframe`，而是让关键帧恢复窗口完成；宽限过期或队列过大仍保留原低延迟丢旧保护。页面回归先红于 `postRecoveryQueueGrace=false`，绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 显示 `postRecoveryGrace=yes`。不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject；仍需用户真实最小化/切 app/切回复测确认 W2 是否不再关键帧等待循环。
 ## 2026-06-21 W4 音频恢复后 snap-live 防积压
 - Windows 控制端在 `a51cc60` 的音频可见性恢复基础上继续补了一层跟随窗口：页面恢复可见/聚焦后的约 `3000ms` 内，如果 WebAudio 队列再次超过约 `180ms`，会把 active/future scheduled source 都丢掉并把下一帧播放贴回当前 `now + 120ms`，诊断原因改为 `queue-overflow-snap-live`。这样后台回来后不会因为旧播放尾巴或后续排队继续积累延迟。`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000` 已覆盖 `postVisibilitySnapToLive`，完整 `--diagnosticsOnly` 也通过。不改系统声音输出、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W2/W4 背景媒体复测进入 Windows 恢复总览

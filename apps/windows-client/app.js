@@ -178,6 +178,8 @@ const h264VisibilityRecoveryMinimumHiddenMs = 250;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
 const h264KeyFrameWaitRecoveryTimeoutMs = 900;
 const h264KeyFrameWaitRecoveryRetryMs = 900;
+const h264RecoveryQueueGraceMs = 1600;
+const h264RecoveryQueueGraceAgeMs = 1200;
 const h264FallbackRecoveryCooldownMs = 2500;
 const h264FallbackRecoveryStableJpegFrames = 3;
 const h264FallbackRecoveryLoopWindowMs = 15000;
@@ -583,6 +585,7 @@ const state = {
   h264SkippedDeltaFrames: 0,
   h264KeyFrameWaitStartedAt: 0,
   h264KeyFrameRecoveryLastRequestedAt: 0,
+  h264RecoveryQueueGraceUntil: 0,
   h264DecodedFrames: 0,
   h264ReceivedFrames: 0,
   h264ReceivedKeyFrames: 0,
@@ -3145,6 +3148,7 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264SkippedDeltaFrames = 0;
   state.h264KeyFrameWaitStartedAt = 0;
   state.h264KeyFrameRecoveryLastRequestedAt = 0;
+  state.h264RecoveryQueueGraceUntil = 0;
   state.h264DecodedFrames = 0;
   if (resetFallback) {
     resetH264ReceiveEvidence();
@@ -9061,9 +9065,46 @@ function shouldKeepH264DecoderForFirstSurface(metrics) {
   );
 }
 
+function getH264RecoveryQueueGraceFrames() {
+  const fps = Math.max(
+    1,
+    Math.min(
+      60,
+      Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value) || 30,
+    ),
+  );
+  return Math.max(h264MaximumQueuedFrames, Math.ceil(fps * 1.2));
+}
+
+function shouldKeepH264DecoderForRecoveryQueueGrace(metrics, now = performance.now()) {
+  const graceUntil = Number(state.h264RecoveryQueueGraceUntil) || 0;
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp) || graceUntil <= 0 || timestamp > graceUntil) {
+    return false;
+  }
+  if (
+    metrics.queueLength > getH264RecoveryQueueGraceFrames() ||
+    metrics.oldestAgeMs > h264RecoveryQueueGraceAgeMs
+  ) {
+    return false;
+  }
+  const status = String(state.h264DecoderStatus || "").toLowerCase();
+  const dropReason = String(state.videoLastDropReason || "").toLowerCase();
+  return (
+    state.h264DecoderNeedsKeyFrame === true ||
+    status === "recovering" ||
+    status === "waiting-keyframe" ||
+    dropReason === "keyframe-wait-h264-recovery" ||
+    dropReason === "visibility-return-h264-recovery"
+  );
+}
+
 function shouldResyncH264DecoderQueue(now = performance.now()) {
   const metrics = getH264DecoderQueueMetrics(now);
-  if (shouldKeepH264DecoderForFirstSurface(metrics)) {
+  if (
+    shouldKeepH264DecoderForFirstSurface(metrics) ||
+    shouldKeepH264DecoderForRecoveryQueueGrace(metrics, now)
+  ) {
     return false;
   }
   return (
@@ -9152,6 +9193,7 @@ function getH264KeyFrameWaitSkippedDeltaLimit() {
 function clearH264KeyFrameWaitTimers() {
   state.h264KeyFrameWaitStartedAt = 0;
   state.h264KeyFrameRecoveryLastRequestedAt = 0;
+  state.h264RecoveryQueueGraceUntil = 0;
 }
 
 function startH264KeyFrameWait(now = performance.now(), { requestedNow = false } = {}) {
@@ -9163,6 +9205,7 @@ function startH264KeyFrameWait(now = performance.now(), { requestedNow = false }
   }
   if (requestedNow) {
     state.h264KeyFrameRecoveryLastRequestedAt = timestamp;
+    state.h264RecoveryQueueGraceUntil = timestamp + h264RecoveryQueueGraceMs;
   }
 }
 

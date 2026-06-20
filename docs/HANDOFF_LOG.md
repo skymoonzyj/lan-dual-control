@@ -18,6 +18,17 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 H.264 恢复后队列宽限防循环
+开发端：Windows Codex
+本轮目标：收口 `a51cc607` 后仍出现的 W2 视频关键帧等待循环，避免后台/切 app 回来后刚请求恢复又立刻被本机队列超时打断。
+完成内容：Windows 控制端新增 `h264RecoveryQueueGraceMs=1600` / `h264RecoveryQueueGraceAgeMs=1200`。当 `requestH264VideoRecovery` 通过 `keyframe-wait-h264-recovery` 或可见性恢复请求新关键帧后，短窗口内允许小幅本机队列恢复，不再因约 `533ms` 队列年龄马上再次关 decoder；宽限过期、队列年龄超过约 `1200ms` 或帧数极端堆积时仍按原逻辑 `queue-overflow-wait-keyframe` 丢旧保实时。测试新增 `postRecoveryQueueGrace` 红灯场景，复现旧逻辑会立刻再次关 decoder。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `postRecoveryQueueGrace=false` / `postRecoveryGraceResync.dropFrame=true`；绿灯后 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、同一 diagnosticsOnly 通过并输出 `postRecoveryGrace=yes`。
+遗留问题：仍需用户真实最小化/切 app/切回复测，确认 `needsKeyframe=yes` 和 `queue-overflow-wait-keyframe` 不再每约 0.9-1.1s 循环；音频 W4 snap-live 也需同步看 dropped/resync/refill。
+下一步建议：双方拉最新；Mac 保持 host 在线；Windows/用户运行 `Run-WinClientRetest-And-Post.cmd`，只把脱敏 `W2W3Retest=` / `W2H264BoardDiagnosis=` 上板，不发送密码或真实输入事件。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W4 音频恢复后 snap-live 防积压
 开发端：Windows Codex
 本轮目标：补强后台/切 app 恢复后的音频低延迟策略，避免恢复后一小段时间又继续积累播放尾巴。
