@@ -88,6 +88,19 @@ function makeState() {
   };
 }
 
+function makeEvents(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const eventNumber = index + 1;
+    return {
+      id: `event-${eventNumber}`,
+      at: `2026-06-20T00:${String(eventNumber).padStart(2, "0")}:40.000Z`,
+      type: "message",
+      from: "Mac Codex",
+      text: `event ${eventNumber}`,
+    };
+  });
+}
+
 async function readJson(request) {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
@@ -213,6 +226,34 @@ async function checkWatchOnceShowsUserPresence(args) {
   console.log("[OK] codex-link-client watch --once surfaces structured userPresence safely");
 }
 
+async function checkWatchOnceLimitsEventsByDefault(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "watch", "--once"], args);
+    assert(result.status === 0, `watch --once should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "recentEvents: last 10 of 15", "watch --once recent event summary");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 1\n", "watch --once default events");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 5\n", "watch --once default events");
+    assertIncludes(result.stdout, "message Mac Codex: event 6\n", "watch --once default events");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "watch --once default events");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `watch --once should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client watch --once defaults to the most recent events");
+}
+
+async function checkWatchOnceCanShowAllEvents(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "watch", "--once", "--allEvents"], args);
+    assert(result.status === 0, `watch --once --allEvents should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertNotIncludes(result.stdout, "recentEvents: last 10 of 15", "watch --once --allEvents");
+    assertIncludes(result.stdout, "message Mac Codex: event 1\n", "watch --once --allEvents");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "watch --once --allEvents");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `watch --once --allEvents should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client watch --once can still show the full event history");
+}
+
 async function checkPresencePost(args) {
   await withFakeBoard(makeState(), async (serverUrl, requests) => {
     const result = await run([
@@ -268,6 +309,8 @@ async function main() {
   await checkStateJson(args);
   await checkStateTextStillHumanReadable(args);
   await checkWatchOnceShowsUserPresence(args);
+  await checkWatchOnceLimitsEventsByDefault(args);
+  await checkWatchOnceCanShowAllEvents(args);
   await checkPresencePost(args);
   await checkPresenceUnsupportedHint(args);
   console.log("[OK] codex-link-client self-test passed");

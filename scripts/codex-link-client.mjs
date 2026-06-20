@@ -6,6 +6,8 @@ const defaults = {
   intervalMs: 1000,
 };
 
+const defaultWatchOnceEventLimit = 10;
+
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
 
@@ -79,7 +81,13 @@ async function watch(options) {
       console.log(state.currentCall ? formatCall(state.currentCall) : "[call] none");
     }
 
-    for (const event of state.events || []) {
+    const events = state.events || [];
+    const visibleEvents = once ? selectWatchOnceEvents(events, options) : events;
+    if (once && visibleEvents.length < events.length) {
+      console.log(`recentEvents: last ${visibleEvents.length} of ${events.length}`);
+    }
+
+    for (const event of visibleEvents) {
       if (seen.has(event.id)) continue;
       seen.add(event.id);
       console.log(formatEvent(event));
@@ -95,6 +103,11 @@ function printWatchHeader(state) {
   console.log("userPresence:");
   console.log(formatUserPresence(state.userPresence));
   console.log("");
+}
+
+function selectWatchOnceEvents(events, options) {
+  if (options.allEvents) return events;
+  return events.slice(-defaultWatchOnceEventLimit);
 }
 
 async function post(options, path, body) {
@@ -230,7 +243,7 @@ function sleep(ms) {
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
+  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once] [--allEvents]
   node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
   node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"
