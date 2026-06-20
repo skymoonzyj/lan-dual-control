@@ -284,7 +284,7 @@ function makeAnnexBPayload(nalTypes) {
 
 function makeVideoFrame(frameId) {
   const timestampUs = 1_000_000 + frameId * 33_333;
-  const keyFrame = frameId === 1 || frameId % 30 === 0;
+  const keyFrame = frameId === 1 || frameId % 5 === 0;
   const payload = keyFrame ? makeAnnexBPayload([7, 8, 5]) : makeAnnexBPayload([1]);
   return {
     type: "video_frame",
@@ -629,6 +629,8 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "boardSummary should include media request context");
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
     assert(lines[0].includes("firstKeyNal=7,8,5"), "boardSummary should include first H.264 keyframe NAL types");
+    assert(lines[0].includes("keyGapFramesMax=5"), "boardSummary should include H.264 keyframe max frame gap");
+    assert(lines[0].includes("keyGapMsMax="), "boardSummary should include H.264 keyframe max time gap");
     assert(lines[0].includes("resource=off"), "boardSummary should mark resource sampling off by default");
     assert(lines[0].includes("password was not printed"), "boardSummary should include password safety note");
     assert(lines[0].includes("playTone=false"), "boardSummary should show no test tone by default");

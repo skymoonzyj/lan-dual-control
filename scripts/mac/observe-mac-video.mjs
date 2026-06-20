@@ -346,6 +346,10 @@ function createVideoStats(args) {
       keyFramesWithParameterSets: 0,
       firstNalTypes: [],
       firstKeyFrameNalTypes: [],
+      keyFrameIntervalFrames: [],
+      keyFrameIntervalMs: [],
+      lastKeyFrameFrameId: null,
+      lastKeyFrameTimestampUs: null,
       nalTypes: new Map(),
     },
     invalidFrames: [],
@@ -374,7 +378,7 @@ function createVideoStats(args) {
     countValue(stats.activeDisplayIds, frame.activeDisplayId || frame.displayId || "");
     countValue(stats.displayNames, frame.displayName || "");
     countValue(stats.sizes, `${frame.width || "?"}x${frame.height || "?"}`);
-    trackH264Frame(stats, h264Info);
+    trackH264Frame(stats, h264Info, frame);
 
     const problems = [
       ...validateVideoFrame(frame, args, h264Info),
@@ -564,7 +568,7 @@ function findAnnexBStartCode(bytes, fromIndex) {
   return null;
 }
 
-function trackH264Frame(stats, h264Info) {
+function trackH264Frame(stats, h264Info, frame = {}) {
   if (!h264Info) return;
   stats.h264.frames += 1;
   if (stats.h264.firstNalTypes.length === 0) {
@@ -578,6 +582,7 @@ function trackH264Frame(stats, h264Info) {
     if (stats.h264.firstKeyFrameNalTypes.length === 0) {
       stats.h264.firstKeyFrameNalTypes = h264Info.nalTypes;
     }
+    trackH264KeyFrameInterval(stats.h264, frame);
   }
   if (h264Info.keyFrameFlag) stats.h264.keyFrameFlagFrames += 1;
   if (h264Info.payloadKeyFrame) stats.h264.payloadKeyFrames += 1;
@@ -585,6 +590,26 @@ function trackH264Frame(stats, h264Info) {
   if (h264Info.hasPps) stats.h264.ppsFrames += 1;
   if (h264Info.hasIdr) stats.h264.idrFrames += 1;
   if (h264Info.keyFrameWithParameterSets) stats.h264.keyFramesWithParameterSets += 1;
+}
+
+function trackH264KeyFrameInterval(h264, frame) {
+  const frameId = Number(frame.frameId);
+  if (Number.isFinite(frameId) && Number.isFinite(h264.lastKeyFrameFrameId)) {
+    const frameGap = frameId - h264.lastKeyFrameFrameId;
+    if (frameGap > 0) h264.keyFrameIntervalFrames.push(frameGap);
+  }
+  if (Number.isFinite(frameId)) {
+    h264.lastKeyFrameFrameId = frameId;
+  }
+
+  const timestampUs = Number(frame.timestampUs);
+  if (Number.isFinite(timestampUs) && Number.isFinite(h264.lastKeyFrameTimestampUs)) {
+    const timestampGapUs = timestampUs - h264.lastKeyFrameTimestampUs;
+    if (timestampGapUs > 0) h264.keyFrameIntervalMs.push(timestampGapUs / 1000);
+  }
+  if (Number.isFinite(timestampUs)) {
+    h264.lastKeyFrameTimestampUs = timestampUs;
+  }
 }
 
 function summarizeStats(stats, args) {
@@ -674,6 +699,8 @@ function makeObservation(stats, args) {
 }
 
 function makeH264Observation(h264) {
+  const keyFrameIntervalFrames = summarizeNumberList(h264.keyFrameIntervalFrames);
+  const keyFrameIntervalMs = summarizeNumberList(h264.keyFrameIntervalMs);
   return {
     frames: h264.frames,
     keyFrames: h264.keyFrames,
@@ -685,6 +712,18 @@ function makeH264Observation(h264) {
     keyFramesWithParameterSets: h264.keyFramesWithParameterSets,
     firstNalTypes: h264.firstNalTypes,
     firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
+    keyFrameIntervalFrames: {
+      count: keyFrameIntervalFrames.count,
+      min: Math.round(keyFrameIntervalFrames.min),
+      avg: Number(keyFrameIntervalFrames.avg.toFixed(2)),
+      max: Math.round(keyFrameIntervalFrames.max),
+    },
+    keyFrameIntervalMs: {
+      count: keyFrameIntervalMs.count,
+      min: Math.round(keyFrameIntervalMs.min),
+      avg: Number(keyFrameIntervalMs.avg.toFixed(2)),
+      max: Math.round(keyFrameIntervalMs.max),
+    },
     nalTypes: countsToObject(h264.nalTypes),
   };
 }
@@ -841,8 +880,10 @@ function summarizeFrameTiming(stats) {
 }
 
 function summarizeNumberList(values) {
-  if (values.length === 0) return { avg: 0, max: 0 };
+  if (values.length === 0) return { count: 0, min: 0, avg: 0, max: 0 };
   return {
+    count: values.length,
+    min: Math.min(...values),
     avg: values.reduce((sum, value) => sum + value, 0) / values.length,
     max: Math.max(...values),
   };

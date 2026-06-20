@@ -154,7 +154,7 @@ function makeAnnexBPayload(nalTypes) {
 
 function makeVideoFrame(frameId, options = {}) {
   const timestampUs = 1_000_000 + frameId * 33_333;
-  const keyFrame = options.keyframes !== false && (frameId === 1 || frameId % 30 === 0);
+  const keyFrame = options.keyframes !== false && (frameId === 1 || frameId % 3 === 0);
   const payload = keyFrame
     ? makeAnnexBPayload(options.omitParameterSets ? [1] : [7, 8, 5])
     : makeAnnexBPayload([1]);
@@ -380,6 +380,12 @@ async function assertJsonSuccess(timeoutMs) {
     }
     if (Number(payload.observation.h264.keyFramesWithParameterSets) < 1) {
       throw new Error(`JSON success should count H.264 keyframes with parameter sets.\n${result.stdout}`);
+    }
+    if (Number(payload.observation.h264.keyFrameIntervalFrames?.count) < 1 || Number(payload.observation.h264.keyFrameIntervalFrames?.max) !== 3) {
+      throw new Error(`JSON success should report H.264 keyframe interval frames.\n${result.stdout}`);
+    }
+    if (Number(payload.observation.h264.keyFrameIntervalMs?.count) < 1 || Number(payload.observation.h264.keyFrameIntervalMs?.max) < 90) {
+      throw new Error(`JSON success should report H.264 keyframe interval timing.\n${result.stdout}`);
     }
     if (payload.observation?.activeDisplayIds?.main < 1) {
       throw new Error(`JSON success should count activeDisplayId main.\n${result.stdout}`);

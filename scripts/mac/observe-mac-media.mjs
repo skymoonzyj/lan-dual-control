@@ -733,7 +733,15 @@ function formatH264ProbeSummary(h264) {
     `keyParam=${h264.keyFramesWithParameterSets || 0}`,
     formatH264NalTypes("firstKeyNal", h264.firstKeyFrameNalTypes),
     formatH264NalTypes("firstNal", h264.firstNalTypes),
+    formatH264Interval("keyGapFramesMax", h264.keyFrameIntervalFrames, 0),
+    formatH264Interval("keyGapMsMax", h264.keyFrameIntervalMs, 0),
   ].filter(Boolean).join(",");
+}
+
+function formatH264Interval(label, value, decimals) {
+  const max = Number(value?.max);
+  if (!Number.isFinite(max) || max <= 0) return "";
+  return `${label}=${decimals > 0 ? max.toFixed(decimals) : Math.round(max)}`;
 }
 
 function formatH264NalTypes(label, value) {
