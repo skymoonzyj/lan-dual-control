@@ -269,6 +269,23 @@ function assertWindowsHostBoardSummary(text, label) {
   assertIncludes(text || "", "WindowsHostReadiness=node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary", label);
 }
 
+function assertHeartbeatCriticalCommandsBeforeTruncation(text, label) {
+  const limit = 3400;
+  for (const key of [
+    "MacClientDiscoverWindows=",
+    "MacClientDiscoverWindowsCall=",
+    "MacClientFormalChecklist=",
+    "MacClientFormalSmoke=",
+    "MacClientPromptPasswordSmoke=",
+    "MacClientBrowserSelfTest=",
+    "MacScriptHelp=",
+  ]) {
+    const position = String(text || "").indexOf(key);
+    assert(position >= 0, `${label} should include ${key}`);
+    assert(position < limit, `${label} should surface ${key} before ${limit} chars; got ${position}`);
+  }
+}
+
 function assertMacClientDiscoverWindowsCallCommand(command, label) {
   assertIncludes(command || "", "node scripts/mac/discover-windows-hosts.mjs", label);
   assertIncludes(command || "", "--checkBoard", label);
@@ -597,6 +614,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "offline board summary");
+  assertHeartbeatCriticalCommandsBeforeTruncation(payload.boardSummary || "", "offline board summary");
   assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "offline board summary");
   assertCommandSet(payload.commands, "offline commands");
   assertNoSecrets(`${result.stdout}\n${result.stderr}`, "offline output");
@@ -713,6 +731,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "online board summary");
       assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "online board summary");
+      assertHeartbeatCriticalCommandsBeforeTruncation(payload.boardSummary || "", "online board summary");
       assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "online board summary");
       assertNotIncludes(payload.boardSummary || "", "MacClientDiagnosticsOk", "online board summary without board check");
       assertCommandSet(payload.commands, "online commands");

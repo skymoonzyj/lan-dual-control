@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Mac Heartbeat summary truncation
+- `check-mac-heartbeat --boardSummary` 现在把 Mac client 页面/诊断、Windows discovery/call、formal checklist/smoke、prompt-password smoke、本地 browser self-test 和 `MacScriptHelp=` 提前到摘要前段，避免 Agent Link Board 状态 note 截断时只剩长的 host/LaunchAgent 命令而看不到 Mac 控 Windows 关键入口。命令内容和安全边界不变：默认 heartbeat 仍只读，不连接 Windows、不认证、不请求或发送密码、不发 call/input/inject；`MacClientDiscoverWindowsCall=` 仍只是显式复制入口。
+
 ## 2026-06-20 Mac H.264 discovery idle state
 - `check-mac-resume-status` 和 `check-mac-host-readiness` 不再把 `/discovery` 里的 `h264Stream=true` + `capturePipeline=background-jpeg` 误报为 `h264-fallback` warning。Mac host 的 discovery 在没有客户端协商 H.264 会话前会报告后台 JPEG 空闲态；这不等于 H.264 失败。摘要仍保留 `h264=on pipeline=background-jpeg` 事实，真正长测前的 H.264/PCM 质量仍按 `MacHostMedia=... --probeMedia --promptPassword --boardSummary`、browser/formal smoke 或实际会话诊断验证；不改协议、不认证、不请求密码、不发 input/inject。
 

@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac Heartbeat 摘要抗截断排序
+开发端：Mac Codex
+本轮目标：避免最新 `Mac Heartbeat` 上板 note 被 Agent Link Board 截断时，Mac 控 Windows 的关键入口落在后段不可见。
+完成内容：
+- `check-mac-heartbeat --boardSummary` 将 `MacClientPage=`、`MacClientDiagnostics=`、`MacClientDiscoverWindows=`、`MacClientDiscoverWindowsCall=`、`MacClientFormalChecklist=`、`MacClientFormalSmoke=`、`MacClientPromptPasswordSmoke=`、`MacClientBrowserSelfTest=` 和 `MacScriptHelp=` 提前到摘要前段。
+- 保持所有命令内容与安全边界不变；长的 host 启停、LaunchAgent、手工清单说明仍保留在后段。
+- 回归测试新增关键标签必须在摘要前 3400 字符内，防止以后继续堆长文本又把关键入口挤到截断区。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败于 `MacClientDiscoverWindowsCall=` 位置 3451，超过前段阈值。
+- 绿灯：同一测试通过；真实 `check-mac-heartbeat --checkBoard --boardSummary` 位置统计显示关键标签在 1525-2222 字符，`MacLaunchAgentPlan=` 移到 3893。
+遗留问题：
+- 当前 Agent Link Board active call 仍是 Windows host readiness，需要 Windows 端处理；本轮没有刷新或覆盖该 call。
+下一步建议：
+- 白天继续时，最新 `Mac Heartbeat` 即使被通讯板截断，也应优先能看到 Mac client/discovery/formal/browser/help 关键入口；如果要处理 Windows host readiness，仍等 Windows 端按 currentCall 刷新。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 代码修改；Windows host readiness call 仍需 Windows 端按原 call 处理。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac H.264 discovery 空闲态误报修正
 开发端：Mac Codex
 本轮目标：修正 Mac resume/readiness 把 `/discovery` 的 `h264Stream=true` + `capturePipeline=background-jpeg` 当成 H.264 fallback warning 的误导口径。
