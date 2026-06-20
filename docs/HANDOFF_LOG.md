@@ -46,6 +46,34 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 隐藏密码提示中文化
+开发端：Windows Codex
+本轮目标：避免现场看到 `Mac host password:` 时不知道密码该输到哪里。
+完成内容：
+- `check-mac-formal-e2e.mjs` 和 `test-windows-client-browser.mjs` 的 `--promptPassword` 提示改为中文：明确在当前终端输入 Mac 端当前临时密码，输入不显示，回车继续，不要输到网页或通讯板。
+- 实际隐藏输入等待标签改为 `当前终端输入 Mac 临时密码（输入不显示，回车继续）: `。
+- `test-mac-formal-e2e-preflight` 新增源码断言，防止两个 Windows 入口退回英文 `Mac host password:`，并保留非交互终端先提示再拒绝的回归。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000` 先失败于 `formal runner prompt label leaked unexpected text: promptHidden("Mac host password: ")`。
+- 绿灯：`node --check scripts/windows/check-mac-formal-e2e.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- 绿灯：`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+遗留问题：
+- 这只改善终端隐藏密码提示；真实连接仍需要用户在本机输入当前临时密码。
+下一步建议：
+- 现场若只想打开控制页，继续用 `Start-Windows-Control-Mac.cmd` / `start-windows-control-mac.ps1`；只有 formal E2E 或 browser runner 显示上述终端提示时，才在黑色终端里输入密码。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 日期：2026-06-20 Windows 控 Mac 入口自动发现 Mac host
 开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 最短入口默认只读发现最新 Mac host，避免 Mac IP 变化后仍预填旧地址。
@@ -8107,7 +8135,7 @@
 - 冲突标记扫描
 遗留问题：
 - 本轮不启动正式 Mac host、不写 LaunchAgent、不认证 WebSocket、不发送密码、不执行 input/inject。
-- 真正的 formal Plan 2 H.264 canvas 连接仍需要用户本机隐藏输入 Mac 密码；如果命令停在 `Mac host password:`，属于等待现场输入。
+- 真正的 formal Plan 2 H.264 canvas 连接仍需要用户本机隐藏输入 Mac 密码；如果命令停在“当前终端输入 Mac 临时密码（输入不显示，回车继续）: ”，就在这个黑色终端里输入 Mac 端当前临时密码并回车，输入不会显示。
 下一步建议：
 - Mac 侧先把当前 30Hz 上限按 `MacMaxFpsSafeStart=` 前台启动或按 `MacMaxFpsPlan=` 写入 LaunchAgent，再复跑 readiness/status；Windows 侧再做正式 60Hz 第二步。
 是否改了协议：否。

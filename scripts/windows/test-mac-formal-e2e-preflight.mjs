@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -747,6 +748,18 @@ async function testBrowserPromptExplainsPasswordWait(args) {
   print("OK", "Browser runner explains password wait before interactive prompt");
 }
 
+function testPromptLabelsUseChineseTerminalGuidance() {
+  for (const [label, scriptPath] of [
+    ["formal runner", runnerScript],
+    ["browser runner", browserRunnerScript],
+  ]) {
+    const source = readFileSync(scriptPath, "utf8");
+    assertNotIncludes(source, 'promptHidden("Mac host password: ")', `${label} prompt label`);
+    assertIncludes(source, 'promptHidden("当前终端输入 Mac 临时密码（输入不显示，回车继续）: ")', `${label} prompt label`);
+    assertIncludes(source, "请直接在当前终端窗口输入 Mac 端当前临时密码", `${label} prompt hint`);
+  }
+  print("OK", "Windows prompt-password labels clearly point to the current terminal");
+}
 async function testMockFastPath(args) {
   await withMockHost(async (port) => {
     const result = await runRunner([
@@ -829,6 +842,7 @@ async function main() {
   }
 
   const args = parseArgs(process.argv);
+  testPromptLabelsUseChineseTerminalGuidance();
   await testOfflinePreflight(args);
   await testOfflineJson(args);
   await testOfflineBoardSummary(args);
