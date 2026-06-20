@@ -139,6 +139,14 @@ Machine-readable JSON fields:
                                   in argv.
   commands.macResumeStatus       Follow-up Mac resume status command with the
                                   standard MacResumeStatus label.
+  commands.windowsHostStatus     Secret-free Windows-side local host status
+                                  command for the active Mac -> Windows
+                                  preflight call; it does not authenticate,
+                                  request a password, or send input.
+  commands.windowsHostReadiness  Secret-free Windows-side local host readiness
+                                  command for the active Mac -> Windows
+                                  preflight call; it does not authenticate,
+                                  request a password, or send input.
   commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
                                   short validation command; prompts locally
                                   and never embeds a password in argv.
@@ -701,6 +709,8 @@ function makeCommands(args) {
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macHostMedia: makeMacHostMediaCommand(args),
     macResumeStatus: makeMacResumeStatusCommand(args),
+    windowsHostStatus: makeWindowsHostStatusCommand(),
+    windowsHostReadiness: makeWindowsHostReadinessCommand(),
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
     macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
     macScriptHelp: makeMacScriptHelpCommand(),
@@ -861,6 +871,14 @@ function makeMacFormalLocalSmokeCommand(args) {
   ].join(" ");
 }
 
+function makeWindowsHostStatusCommand() {
+  return "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary";
+}
+
+function makeWindowsHostReadinessCommand() {
+  return "node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -998,7 +1016,7 @@ function makeBoardSummary(report) {
   const authPath = formatMacHostAuthPathSummary(report.macHostAuthPath);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${authPath}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; WindowsHostStatus=${report.commands.windowsHostStatus}; WindowsHostReadiness=${report.commands.windowsHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");

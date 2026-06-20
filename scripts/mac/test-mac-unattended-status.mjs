@@ -306,6 +306,48 @@ function assertMacManualUxStatusCommand(command, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertWindowsHostStatusCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(text, "--status", label);
+  assertIncludes(text, "--host 127.0.0.1", label);
+  assertIncludes(text, "--port 43770", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--forceCall", label);
+  assertNotIncludes(text, "--server", label);
+  assertNotIncludes(text, "--json", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
+function assertWindowsHostReadinessCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/windows/check-windows-host-readiness.mjs", label);
+  assertIncludes(text, "--host 127.0.0.1", label);
+  assertIncludes(text, "--port 43770", label);
+  assertIncludes(text, "--checkBoard", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--forceCall", label);
+  assertNotIncludes(text, "--server", label);
+  assertNotIncludes(text, "--json", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
+function assertWindowsHostBoardSummary(text, label) {
+  const value = String(text || "");
+  assertIncludes(value, "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", label);
+  assertIncludes(value, "WindowsHostReadiness=node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary", label);
+}
+
 function assertMacClientManualChecklistAction(text, label) {
   const value = String(text || "");
   assertIncludes(value, "手工清单", label);
@@ -436,6 +478,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macResumeStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsHostStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsHostReadiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
@@ -641,6 +685,8 @@ function checkMissingLaunchAgentJson(args) {
   assertNotIncludes(payload.commands?.macResumeStatus || "", "--password", "missing LaunchAgent commands.macResumeStatus");
   assertNotIncludes(payload.commands?.macResumeStatus || "", "input_event", "missing LaunchAgent commands.macResumeStatus");
   assertNotIncludes(payload.commands?.macResumeStatus || "", "inject", "missing LaunchAgent commands.macResumeStatus");
+  assertWindowsHostStatusCommand(payload.commands?.windowsHostStatus || "", "missing LaunchAgent commands.windowsHostStatus");
+  assertWindowsHostReadinessCommand(payload.commands?.windowsHostReadiness || "", "missing LaunchAgent commands.windowsHostReadiness");
   assertIncludes(payload.commands?.macFormalLocalSmoke || "", "check-mac-formal-local-smoke.mjs", "missing LaunchAgent commands.macFormalLocalSmoke");
   assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--host 127.0.0.1", "missing LaunchAgent commands.macFormalLocalSmoke");
   assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--port 9", "missing LaunchAgent commands.macFormalLocalSmoke");
@@ -709,6 +755,7 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "--probeMedia --probeMediaResourceSample --promptPassword", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacResumeStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "missing LaunchAgent board summary");
+  assertWindowsHostBoardSummary(payload.boardSummary, "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "missing LaunchAgent board summary");
@@ -1045,6 +1092,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "--probeMedia --probeMediaResourceSample --promptPassword", "board summary");
   assertIncludes(text, "MacResumeStatus=", "board summary");
   assertIncludes(text, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "board summary");
+  assertWindowsHostBoardSummary(text, "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "board summary");
   assertIncludes(text, "MacClientBrowserSelfTest=", "board summary");
