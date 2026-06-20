@@ -1623,6 +1623,83 @@ async function checkBoardMacManualUxSummary(args) {
   print("OK", "Agent Link Board MacManualUx summary is surfaced safely");
 }
 
+async function checkBoardMacClientDiscoverWindowsSummary(args) {
+  const windowsHostStatusCommand = "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary";
+  const windowsHostReadinessCommand = "node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary";
+  const discoveryNote = `Windows host discovery: no Windows host found after scanning 0 candidate(s). ScannerWarning=timeout. Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. WindowsHostStatus=${windowsHostStatusCommand}. WindowsHostReadiness=${windowsHostReadinessCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `Mac Client Discover Windows summary JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "Mac Client Discover Windows summary resume status");
+    assert(payload.board?.macClientDiscoverWindows?.status === "windows-discovery-timeout", "Mac Client Discover Windows JSON should expose timeout status");
+    assert(payload.board.macClientDiscoverWindows.scannerWarning === "timeout", "Mac Client Discover Windows JSON should expose scanner timeout warning");
+    assertWindowsHostStatusCommand(payload.board.macClientDiscoverWindows.windowsHostStatusCommand || "", "Mac Client Discover Windows JSON Windows host status command");
+    assertWindowsHostReadinessCommand(payload.board.macClientDiscoverWindows.windowsHostReadinessCommand || "", "Mac Client Discover Windows JSON Windows host readiness command");
+    assert(String(payload.boardSummary || "").includes("MacClientDiscoverWindowsStatus=windows-discovery-timeout"), "board summary should expose Mac Client Discover Windows status");
+    assert(String(payload.boardSummary || "").includes("ScannerWarning=timeout"), "board summary should expose scanner timeout");
+    assert(String(payload.boardSummary || "").includes("WindowsHostStatus="), "board summary should expose Windows host status command label");
+    assert(String(payload.boardSummary || "").includes("WindowsHostReadiness="), "board summary should expose Windows host readiness command label");
+    assertNoPasswordLeak(result, "Mac Client Discover Windows summary JSON");
+  }, {
+    statuses: {
+      "Mac Client Discover Windows": {
+        status: "windows-discovery-timeout",
+        role: "Mac 端",
+        note: discoveryNote,
+      },
+      "Mac Codex": {
+        status: "idle",
+        role: "Mac 端",
+        note: "Mac 端空闲，没有重复 Windows discovery 摘要。",
+      },
+    },
+    events: [],
+  });
+
+  const unsafeDiscoveryNote = `${discoveryNote} --password leaked`;
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `unsafe Mac Client Discover Windows summary JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "unsafe Mac Client Discover Windows summary resume status");
+    assert(!payload.board?.macClientDiscoverWindows, "unsafe Mac Client Discover Windows summary should not be promoted");
+    assert(!String(payload.boardSummary || "").includes("MacClientDiscoverWindowsStatus=windows-discovery-timeout"), "unsafe board summary should not expose Mac Client Discover Windows status");
+    assert(!String(result.stdout || "").includes("--password leaked"), "unsafe output should not echo password-like discovery text");
+    assertNoPasswordLeak(result, "unsafe Mac Client Discover Windows summary JSON");
+  }, {
+    statuses: {
+      "Mac Client Discover Windows": {
+        status: "windows-discovery-timeout",
+        role: "Mac 端",
+        note: unsafeDiscoveryNote,
+      },
+    },
+    events: [],
+  });
+  print("OK", "Agent Link Board Mac Client Discover Windows summary is surfaced safely");
+}
+
 async function checkBoardMacEvidence(args) {
   const cleanHeartbeat = "MacHeartbeat=status=ok; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok call=none; blockers=none warnings=none reason=ok. Evidence=MacClientPageOnline,MacClientDiagnosticsOk.";
   await withFakeBoard(null, async (server) => {
@@ -1937,6 +2014,7 @@ async function main() {
   await checkPostPassManualUxStandby(args);
   await checkUsableEntryCallUsesManualUxPath(args);
   await checkBoardMacManualUxSummary(args);
+  await checkBoardMacClientDiscoverWindowsSummary(args);
   await checkBoardMacEvidence(args);
   await checkBoardMacPowerHealth(args);
   await checkBoardDoneCall(args);

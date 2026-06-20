@@ -19,6 +19,31 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac resume 消费 Windows discovery 状态
+开发端：Mac Codex
+本轮目标：让 `check-mac-resume-status --checkBoard` 直接读懂 `Mac Client Discover Windows` 的通讯板状态，白天恢复工作时不用再从长 heartbeat/消息里找 discovery timeout。
+完成内容：
+- 恢复状态新增 `board.macClientDiscoverWindows` 安全摘要，当前 `windows-discovery-timeout` 会显示 `ScannerWarning=timeout`。
+- `--boardSummary` 会直接带出 `MacClientDiscoverWindowsStatus=`、`ScannerWarning=`、`WindowsHostStatus=` 和 `WindowsHostReadiness=`。
+- 解析器失败关闭：只接受固定 discovery 状态、`ScannerWarning=timeout`、固定 Windows host status/readiness 命令；含 password/token/secret 或 input/inject 的候选不会被提升。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败于 `Mac Client Discover Windows JSON should expose timeout status`。
+- 绿灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000`
+- 语法：`node --check scripts/mac/check-mac-resume-status.mjs`、`node --check scripts/mac/test-mac-resume-status.mjs`
+- 真实摘要：`node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary` 已显示 `MacClientDiscoverWindowsStatus=windows-discovery-timeout ScannerWarning=timeout` 和 Windows host status/readiness 命令。
+遗留问题：
+- 当前通讯板 active call 仍需要 Windows Codex 在 Windows 本机刷新 Windows host status/readiness 或安全启动 Windows host 后上板。
+下一步建议：
+- 白天继续时先看 `MacResumeStatus=`：如果仍显示 `MacClientDiscoverWindowsStatus=windows-discovery-timeout`，Windows 端先执行同一行 `WindowsHostStatus=` / `WindowsHostReadiness=`，再让 Mac 重跑 discovery/formal smoke。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端按 currentCall 刷新 Windows host 状态；本轮不要求 Windows 代码修改。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac discovery 显式上板
 开发端：Mac Codex
 本轮目标：让 Mac 侧 Windows host discovery 结果可以作为独立状态上板，减少 Windows 端从普通消息里查找 `ScannerWarning=timeout` 的成本。

@@ -127,6 +127,14 @@ const allowedMacManualUxNext = new Set([
 const allowedMacManualUxCallStates = new Set(["active", "near-timeout", "timeout"]);
 const allowedMacManualUxGateStates = new Set(["wait-windows-codex-push"]);
 const macManualUxSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌/i;
+const allowedMacClientDiscoverWindowsStatuses = new Set([
+  "windows-discovery-found",
+  "windows-discovery-timeout",
+  "windows-discovery-waiting",
+  "windows-discovery-missing",
+]);
+const allowedMacClientDiscoverWindowsWarnings = new Set(["timeout"]);
+const macClientDiscoverWindowsSecretPattern = macManualUxSecretPattern;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -662,6 +670,7 @@ async function getBoardStatus(args, nowMs) {
       macHostAuthPath: null,
       macManualUxStandby: null,
       macManualUx: null,
+      macClientDiscoverWindows: null,
       currentCall: null,
       activeCall: false,
     };
@@ -687,6 +696,7 @@ async function getBoardStatus(args, nowMs) {
   const macHostAuthPath = collectMacHostAuthPath(stateResult.state, lines);
   const macManualUxStandby = collectMacManualUxStandby(stateResult.state);
   const macManualUx = collectMacManualUx(stateResult.state);
+  const macClientDiscoverWindows = collectMacClientDiscoverWindows(stateResult.state);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
@@ -699,6 +709,7 @@ async function getBoardStatus(args, nowMs) {
     macHostAuthPath,
     macManualUxStandby,
     macManualUx,
+    macClientDiscoverWindows,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
@@ -723,6 +734,14 @@ function collectMacManualUxStandby(state) {
 function collectMacManualUx(state) {
   for (const text of collectBoardCurrentStateTexts(state)) {
     const summary = extractMacManualUxSummary(text);
+    if (summary) return summary;
+  }
+  return null;
+}
+
+function collectMacClientDiscoverWindows(state) {
+  for (const text of collectBoardCurrentStateTexts(state)) {
+    const summary = extractMacClientDiscoverWindowsSummary(text);
     if (summary) return summary;
   }
   return null;
@@ -1081,6 +1100,90 @@ function isSafeHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+function extractMacClientDiscoverWindowsSummary(text) {
+  const source = normalizedText(text);
+  if (!source || !hasMacClientDiscoverWindowsContext(source)) return null;
+  const start = findMacClientDiscoverWindowsStart(source);
+  const segment = source.slice(Math.max(0, start));
+  if (macClientDiscoverWindowsSecretPattern.test(segment)) return null;
+
+  const status = extractMacClientDiscoverWindowsField(segment, "MacClientDiscoverWindowsStatus")
+    || extractMacClientDiscoverWindowsStatus(segment);
+  if (!allowedMacClientDiscoverWindowsStatuses.has(status)) return null;
+
+  const scannerWarning = extractMacClientDiscoverWindowsField(segment, "ScannerWarning");
+  if (scannerWarning && !allowedMacClientDiscoverWindowsWarnings.has(scannerWarning)) return null;
+
+  const windowsHostStatusCommand = extractMacClientDiscoverWindowsCommandField(segment, "WindowsHostStatus");
+  const windowsHostReadinessCommand = extractMacClientDiscoverWindowsCommandField(segment, "WindowsHostReadiness");
+  if (windowsHostStatusCommand && !isSafeWindowsHostStatusCommand(windowsHostStatusCommand)) return null;
+  if (windowsHostReadinessCommand && !isSafeWindowsHostReadinessCommand(windowsHostReadinessCommand)) return null;
+
+  const parts = [`MacClientDiscoverWindowsStatus=${status}`];
+  if (scannerWarning) parts.push(`ScannerWarning=${scannerWarning}`);
+  if (windowsHostStatusCommand) parts.push(`WindowsHostStatus=${windowsHostStatusCommand}`);
+  if (windowsHostReadinessCommand) parts.push(`WindowsHostReadiness=${windowsHostReadinessCommand}`);
+
+  return {
+    status,
+    scannerWarning: scannerWarning || "",
+    windowsHostStatusCommand: windowsHostStatusCommand || "",
+    windowsHostReadinessCommand: windowsHostReadinessCommand || "",
+    summary: parts.join(" "),
+  };
+}
+
+function hasMacClientDiscoverWindowsContext(text) {
+  return /\bMac Client Discover Windows\b/i.test(text)
+    || /\bMacClientDiscoverWindowsStatus\s*=/i.test(text)
+    || /\bWindows host discovery:/i.test(text);
+}
+
+function findMacClientDiscoverWindowsStart(text) {
+  const candidates = [
+    text.search(/\bMacClientDiscoverWindowsStatus\s*=/i),
+    text.search(/\bMac Client Discover Windows\b/i),
+    text.search(/\bWindows host discovery:/i),
+  ].filter((index) => index >= 0);
+  return candidates.length ? Math.min(...candidates) : 0;
+}
+
+function extractMacClientDiscoverWindowsStatus(segment) {
+  const match = String(segment || "").match(/\bwindows-discovery-(?:found|timeout|waiting|missing)\b/i);
+  return match ? match[0].toLowerCase() : "";
+}
+
+function extractMacClientDiscoverWindowsField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([A-Za-z0-9_-]+)`, "i"));
+  return match ? match[1] : "";
+}
+
+function extractMacClientDiscoverWindowsCommandField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const boundary = "(?:WindowsHostStatus|WindowsHostReadiness|MacClientPromptPasswordSmoke|MacClientBrowserSelfTest|MacScriptHelp|MacPowerPlan|MacRemoteAudioPlan|MacInputSafetyPlan|MacUnattendedFreshness|MacClientDiscoverWindowsStatus|ScannerWarning)";
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*(.+?)(?=\\.\\s+${boundary}\\s*=|\\.\\s+No password\\b|\\s+${boundary}\\s*=|$)`, "i"));
+  return normalizeCommandForComparison(match ? match[1] : "");
+}
+
+function normalizeCommandForComparison(commandText) {
+  return String(commandText || "").trim().replace(/[.]+$/g, "").replace(/\s+/g, " ");
+}
+
+function isSafeWindowsHostStatusCommand(commandText) {
+  const command = normalizeCommandForComparison(commandText);
+  if (!command || macClientDiscoverWindowsSecretPattern.test(command)) return false;
+  if (/\binput_event\b|inject/i.test(command)) return false;
+  return command === makeWindowsHostStatusCommand();
+}
+
+function isSafeWindowsHostReadinessCommand(commandText) {
+  const command = normalizeCommandForComparison(commandText);
+  if (!command || macClientDiscoverWindowsSecretPattern.test(command)) return false;
+  if (/\binput_event\b|inject/i.test(command)) return false;
+  return command === makeWindowsHostReadinessCommand();
 }
 
 function isUsableEntryManualUxCall(text) {
@@ -1825,6 +1928,12 @@ function formatMacManualUxSummary(board) {
   return `${macManualUx.summary};`;
 }
 
+function formatMacClientDiscoverWindowsSummary(board) {
+  const discovery = board?.macClientDiscoverWindows;
+  if (!discovery?.summary) return "";
+  return `${discovery.summary};`;
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -2049,6 +2158,7 @@ function formatBoardSummary(report) {
   const macHostAuthPathSummary = formatMacHostAuthPathSummary(board);
   const macManualUxStandbySummary = formatMacManualUxStandbySummary(board);
   const macManualUxSummary = formatMacManualUxSummary(board);
+  const macClientDiscoverWindowsSummary = formatMacClientDiscoverWindowsSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
@@ -2061,6 +2171,7 @@ function formatBoardSummary(report) {
       macHostAuthPathSummary,
       macManualUxStandbySummary,
       macManualUxSummary,
+      macClientDiscoverWindowsSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -2119,6 +2230,7 @@ function formatBoardSummary(report) {
     macHostAuthPathSummary,
     macManualUxStandbySummary,
     macManualUxSummary,
+    macClientDiscoverWindowsSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
