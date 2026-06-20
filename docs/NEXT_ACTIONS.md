@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- Agent Link presence endpoint fallback 最新口径：如果 Windows 控制端 Mac 提醒/值守文本看到 `presence endpoint/API/接口 404` 或不可用，会显示“presence 接口未启用”；同段带 `state.userPresence` 为准时，会显示证据“仍以 state.userPresence 为准”。现场看到它时，按“当前联络板服务可能还没启用新版 presence endpoint / 需等服务重启或升级”处理，但用户在场权威仍先看 `/api/state.userPresence`；不要因为 404 请求密码、认证、真实 input/inject 或系统授权。
 - MacScriptHelpStatus 最新口径：Mac `test-mac-script-help --boardSummary` 现在会输出稳定 `MacScriptHelpStatus=ok|failed`；Windows 控制端已把 `ok` 显示为“Mac 脚本 help 自检已通过”证据，把 `failed` 显示为“Mac 脚本 help 自检失败”风险。现场看到 failed 时，先让 Mac 端修复/复跑 help 覆盖；不要因此请求密码、认证、真实 input/inject 或系统授权。
 - Windows 控制端 UserPresence 最新口径：如果 Mac 提醒/值守文本带 `UserPresence=away`、`UserPresenceAction=no-auth-only` 或 `BLOCKED_BY_USER_AWAY`，页面会直接显示“用户不在 / 只做无授权任务”。现场看到这条时，只允许继续代码、文档、只读检查和无密通讯板同步；不要请求远控密码、系统授权、真实 input/inject、声音输出变更或人工观感确认，直到用户明确在场并同步结构化 presence。
 - Windows 重连上限失败最新口径：自动重连 3 次仍未恢复后，页面状态会明确提示“点连接重新尝试 / 复制诊断给两端”，host 诊断显示“自动重连已停止”，导出诊断新增 `重连建议`。现场看到这条时，不要继续等倒计时；先检查 Mac host/局域网，再手动点连接或把诊断发到通讯板。

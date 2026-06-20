@@ -2201,6 +2201,12 @@ async function verifyDesktopOnlyHostPanel(session) {
               "Mac script help: failed 1/148 across 74 scripts; timeout=10000ms. MacScriptHelpStatus=failed failures=1 commands=148 scripts=74 timeoutMs=10000.",
             )
           : null;
+      const agentLinkPresenceFallbackAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "presence 接口在当前板服务上仍 404，仍以 state.userPresence 为准；无密码/auth/input/inject。",
+            )
+          : null;
       const cleanMacHeartbeatCommandAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2852,6 +2858,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           macScriptHelpOkStatusAttention.evidenceLabels.length === 1 &&
           macScriptHelpFailedStatusAttention?.summary.includes("Mac 脚本 help 自检失败") &&
           !macScriptHelpFailedStatusAttention?.evidenceSummary.includes("Mac 脚本 help 自检已通过") &&
+          agentLinkPresenceFallbackAttention?.summary.includes("presence 接口未启用") &&
+          agentLinkPresenceFallbackAttention?.evidenceSummary.includes("仍以 state.userPresence 为准") &&
           cleanMacHeartbeatCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHeartbeatCommandAttention?.labels) &&
           cleanMacHeartbeatCommandAttention.labels.length === 0 &&
@@ -2972,6 +2980,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacScriptHelpAttention,
         macScriptHelpOkStatusAttention,
         macScriptHelpFailedStatusAttention,
+        agentLinkPresenceFallbackAttention,
         macHeartbeatRerunAttention,
         macHostMediaCommandAttention,
         macClientPageCommandAttention,

@@ -289,6 +289,7 @@ const macUnattendedRiskLabels = {
   "mac-remote-audio-read-only": "不会自动改 Mac 音量",
   "user-presence-away": "用户不在",
   "user-presence-no-auth-only": "只做无授权任务",
+  "agent-link-presence-endpoint-unavailable": "presence 接口未启用",
   "blocked_by_user_away": "用户不在，只做无授权任务",
   "blocked-by-user-away": "用户不在，只做无授权任务",
   "system-sleep-enabled": "系统睡眠未关闭",
@@ -4076,6 +4077,35 @@ function extractUserPresenceRisks(text) {
   }
   return [...new Set(risks)];
 }
+function isSafeAgentLinkPresenceSegment(segment) {
+  return (
+    !/\b(?:password|passwd|pwd|token|secret|cookie)\s*[:=]\s*\S+/i.test(segment) &&
+    !/(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(segment)
+  );
+}
+
+function extractAgentLinkPresenceRisks(text) {
+  const risks = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    if (!isSafeAgentLinkPresenceSegment(segment)) continue;
+    const endpoint404 =
+      /(?:\bpresence\s+(?:endpoint|api)\b|\bpresence\s*接口|\/api\/presence)[^;\r\n。]*(?:\b404\b|not\s+found|unavailable|未启用|不可用)/i.test(segment) ||
+      /(?:\b404\b|not\s+found|unavailable|未启用|不可用)[^;\r\n。]*(?:\bpresence\s+(?:endpoint|api)\b|\bpresence\s*接口|\/api\/presence)/i.test(segment);
+    if (endpoint404) risks.push("agent-link-presence-endpoint-unavailable");
+  }
+  return [...new Set(risks)];
+}
+
+function parseAgentLinkPresenceEvidenceLabels(text) {
+  const labels = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    if (!isSafeAgentLinkPresenceSegment(segment)) continue;
+    if (/\bstate\.userPresence\b/i.test(segment) && /(?:仍以|以|current|authority|authoritative|为准|source\s+of\s+truth)/i.test(segment)) {
+      labels.push("仍以 state.userPresence 为准");
+    }
+  }
+  return [...new Set(labels)];
+}
 
 function parseMacInputSafetyPlanEvidenceLabels(text) {
   const source = String(text || "");
@@ -4297,6 +4327,7 @@ function parseMacPositiveEvidenceLabels(text) {
   labels.push(...parseMacInputSafetyPlanEvidenceLabels(source));
   labels.push(...parseMacHostAuthPathEvidenceLabels(source));
   labels.push(...parseMacClientPasswordLocationEvidenceLabels(source));
+  labels.push(...parseAgentLinkPresenceEvidenceLabels(source));
   return [...new Set(labels)];
 }
 
@@ -4308,8 +4339,9 @@ function parseMacUnattendedAttention(text) {
   const heartbeatHealthRisks = extractMacHeartbeatHealthRisks(source);
   const remoteAudioStatusRisks = extractMacRemoteAudioStatusRisks(source);
   const userPresenceRisks = extractUserPresenceRisks(source);
+  const agentLinkPresenceRisks = extractAgentLinkPresenceRisks(source);
   const macScriptHelpStatusRisks = extractMacScriptHelpStatusRisks(source);
-  const risks = [...new Set([...userPresenceRisks, ...macScriptHelpStatusRisks, ...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
+  const risks = [...new Set([...userPresenceRisks, ...agentLinkPresenceRisks, ...macScriptHelpStatusRisks, ...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();

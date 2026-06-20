@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控制端 presence endpoint fallback 可见化
+开发端：Windows Codex
+本轮目标：让 Windows 控制端能读懂当前联络板 presence endpoint 仍 404、但 `state.userPresence` 仍为权威的现场提示。
+完成内容：新增只读 Agent Link presence fallback 解析；`presence endpoint/API/接口 404` 或不可用显示为“presence 接口未启用”，同段 `state.userPresence` 为准进入证据“仍以 state.userPresence 为准”；页面 diagnostics-only 自测覆盖该路径。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 presence fallback summary/evidence 为空；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 控制端本地提示，不启动或重启 Agent Link Board，也不替代 Mac 端正在做的 board health/health 命令。
+下一步建议：等 Mac 端 board health 推送后，Windows 可再消费 health/features 输出，把“旧服务需重启/新版已启用”进一步结构化。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 控制端消费 MacScriptHelpStatus
 开发端：Windows Codex
 本轮目标：接住 Mac 端新增的 `MacScriptHelpStatus=ok|failed` 稳定标签，让 Windows 控制端能直接显示 help 自检结果。
