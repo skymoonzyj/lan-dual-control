@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W3 Windows 音频低水位补缓冲诊断
+开发端：Windows Codex
+本轮目标：让声音断续诊断能区分低水位补缓冲和高水位溢出重同步。
+完成内容：
+- WebAudio 队列低于 70ms 并补到 80ms 时，记录 `audioUnderrunCount` 和 `audioLastBufferReason=queue-underrun-prebuffer`。
+- 复制/导出诊断“现场声音”新增 `补缓冲 <n>`，并在没有更具体丢弃原因时输出 `原因 queue-underrun-prebuffer`。
+- 页面自测扩展 `verifyAudioPlaybackBufferGuards`，覆盖低水位补缓冲诊断和已有高水位 overflow flush。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `underrunPrebufferDiagnosed=false`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 输出 `Audio buffer guards: underrunStart=10.080 underrun=1 overflowDropped=2 resync=1`。
+遗留问题：真实体验仍需用户粘贴“现场声音”行；如果 `补缓冲` 高，优先查 Mac 采集/网络供流间歇；如果 `重同步` 高，优先查 Windows 播放队列持续溢出。
+下一步建议：继续 W3 可用真实样本做自适应阈值或音频 jitter buffer；也可转 W1 做一键入口现场流程打磨。
+是否改了协议：否；只改 Windows 控制端本地 WebAudio 诊断和页面自测。
+是否需要另一端配合：暂不需要；真实体验复测时需要 Mac 端同步音频基线或手工验收窗口。
+
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows WebCodecs decodeQueueSize 背压重同步
 开发端：Windows Codex
 本轮目标：减少 Windows 控 Mac 时 WebCodecs 内部解码队列堆积导致的画面越播越慢。

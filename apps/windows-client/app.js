@@ -554,7 +554,9 @@ const state = {
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
   audioResyncCount: 0,
+  audioUnderrunCount: 0,
   audioLastDropReason: "",
+  audioLastBufferReason: "",
   audioLastError: "",
   audioLastStatusUpdateAt: 0,
   audioLastRenderedDroppedFrames: 0,
@@ -2963,7 +2965,9 @@ function resetAudioPlayback() {
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
   state.audioResyncCount = 0;
+  state.audioUnderrunCount = 0;
   state.audioLastDropReason = "";
+  state.audioLastBufferReason = "";
   state.audioLastError = "";
   state.audioLastStatusUpdateAt = 0;
   state.audioLastRenderedDroppedFrames = 0;
@@ -3021,6 +3025,7 @@ function resyncAudioQueue(reason, now) {
   state.audioDroppedFrames += Math.max(1, flushed);
   state.audioResyncCount = (Number(state.audioResyncCount) || 0) + 1;
   state.audioLastDropReason = reason;
+  state.audioLastBufferReason = reason;
   state.audioNextPlayTime = now + audioResyncBufferSeconds;
   return flushed;
 }
@@ -3141,6 +3146,8 @@ async function playPcmAudioFrame(frame) {
     resyncAudioQueue("queue-overflow-flush-old", now);
   }
   if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
+    state.audioUnderrunCount = (Number(state.audioUnderrunCount) || 0) + 1;
+    state.audioLastBufferReason = "queue-underrun-prebuffer";
     state.audioNextPlayTime = now + audioInitialBufferSeconds;
   }
 
@@ -4548,10 +4555,12 @@ function getAudioPerformanceExportStatus() {
   const droppedCount = Number(state.audioDroppedFrames) || 0;
   const queueMs = getAudioQueueMs();
   const resyncCount = Number(state.audioResyncCount) || 0;
-  const dropReason = String(state.audioLastDropReason || "").trim();
+  const underrunCount = Number(state.audioUnderrunCount) || 0;
+  const dropReason = String(state.audioLastDropReason || state.audioLastBufferReason || "").trim();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
   if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
+  if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (state.audioLastError) {
     parts.push(`错误 ${String(state.audioLastError).replace(/\s+/g, " ").slice(0, 80)}`);

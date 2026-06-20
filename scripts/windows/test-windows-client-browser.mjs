@@ -6248,8 +6248,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
   const result = await evaluate(
     session,
     `(async () => {
-      if (typeof playPcmAudioFrame !== "function") {
-        return { ok: false, reason: "playPcmAudioFrame missing" };
+      if (typeof playPcmAudioFrame !== "function" || typeof getAudioPerformanceExportStatus !== "function") {
+        return { ok: false, reason: "audio playback helpers missing" };
       }
       const audioToggle = document.querySelector("#audioToggle");
       const volumeRange = document.querySelector("#audioVolumeRange");
@@ -6265,6 +6265,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         scheduledSources: Array.isArray(state.audioScheduledSources) ? state.audioScheduledSources.slice() : undefined,
         resyncCount: state.audioResyncCount,
         lastDropReason: state.audioLastDropReason,
+        underrunCount: state.audioUnderrunCount,
+        lastBufferReason: state.audioLastBufferReason,
       };
       const starts = [];
       const stops = [];
@@ -6319,11 +6321,23 @@ async function verifyAudioPlaybackBufferGuards(session) {
         if (Array.isArray(state.audioScheduledSources)) state.audioScheduledSources.length = 0;
         state.audioResyncCount = 0;
         state.audioLastDropReason = "";
+        state.audioUnderrunCount = 0;
+        state.audioLastBufferReason = "";
         starts.length = 0;
         stops.length = 0;
         const underrunPlayed = await playPcmAudioFrame(makeFrame());
         const underrunStart = starts[0] || 0;
-        const preservedPrebuffer = underrunPlayed && underrunStart >= 10.07;
+        const underrunExportText = getAudioPerformanceExportStatus();
+        const underrunCountAfterPrebuffer = state.audioUnderrunCount;
+        const underrunBufferReasonAfterPrebuffer = state.audioLastBufferReason;
+        const underrunPrebufferDiagnosed =
+          underrunPlayed &&
+          underrunStart >= 10.07 &&
+          underrunCountAfterPrebuffer === 1 &&
+          underrunBufferReasonAfterPrebuffer === "queue-underrun-prebuffer" &&
+          underrunExportText.includes("补缓冲 1") &&
+          underrunExportText.includes("原因 queue-underrun-prebuffer");
+        const preservedPrebuffer = underrunPrebufferDiagnosed;
 
         state.audioContext = makeFakeContext(20);
         state.audioGain = { gain: { value: 0 } };
@@ -6332,6 +6346,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioDroppedFrames = 0;
         state.audioResyncCount = 0;
         state.audioLastDropReason = "";
+        state.audioUnderrunCount = 0;
+        state.audioLastBufferReason = "";
         state.audioScheduledSources = [
           { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.2, duration: 0.12 },
           { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.32, duration: 0.12 },
@@ -6352,6 +6368,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
         return {
           ok: preservedPrebuffer && flushedOldQueue,
           preservedPrebuffer,
+          underrunPrebufferDiagnosed,
+          underrunCount: underrunCountAfterPrebuffer,
+          underrunBufferReason: underrunBufferReasonAfterPrebuffer,
+          underrunExportText,
           underrunStart,
           overflowPlayed,
           overflowStarts: starts.length,
@@ -6378,6 +6398,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         }
         state.audioResyncCount = original.resyncCount;
         state.audioLastDropReason = original.lastDropReason;
+        state.audioUnderrunCount = original.underrunCount;
+        state.audioLastBufferReason = original.lastBufferReason;
       }
     })()`,
   );
@@ -6618,7 +6640,7 @@ async function run() {
     summary.checks.push("audio-buffer-guards");
     print(
       "OK",
-      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0}`,
+      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} underrun=${audioBufferGuardCheck.underrunCount ?? 0} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0}`,
     );
     const layoutStabilityCheck = await verifyLiveStatusLayoutStability(session);
     summary.checks.push("layout-stability");
