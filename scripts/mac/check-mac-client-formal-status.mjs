@@ -172,6 +172,11 @@ JSON output:
                                   command. It reports whether the Windows host
                                   is running and surfaces the safe start command
                                   when it is offline.
+  runPlan.commands.windowsHostReadiness
+                                  Recommended Windows-side loopback readiness
+                                  command. It checks host readiness and board
+                                  hints without passwords, authentication,
+                                  input events, or inject.
   runPlan.commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command that inspects the one-time reverse-
@@ -835,6 +840,7 @@ function buildChecklist(readiness, args) {
   const input = capabilities.input || {};
   const clipboard = capabilities.clipboard || {};
   const windowsHostStatusCommand = makeWindowsHostStatusCommand(windowsHost, args);
+  const windowsHostReadinessCommand = makeWindowsHostReadinessCommand(windowsHost, args);
 
   if (git.clean) {
     checklist.push(okItem("repo", `repo clean at ${readiness.currentBuildId || "unknown"}`));
@@ -868,12 +874,12 @@ function buildChecklist(readiness, args) {
 
   if (!windowsHost.checked) {
     checklist.push(args.allowWindowsHostOffline
-      ? warnItem("windows-host", "Windows host discovery not checked", "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then rerun with --host <Windows IP> --port 43770.`)
-      : blockItem("windows-host", "Windows host discovery not checked", "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then rerun with --host <Windows IP> --port 43770.`));
+      ? warnItem("windows-host", "Windows host discovery not checked", "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Readiness=${windowsHostReadinessCommand}. Then rerun with --host <Windows IP> --port 43770.`)
+      : blockItem("windows-host", "Windows host discovery not checked", "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Readiness=${windowsHostReadinessCommand}. Then rerun with --host <Windows IP> --port 43770.`));
   } else if (!windowsHost.online) {
     checklist.push(args.allowWindowsHostOffline
-      ? warnItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then start safely if needed and rerun.`)
-      : blockItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then start safely if needed and rerun.`));
+      ? warnItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Readiness=${windowsHostReadinessCommand}. Then start safely if needed and rerun.`)
+      : blockItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", `Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Readiness=${windowsHostReadinessCommand}. Then start safely if needed and rerun.`));
   } else {
     const runtime = windowsHost.runtime?.buildId ? ` build=${windowsHost.runtime.buildId}` : "";
     checklist.push(okItem("windows-host", `${windowsHost.device?.name || "Windows host"} online at ${windowsHost.probe?.host}:${windowsHost.probe?.port}${runtime}`));
@@ -916,7 +922,7 @@ function makeCallText(report) {
   const freshnessText = makeMacUnattendedFreshnessSentence(report.macUnattendedFreshness);
   if (!host.online) {
     return [
-      `Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(host, report.args || {})}. Then rerun with --host <Windows IP> --port 43770 --boardSummary.`,
+      `Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(host, report.args || {})}. Readiness=${makeWindowsHostReadinessCommand(host, report.args || {})}. Then rerun with --host <Windows IP> --port 43770 --boardSummary.`,
       ...(freshnessText ? [freshnessText] : []),
     ].join(" ");
   }
@@ -1027,6 +1033,12 @@ function makeWindowsHostStatusCommand(reportOrHost = {}, args = {}) {
   const host = reportOrHost.readiness?.windowsHost || reportOrHost || {};
   const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
   return `node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port ${targetPort} --boardSummary`;
+}
+
+function makeWindowsHostReadinessCommand(reportOrHost = {}, args = {}) {
+  const host = reportOrHost.readiness?.windowsHost || reportOrHost || {};
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  return `node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port ${targetPort} --checkBoard --boardSummary`;
 }
 
 function makeWindowsReverseGrantPowerShellCommand(report, args, action = "grant") {
@@ -1307,6 +1319,7 @@ function makeRunPlan(report, args) {
       ensureMacClient: makeStartClientCommand(args),
       checkMacClient: makeClientStatusCommand(args),
       windowsHostStatus: makeWindowsHostStatusCommand(report, args),
+      windowsHostReadiness: makeWindowsHostReadinessCommand(report, args),
       safePreflightWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--boardSummary"]),
       sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
       macClientFormalChecklist: makeChecklistCommand(args),
@@ -1411,6 +1424,7 @@ function makeBoardSummary(report) {
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     `WindowsHostStatus=${report.runPlan?.commands?.windowsHostStatus || makeWindowsHostStatusCommand(host, report.args || {})}.`,
+    `WindowsHostReadiness=${report.runPlan?.commands?.windowsHostReadiness || makeWindowsHostReadinessCommand(host, report.args || {})}.`,
     `MacClientDiscoverWindows=${report.runPlan?.commands?.discoverWindowsHost || "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary"}.`,
     `MacClientFormalChecklist=${report.runPlan?.commands?.macClientFormalChecklist || makeChecklistCommand(report.args || {})}.`,
     `MacClientPromptPasswordSmoke=${report.runPlan?.commands?.macClientPromptPasswordSmoke || makePromptPasswordSmokeCommand(report, report.args || {})}.`,
@@ -1600,6 +1614,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.windowsHostStatus) {
     console.log(`- Windows host status for Windows side: ${runPlan.commands.windowsHostStatus}`);
+  }
+  if (runPlan.commands?.windowsHostReadiness) {
+    console.log(`- Windows host readiness for Windows side: ${runPlan.commands.windowsHostReadiness}`);
   }
   if (runPlan.commands?.macClientFormalChecklist) {
     console.log(`- Mac client formal checklist: ${runPlan.commands.macClientFormalChecklist}`);
