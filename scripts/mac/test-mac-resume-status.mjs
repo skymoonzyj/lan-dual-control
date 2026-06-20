@@ -512,6 +512,19 @@ function assertMacClientDiscoverWindowsCommand(command, label) {
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
 }
 
+function assertMacClientDiscoverWindowsCallCommand(command, label) {
+  assert(/discover-windows-hosts\.mjs/.test(command), `${label} should use discover-windows-hosts`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board before sending a call`);
+  assert(command.includes("--sendCall"), `${label} should explicitly send the Windows host readiness call`);
+  assert(command.includes("--boardSummary"), `${label} should keep the operator-visible summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--forceCall"), `${label} should not force-replace Agent Link Board calls`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not mention input events`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertWindowsHostStatusCommand(command, label) {
   assert(/scripts\/windows\/start-windows-host\.mjs/.test(command), `${label} should use Windows host status`);
   assert(command.includes("--status"), `${label} should be a status-only command`);
@@ -783,6 +796,7 @@ function checkHelp(args) {
     assert(/commands\.macClientPageStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac client page status JSON field`);
     assert(/commands\.macClientManualChecklistAction/.test(result.stdout), `${script} ${flag} should document Mac client manual checklist JSON field`);
     assert(/commands\.macClientDiscoverWindowsCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery JSON field`);
+    assert(/commands\.macClientDiscoverWindowsCallCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery call JSON field`);
     assert(/commands\.windowsHostStatusCommand/.test(result.stdout), `${script} ${flag} should document Windows host status JSON field`);
     assert(/commands\.windowsHostReadinessCommand/.test(result.stdout), `${script} ${flag} should document Windows host readiness JSON field`);
     assert(/commands\.macClientFormalChecklistCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal checklist JSON field`);
@@ -1665,10 +1679,13 @@ async function checkBoardMacClientDiscoverWindowsSummary(args) {
     assert(payload.board.macClientDiscoverWindows.scannerWarning === "timeout", "Mac Client Discover Windows JSON should expose scanner timeout warning");
     assertWindowsHostStatusCommand(payload.board.macClientDiscoverWindows.windowsHostStatusCommand || "", "Mac Client Discover Windows JSON Windows host status command");
     assertWindowsHostReadinessCommand(payload.board.macClientDiscoverWindows.windowsHostReadinessCommand || "", "Mac Client Discover Windows JSON Windows host readiness command");
+    assertMacClientDiscoverWindowsCallCommand(payload.commands?.macClientDiscoverWindowsCallCommand || "", "Mac Client Discover Windows JSON call command");
     assert(String(payload.boardSummary || "").includes("MacClientDiscoverWindowsStatus=windows-discovery-timeout"), "board summary should expose Mac Client Discover Windows status");
     assert(String(payload.boardSummary || "").includes("ScannerWarning=timeout"), "board summary should expose scanner timeout");
     assert(String(payload.boardSummary || "").includes("WindowsHostStatus="), "board summary should expose Windows host status command label");
     assert(String(payload.boardSummary || "").includes("WindowsHostReadiness="), "board summary should expose Windows host readiness command label");
+    assert(String(payload.boardSummary || "").includes("MacClientDiscoverWindowsCall="), "board summary should expose the explicit discovery call command label");
+    assert(String(payload.boardSummary || "").includes("--sendCall"), "board summary should make the explicit discovery call flag visible");
     assertNoPasswordLeak(result, "Mac Client Discover Windows summary JSON");
   }, {
     statuses: {

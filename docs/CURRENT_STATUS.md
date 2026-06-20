@@ -6,6 +6,7 @@
 
 ## 2026-06-20 Mac Windows host discovery call
 - `discover-windows-hosts` 现在支持显式 `--sendCall`：当 Mac discovery 没找到 Windows host 或 scanner timeout 时，可直接向 Agent Link Board 发送/刷新 `Start or refresh Windows host for Mac-control-Windows preflight` 呼叫，正文包含 `WindowsHostStatus=`、`WindowsHostReadiness=`、`ScannerWarning=timeout` 等无密证据；JSON 同步暴露 `windowsHostReadinessCall`。默认仍只读不上板；`--sendCall` 发送前会实时读取 currentCall，只允许刷新同一个 Mac -> Windows readiness call，遇到其它 active call 会 fail-closed，不覆盖对方任务。该入口不认证、不请求或发送密码、不连接 WebSocket、不发 input_event/inject。
+- `check-mac-resume-status --checkBoard --json/--boardSummary` 现在也会输出 `commands.macClientDiscoverWindowsCallCommand` / `MacClientDiscoverWindowsCall=`，固定为 `node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary`。这只是第一屏可复制的显式刷新 call 命令；默认 resume 检查仍不发送 call、不连接 Windows、不认证、不请求或发送密码、不发 input_event/inject。
 
 ## 2026-06-20 Mac client 密码输入位置
 - Mac 控 Windows 页面现在在密码框下固定显示“在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断”。复制/导出诊断新增 `密码输入位置` 行，同步带出同一条无密说明；自测覆盖页面提示、诊断复制和连接密码不泄漏。该改动不改协议、不认证、不请求或发送密码、不发 input/inject。- Windows 恢复总览和 Windows 控制端现在会消费 Mac 侧无密 `MacClientPasswordLocation=`：`check-windows-resume-status --checkBoard` 在 JSON、普通输出和 `--boardSummary` 中显示 Mac client 页面密码框位置；Windows 控制页 Mac 提醒区、值守证据和复制/导出诊断也会显示“Mac client 页面密码框填写 Windows 临时密码 / 终端隐藏输入只用于 formal/browser runner / 不要把密码发到通讯板”。解析拒绝 `password=...`、token/secret、`input_event`、`inject` 或自动发送伪造候选；Windows 不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。

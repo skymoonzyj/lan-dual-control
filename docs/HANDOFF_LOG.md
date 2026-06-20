@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac resume 第一屏暴露 discovery readiness call 命令
+开发端：Mac Codex
+本轮目标：让 Mac 开工第一屏在 Windows discovery timeout 时，不只显示当前状态，还能直接给出显式刷新 Windows host readiness call 的安全命令。
+完成内容：
+- `check-mac-resume-status` 新增 JSON `commands.macClientDiscoverWindowsCallCommand`。
+- `--boardSummary` / 普通输出新增 `MacClientDiscoverWindowsCall=node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary`。
+- 保留原 `MacClientDiscoverWindows=` 只读 discovery 命令；新的 call 命令必须人工显式复制运行，默认 resume/status 不发 call。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败于 help 未记录 `commands.macClientDiscoverWindowsCallCommand`。
+- 绿灯：同一测试通过，覆盖 JSON 命令、`MacClientDiscoverWindowsCall=` 摘要标签、`--sendCall` 显式可见，以及无密码/无 force/input/inject 边界。
+遗留问题：
+- 当前真实 Agent Link Board active call 仍需要 Windows Codex 在 Windows 本机刷新 Windows host status/readiness 或安全启动 Windows host 后上板。
+下一步建议：
+- 白天继续时，Mac 第一屏若仍显示 `MacClientDiscoverWindowsStatus=windows-discovery-timeout`，可复制 `MacClientDiscoverWindowsCall=` 刷新给 Windows 端；Windows 端仍需执行 `WindowsHostStatus=` / `WindowsHostReadiness=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端处理当前 host readiness call；本轮不要求 Windows 代码修改。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac discovery 显式刷新 Windows host readiness call
 开发端：Mac Codex
 本轮目标：让 Mac 侧在 discovery 超时/找不到 Windows host 时，能用显式安全开关直接刷新给 Windows Codex 的 host readiness 呼叫，而不是只发状态/消息后等人工复制。

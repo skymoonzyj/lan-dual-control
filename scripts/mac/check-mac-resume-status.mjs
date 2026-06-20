@@ -255,6 +255,11 @@ Machine-readable JSON fields:
                              Secret-free Windows host discovery command from
                              the Mac side; it does not authenticate or send
                              input.
+  commands.macClientDiscoverWindowsCallCommand
+                             Secret-free explicit Agent Link Board call command
+                             for the no-Windows-host discovery path; it runs
+                             discovery with --sendCall and still does not
+                             authenticate, request a password, or send input.
   commands.windowsHostStatusCommand
                              Secret-free Windows-side loopback status command
                              for checking or safely starting the Windows host.
@@ -1689,6 +1694,10 @@ function makeMacClientDiscoverWindowsCommand() {
   return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
 
+function makeMacClientDiscoverWindowsCallCommand() {
+  return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary";
+}
+
 function makeWindowsHostStatusCommand() {
   return "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary";
 }
@@ -2196,6 +2205,7 @@ function formatBoardSummary(report) {
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+      `MacClientDiscoverWindowsCall=${report.commands.macClientDiscoverWindowsCallCommand}.`,
       `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
       `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -2256,6 +2266,7 @@ function formatBoardSummary(report) {
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+    `MacClientDiscoverWindowsCall=${report.commands.macClientDiscoverWindowsCallCommand}.`,
     `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
     `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -2383,6 +2394,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac client manual checklist: ${report.commands.macClientManualChecklistAction}`);
   console.log(`[NEXT] Mac client password location: ${report.commands.macClientPasswordLocationAction}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
+  console.log(`[NEXT] Mac client discovery readiness call: ${report.commands.macClientDiscoverWindowsCallCommand}`);
   console.log(`[NEXT] Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
   console.log(`[NEXT] Windows host readiness for Windows side: ${report.commands.windowsHostReadinessCommand}`);
   console.log(`[NEXT] Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
@@ -2468,6 +2480,7 @@ async function main() {
       macClientManualChecklistAction: makeMacClientManualChecklistAction(),
       macClientPasswordLocationAction: makeMacClientPasswordLocationAction(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
+      macClientDiscoverWindowsCallCommand: makeMacClientDiscoverWindowsCallCommand(),
       windowsHostStatusCommand: makeWindowsHostStatusCommand(),
       windowsHostReadinessCommand: makeWindowsHostReadinessCommand(),
       macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
