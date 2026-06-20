@@ -4,7 +4,7 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
-- 当前最高优先级：处理 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`。用户切出 Codex/控制端窗口后视频卡死但声音正常，证据显示连接和音频都还在，视频回到“等待关键帧”且 `queue=470ms staleDrops=142 reason=queue-overflow-wait-keyframe`。这归 Windows 控制端处理：查 page visibility/background throttling、`requestAnimationFrame`/canvas draw、WebCodecs decode queue/backpressure、`visibilitychange` 后清队列并请求/等待下一 IDR 的恢复策略。Mac 侧只保持 host 在线；除非 Windows 收到侧 `recv/key/sps/pps/idr` 缺失，不要让 Mac 继续补 H.264 关键帧证据。
+- 当前最高优先级：真实复测 Windows 已修的 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`。Windows 控制端现在会在切出/后台后恢复可见时，针对 H.264 等关键帧、`queue-overflow-wait-keyframe` 或队列超阈值主动清本机旧队列，并保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 请求下一关键帧；诊断会显示 `原因 visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。下一步由用户真实切出/切回控制端窗口确认画面是否继续流动；如果仍冻结，先复制诊断，看 `recv/key/sps/pps/idr` 是否齐、`reason` 是否仍回到 queue overflow、canvas 是否还在绘制，再决定是否需要 Mac 补证据。Mac 侧继续保持 host 在线；无密码/auth/input/inject。
 
 - 今日协作优先级：W2 后台冻结最高；W3 音频低延迟/低丢包第二，验收看连续体验接收=播放、丢包接近 0、重同步/补缓冲下降；W1 只保持入口稳定，不再扩展 helper；M2 真实输入安全流程排在 W2/W3 稳定后；M1 远程独占声音只做方案/只读探测，未获用户明确同意不得改系统声音输出；C3 双方真实体验收口需要 Windows/Mac 分别勾选。当前主线仍只做 Windows 控 Mac，不做 Mac 控 Windows/反控/WindowsHost。
 

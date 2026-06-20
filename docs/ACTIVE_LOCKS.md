@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE：Windows 控制端新增 visibility/focus H.264 自恢复，后台恢复可见时清本机旧队列并保持 H.264 请求下一关键帧；页面回归先红后绿。待用户真实切出/切回复测确认。不改协议、不认证、不请求密码、不发 input/inject。 |
 | Mac Codex | `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | W2/W3 PASS 后后台冻结新 blocker 收口校准：把通讯板真实 PASS 和新 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE` 提升到交接第一屏，清理旧 currentCall 并向 Windows 发起新 call。文档-only，不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 
 | Windows Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | Windows 恢复总览只读消费 `WinClientRetestPreflight=ready`，输出 JSON/普通输出/boardSummary 的 target/build/diagnostics/next；危险候选不回显。不改协议、不认证、不请求密码、不发 input/inject。 |

@@ -5570,6 +5570,7 @@ async function verifyH264LatencyQueueGuard(session) {
         typeof maybeResyncH264DecoderQueueForLatency !== "function" ||
         typeof getVideoPerformanceExportStatus !== "function" ||
         typeof ensureH264Decoder !== "function" ||
+        typeof recoverH264AfterVisibilityReturn !== "function" ||
         typeof state !== "object"
       ) {
         return { ok: false, reason: "missing H.264 latency queue guard helpers" };
@@ -5608,6 +5609,9 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalDroppedStale = state.videoDroppedStaleFrames;
       const originalQueueMs = state.videoDecoderQueueMs;
       const originalLastDropReason = state.videoLastDropReason;
+      const originalVisibilityHiddenAt = state.videoVisibilityHiddenAt;
+      const originalVisibilityRecoveryCount = state.h264VisibilityRecoveryCount;
+      const originalVisibilityRecoveryLastAt = state.h264VisibilityRecoveryLastAt;
       const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
       const originalVideoDecoderDescriptor = Object.getOwnPropertyDescriptor(window, "VideoDecoder");
 
@@ -5944,8 +5948,53 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264FallbackRecoveryCount === 2 &&
           fallbackRecoveryPausedExportText.includes("最近回退：第三次等待关键帧");
 
+        const visibilitySettingsBefore = fallbackSettings.length;
+        state.connected = true;
+        state.client = {
+          sendDisplaySettings(message) {
+            fallbackSettings.push(message);
+          },
+        };
+        state.h264FallbackActive = false;
+        state.h264Decoder = {
+          state: "configured",
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 9 }, (_, index) => ({
+          frameId: index + 601,
+          queuedAt: performance.now() - 470 + index,
+          timestampUs: index * 33333,
+        }));
+        state.h264DecoderStatus = "waiting-keyframe";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderNeedsKeyFrame = true;
+        state.h264SkippedDeltaFrames = 12;
+        state.videoDroppedStaleFrames = 142;
+        state.videoDecoderQueueMs = 470;
+        state.videoLastDropReason = "queue-overflow-wait-keyframe";
+        state.videoVisibilityHiddenAt = performance.now() - 1200;
+        state.h264VisibilityRecoveryCount = 0;
+        state.h264VisibilityRecoveryLastAt = 0;
+        const visibilityRecoveryResult = recoverH264AfterVisibilityReturn("visibility-return-h264-recovery");
+        const visibilityRecoveryExportText = getVideoPerformanceExportStatus();
+        const visibilityRecovery =
+          visibilityRecoveryResult === true &&
+          state.h264FallbackActive === false &&
+          state.h264DecoderStatus === "recovering" &&
+          state.h264DecoderNeedsKeyFrame === true &&
+          state.h264SkippedDeltaFrames === 0 &&
+          state.h264DecoderQueue.length === 0 &&
+          state.h264VisibilityRecoveryCount === 1 &&
+          state.videoLastDropReason === "visibility-return-h264-recovery" &&
+          fallbackSettings.length === visibilitySettingsBefore + 1 &&
+          fallbackSettings.at(-1)?.preferredVideoCodec === "h264" &&
+          fallbackSettings.at(-1)?.preferredVideoEncoding === "annexb" &&
+          visibilityRecoveryExportText.includes("原因 visibility-return-h264-recovery") &&
+          !visibilityRecoveryExportText.includes("解码 JPEG 回退");
+
         return {
-          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
           deltaOk,
           firstSurfaceQueueGrace,
           firstSurfaceGraceResync,
@@ -5956,6 +6005,7 @@ async function verifyH264LatencyQueueGuard(session) {
           fallbackRecovery,
           secondFallbackRecovery,
           fallbackRecoveryPause,
+          visibilityRecovery,
           fallbackRecoveryCount: state.h264FallbackRecoveryCount,
           fallbackLastReason: state.h264FallbackLastReason,
           fallbackRecoveryPausedUntil: state.h264FallbackRecoveryPausedUntil,
@@ -5963,6 +6013,8 @@ async function verifyH264LatencyQueueGuard(session) {
           fallbackRecoveryExportText,
           secondRecoveryExportText,
           fallbackRecoveryPausedExportText,
+          visibilityRecoveryExportText,
+          visibilityRecoveryCount: state.h264VisibilityRecoveryCount,
           keyFrameWaitGraceExportText,
           keyFrameWaitH264RecoveryExportText,
           fallbackSettings,
@@ -6015,6 +6067,9 @@ async function verifyH264LatencyQueueGuard(session) {
         state.videoDroppedStaleFrames = originalDroppedStale;
         state.videoDecoderQueueMs = originalQueueMs;
         state.videoLastDropReason = originalLastDropReason;
+        state.videoVisibilityHiddenAt = originalVisibilityHiddenAt;
+        state.h264VisibilityRecoveryCount = originalVisibilityRecoveryCount;
+        state.h264VisibilityRecoveryLastAt = originalVisibilityRecoveryLastAt;
         state.hostDiagnostics = originalHostDiagnostics;
         if (originalVideoDecoderDescriptor) {
           Object.defineProperty(window, "VideoDecoder", originalVideoDecoderDescriptor);

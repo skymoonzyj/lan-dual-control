@@ -171,6 +171,7 @@ const videoStreamStatusPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264FirstSurfaceQueueGraceMs = 2200;
+const h264VisibilityRecoveryMinimumHiddenMs = 250;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
 const h264FallbackRecoveryCooldownMs = 2500;
 const h264FallbackRecoveryStableJpegFrames = 3;
@@ -449,6 +450,7 @@ const videoDecoderStatusLabels = {
   configured: "已就绪",
   decoding: "解码中",
   "waiting-keyframe": "等待关键帧",
+  recovering: "恢复中",
   resyncing: "重同步",
   rendering: "已绘制",
   error: "解码错误",
@@ -566,6 +568,9 @@ const state = {
   videoDecoderQueueMs: 0,
   videoDroppedStaleFrames: 0,
   videoLastDropReason: "",
+  videoVisibilityHiddenAt: 0,
+  h264VisibilityRecoveryCount: 0,
+  h264VisibilityRecoveryLastAt: 0,
   h264DecoderErrorCount: 0,
   h264DecoderWarned: false,
   h264DecoderQueue: [],
@@ -5130,6 +5135,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const decoderLatencyMs = Number(state.h264DecoderLatencyMs || state.hostDiagnostics?.h264DecoderLatencyMs) || 0;
   const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
   const skippedDeltaFrames = Number(state.h264SkippedDeltaFrames || state.hostDiagnostics?.h264SkippedDeltaFrames) || 0;
+  const visibilityRecoveryCount = Number(state.h264VisibilityRecoveryCount || state.hostDiagnostics?.h264VisibilityRecoveryCount) || 0;
   const needsKeyFrame = Boolean(state.h264DecoderNeedsKeyFrame || state.hostDiagnostics?.h264DecoderNeedsKeyFrame);
   const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const fallbackRecoveryCount = Number(state.h264FallbackRecoveryCount || state.hostDiagnostics?.h264FallbackRecoveryCount) || 0;
@@ -5180,6 +5186,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
   if (staleDrops > 0) parts.push(`本地过期丢帧 ${staleDrops}`);
   if (skippedDeltaFrames > 0) parts.push(`跳过 delta ${skippedDeltaFrames}`);
+  if (visibilityRecoveryCount > 0) parts.push(`可见恢复 ${visibilityRecoveryCount} 次`);
   if (needsKeyFrame && decoderStatus && decoderStatus !== "idle") parts.push("需要关键帧");
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (fallbackRecoveryCount > 0) parts.push(`回退恢复 ${fallbackRecoveryCount} 次`);
@@ -8891,6 +8898,8 @@ function updateH264DecoderDiagnostics(extra = {}) {
     videoDecoderQueueMs: state.videoDecoderQueueMs,
     videoDroppedStaleFrames: state.videoDroppedStaleFrames,
     videoLastDropReason: state.videoLastDropReason,
+    h264VisibilityRecoveryCount: state.h264VisibilityRecoveryCount,
+    h264VisibilityRecoveryLastAt: state.h264VisibilityRecoveryLastAt,
     h264FallbackReason: state.h264FallbackReason,
     h264FallbackRecoveryCount: state.h264FallbackRecoveryCount,
     h264FallbackLastReason: state.h264FallbackLastReason,
@@ -9056,6 +9065,68 @@ function requestH264VideoRecovery(reason, { dropReason = "" } = {}) {
   if (state.connected && typeof state.client?.sendDisplaySettings === "function") {
     state.client.sendDisplaySettings(buildDisplaySettingsMessage());
   }
+}
+function hasH264VisibilityRecoveryEvidence() {
+  const diagnosticCodec = String(state.hostDiagnostics?.videoCodec || "").toLowerCase();
+  const decoderStatus = String(state.h264DecoderStatus || "").toLowerCase();
+  return (
+    diagnosticCodec === "h264" ||
+    decoderStatus === "waiting-keyframe" ||
+    decoderStatus === "decoding" ||
+    decoderStatus === "configured" ||
+    decoderStatus === "recovering" ||
+    (Number(state.h264ReceivedFrames) || 0) > 0 ||
+    (Number(state.h264DecodedFrames) || 0) > 0 ||
+    state.videoLastDropReason === "queue-overflow-wait-keyframe"
+  );
+}
+
+function shouldRecoverH264AfterVisibilityReturn(now = performance.now()) {
+  if (!state.connected || state.h264FallbackActive || !supportsWebCodecsH264()) {
+    return false;
+  }
+  if (!hasH264VisibilityRecoveryEvidence()) {
+    return false;
+  }
+
+  const decoderStatus = String(state.h264DecoderStatus || "").toLowerCase();
+  const dropReason = String(state.videoLastDropReason || "").toLowerCase();
+  const hiddenAt = Number(state.videoVisibilityHiddenAt) || 0;
+  const hiddenLongEnough = hiddenAt > 0 && now - hiddenAt >= h264VisibilityRecoveryMinimumHiddenMs;
+  const metrics = getH264DecoderQueueMetrics(now);
+  const waitingForRecovery =
+    state.h264DecoderNeedsKeyFrame ||
+    decoderStatus === "waiting-keyframe" ||
+    decoderStatus === "recovering" ||
+    dropReason === "queue-overflow-wait-keyframe";
+  const queueStale = metrics.queueLength > h264MaximumQueuedFrames || metrics.oldestAgeMs > h264MaximumQueueAgeMs;
+  return hiddenLongEnough || waitingForRecovery || queueStale;
+}
+
+function recoverH264AfterVisibilityReturn(reason = "visibility-return-h264-recovery") {
+  const now = performance.now();
+  if (!shouldRecoverH264AfterVisibilityReturn(now)) {
+    state.videoVisibilityHiddenAt = 0;
+    return false;
+  }
+
+  state.h264VisibilityRecoveryCount = (Number(state.h264VisibilityRecoveryCount) || 0) + 1;
+  state.h264VisibilityRecoveryLastAt = now;
+  requestH264VideoRecovery("窗口恢复可见，清理后台积压队列并请求 H.264 关键帧", {
+    dropReason: reason || "visibility-return-h264-recovery",
+  });
+  state.videoVisibilityHiddenAt = 0;
+  updateH264DecoderDiagnostics();
+  return true;
+}
+
+function handleVideoVisibilityChange() {
+  const hidden = Boolean(document.hidden || document.visibilityState === "hidden");
+  if (hidden) {
+    state.videoVisibilityHiddenAt = performance.now();
+    return;
+  }
+  recoverH264AfterVisibilityReturn("visibility-return-h264-recovery");
 }
 
 function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
@@ -9912,6 +9983,8 @@ document.addEventListener("pointerdown", (event) => {
 });
 document.addEventListener("fullscreenchange", handleNativeFullscreenChange);
 document.addEventListener("webkitfullscreenchange", handleNativeFullscreenChange);
+document.addEventListener("visibilitychange", handleVideoVisibilityChange);
+window.addEventListener("focus", () => recoverH264AfterVisibilityReturn("window-focus-h264-recovery"));
 window.addEventListener("pointermove", moveMonitorModeWindow);
 window.addEventListener("pointerup", stopMonitorModeDrag);
 document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);

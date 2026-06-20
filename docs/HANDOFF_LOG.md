@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2 后台/切出窗口 H.264 冻结修复
+开发端：Windows Codex
+本轮目标：修复用户真实反馈的“切出 Codex/控制端窗口后视频卡死但声音继续”问题，避免 Windows 本机 WebCodecs 队列在后台恢复后长期卡在等待关键帧。
+完成内容：Windows 控制端新增 H.264 可见性恢复：`visibilitychange` 记录后台时间，恢复可见或重新聚焦时，如果 H.264 已有证据且处于等待关键帧、`queue-overflow-wait-keyframe`、队列超阈值或后台时间足够长，就清理本机 H.264/WebCodecs 旧队列，保持 H.264/annexb 并通过现有 `display_settings` 请求新的关键帧；诊断显示 `visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。触发条件已收紧，普通 focus 不会因正常一两帧解码队列误重启。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯 `test-windows-client-browser --diagnosticsOnly` 先失败于缺少 `recoverH264AfterVisibilityReturn`；绿灯后 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：仍需用户真实切出/切回控制端窗口确认画面是否继续流动；如果仍冻结，先看导出诊断里的 `recv/key/sps/pps/idr`、`reason`、`可见恢复`、`queueMs`、canvas/image surface，再决定是否需要 Mac 侧补证据。
+下一步建议：Mac 保持 host 在线即可；Windows/用户下一轮做真实窗口切换复测，通过后继续 W2/W3 体验收口，特别是画面稳定性、声音连续性、窗口/全屏/原画、剪贴板/文件和输入安全流程。
+是否改了协议：否。
+是否需要另一端配合：需要用户真实复测；不需要 Mac 改代码。本轮不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 W2/W3 PASS 后发现后台冻结新 blocker

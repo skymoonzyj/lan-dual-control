@@ -4,8 +4,11 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
-## 2026-06-21 W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE
-- W2/W3 首屏可见画面 gate 已过后，用户真实体验又暴露新问题：切出 Codex/控制端窗口后，视频完全卡死，但系统声音仍正常。通讯板现场证据：连接仍在 `192.168.31.122:43770`，视频仍是 H.264/annexb-base64/真实屏幕，实收约 `62 FPS`、到达约 `308ms`，但状态回到“等待关键帧”，`queue=470ms`，本地过期丢帧 `142`，原因 `queue-overflow-wait-keyframe`；音频仍接收/播放 `9583/9583`。这不是 Mac 断流或网络断开，当前 owner 是 Windows 控制端：重点查 page visibility/background throttling、`requestAnimationFrame`/canvas draw、WebCodecs decode queue/backpressure，以及 `visibilitychange` 后是否应清队列并主动请求/等待下一 IDR。Mac 只保持 host 在线；除非 Windows 收到侧 `recv/key/sps/pps/idr` 缺失，不再要求 Mac 补关键帧证据。已向 Windows Codex 发起 `Fix W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE` call；不请求密码、不发 input/inject。
+## 2026-06-21 Windows 修复 W2 后台/切出窗口 H.264 冻结，待真实复测确认
+- Windows 控制端已针对 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE` 增加前台恢复策略：页面进入后台/切出窗口后记录 `visibilitychange` 隐藏时间，恢复可见或重新聚焦时，如果 H.264 链路处于等待关键帧、`queue-overflow-wait-keyframe`、队列超阈值或后台时间足够长，会清理本机 WebCodecs/H.264 旧队列，保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`，并通过现有 `display_settings` 请求新的 H.264 关键帧，不改协议、不切 JPEG。现场/导出诊断会留下 `原因 visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。TDD 红灯先失败于缺少 `recoverH264AfterVisibilityReturn`，绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。下一步需要用户真实切出/切回控制端窗口确认画面不会再长期卡住；若仍复现，优先看导出诊断的 `recv/key/sps/pps/idr`、`reason`、`可见恢复`、`queueMs` 和 canvas 状态。无密码/auth/input/inject。
+
+## 2026-06-21 W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE 现场证据（修复依据）
+- 本轮修复依据来自用户真实体验：切出 Codex/控制端窗口后视频完全卡死但系统声音仍正常。通讯板现场证据显示连接仍在 `192.168.31.122:43770`，视频仍是 H.264/annexb-base64/真实屏幕，实收约 `62 FPS`、到达约 `308ms`，但状态回到“等待关键帧”，`queue=470ms`，本地过期丢帧 `142`，原因 `queue-overflow-wait-keyframe`；音频仍接收/播放 `9583/9583`。这证明主因不是 Mac 断流或网络断开，而是 Windows 控制端后台/恢复可见后的 WebCodecs/H.264 本机队列和关键帧恢复路径。
 
 ## 2026-06-21 W2/W3 真实复测 PASS，进入体验收口
 - 通讯板已收到用户提供的真实 Windows 控 Mac 复测结果：Windows 连接 `192.168.31.122:43770` 成功，remote=H.264 已解码，`canvas=true 1920x1080 image=false`，`decoded=已绘制 18`，`recv=22 key=1 sps/pps/idr=1/1/1`，`h264Errors=0`；实收约 `89.8 FPS`，最大视频间隔 `29ms`，本机队列约 `59ms`，解码延迟约 `59ms`；音频接收/播放 `14/14`，丢 `0`。结论：`W2-H264-DECODE-GATE-BLOCKER` 已修复，Windows 控 Mac 已进入真实可见画面阶段；旧 `Run real WinClientRetest for W2/W3` currentCall 已清理。下一阶段不要继续围绕 H.264 首屏 blocker 做重复诊断，转入真实体验收口：画面稳定性/延迟、音频连续性、窗口/全屏/原画、剪贴板/文件，以及真实输入安全日志到控制流程。全程仍不在通讯板发送密码，不自动发 input/inject。
