@@ -381,6 +381,12 @@ async function assertJsonSuccess(timeoutMs) {
     if (Number(payload.observation.h264.keyFramesWithParameterSets) < 1) {
       throw new Error(`JSON success should count H.264 keyframes with parameter sets.\n${result.stdout}`);
     }
+    if ((payload.observation.h264.lastKeyFrameNalTypes || []).join(",") !== "7,8,5") {
+      throw new Error(`JSON success should report last H.264 keyframe NAL types.\n${result.stdout}`);
+    }
+    if ((payload.observation.h264.lastNalTypes || []).join(",") !== "1") {
+      throw new Error(`JSON success should report last H.264 frame NAL types.\n${result.stdout}`);
+    }
     if (Number(payload.observation.h264.keyFrameIntervalFrames?.count) < 1 || Number(payload.observation.h264.keyFrameIntervalFrames?.max) !== 3) {
       throw new Error(`JSON success should report H.264 keyframe interval frames.\n${result.stdout}`);
     }

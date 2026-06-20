@@ -1165,6 +1165,8 @@ function formatMediaH264BoardSummary(details) {
     `keyParam=${keyParam}`,
     formatH264NalTypesBoardSummary("firstKeyNal", h264.firstKeyFrameNalTypes),
     formatH264NalTypesBoardSummary("firstNal", h264.firstNalTypes),
+    formatH264NalTypesBoardSummary("lastKeyNal", h264.lastKeyFrameNalTypes),
+    formatH264NalTypesBoardSummary("lastNal", h264.lastNalTypes),
     formatH264IntervalBoardSummary("keyGapFramesMax", h264.keyFrameIntervalFrames),
     formatH264IntervalBoardSummary("keyGapMsMax", h264.keyFrameIntervalMs),
   ].filter(Boolean).join(" ");

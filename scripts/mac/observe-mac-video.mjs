@@ -346,6 +346,8 @@ function createVideoStats(args) {
       keyFramesWithParameterSets: 0,
       firstNalTypes: [],
       firstKeyFrameNalTypes: [],
+      lastNalTypes: [],
+      lastKeyFrameNalTypes: [],
       keyFrameIntervalFrames: [],
       keyFrameIntervalMs: [],
       lastKeyFrameFrameId: null,
@@ -574,6 +576,7 @@ function trackH264Frame(stats, h264Info, frame = {}) {
   if (stats.h264.firstNalTypes.length === 0) {
     stats.h264.firstNalTypes = h264Info.nalTypes;
   }
+  stats.h264.lastNalTypes = h264Info.nalTypes;
   for (const nalType of h264Info.nalTypes) {
     countValue(stats.h264.nalTypes, nalType);
   }
@@ -582,6 +585,7 @@ function trackH264Frame(stats, h264Info, frame = {}) {
     if (stats.h264.firstKeyFrameNalTypes.length === 0) {
       stats.h264.firstKeyFrameNalTypes = h264Info.nalTypes;
     }
+    stats.h264.lastKeyFrameNalTypes = h264Info.nalTypes;
     trackH264KeyFrameInterval(stats.h264, frame);
   }
   if (h264Info.keyFrameFlag) stats.h264.keyFrameFlagFrames += 1;
@@ -712,6 +716,8 @@ function makeH264Observation(h264) {
     keyFramesWithParameterSets: h264.keyFramesWithParameterSets,
     firstNalTypes: h264.firstNalTypes,
     firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
+    lastNalTypes: h264.lastNalTypes,
+    lastKeyFrameNalTypes: h264.lastKeyFrameNalTypes,
     keyFrameIntervalFrames: {
       count: keyFrameIntervalFrames.count,
       min: Math.round(keyFrameIntervalFrames.min),

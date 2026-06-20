@@ -733,6 +733,8 @@ function formatH264ProbeSummary(h264) {
     `keyParam=${h264.keyFramesWithParameterSets || 0}`,
     formatH264NalTypes("firstKeyNal", h264.firstKeyFrameNalTypes),
     formatH264NalTypes("firstNal", h264.firstNalTypes),
+    formatH264NalTypes("lastKeyNal", h264.lastKeyFrameNalTypes),
+    formatH264NalTypes("lastNal", h264.lastNalTypes),
     formatH264Interval("keyGapFramesMax", h264.keyFrameIntervalFrames, 0),
     formatH264Interval("keyGapMsMax", h264.keyFrameIntervalMs, 0),
   ].filter(Boolean).join(",");
