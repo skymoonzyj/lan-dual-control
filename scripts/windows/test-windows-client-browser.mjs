@@ -4927,6 +4927,70 @@ async function verifyH264KeyFrameDetection(session) {
   return result;
 }
 
+async function verifyVideoStutterDiagnostics(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (typeof getVideoPerformanceExportStatus !== "function" || typeof state !== "object") {
+        return { ok: false, reason: "missing video stutter diagnostics helpers" };
+      }
+
+      const original = {
+        videoFrameTimes: Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [],
+        videoFrames: state.videoFrames,
+        actualVideoFps: state.actualVideoFps,
+        requestedFps: state.requestedFps,
+        negotiatedFps: state.negotiatedFps,
+        hostDiagnostics: { ...(state.hostDiagnostics || {}) },
+        decoderQueue: Array.isArray(state.h264DecoderQueue) ? state.h264DecoderQueue.slice() : [],
+        decoderLatency: state.h264DecoderLatencyMs,
+        decoderQueueMs: state.videoDecoderQueueMs,
+        droppedStale: state.videoDroppedStaleFrames,
+        lastDropReason: state.videoLastDropReason,
+      };
+
+      try {
+        state.videoFrameTimes = [1000, 1016, 1032, 1200, 1216, 1400];
+        state.videoFrames = 6;
+        state.actualVideoFps = 12.5;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.hostDiagnostics = {};
+        state.h264DecoderQueue = [];
+        state.h264DecoderLatencyMs = 0;
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+        const exportText = getVideoPerformanceExportStatus();
+        return {
+          ok:
+            exportText.includes("平均间隔 80 ms") &&
+            exportText.includes("最大间隔 184 ms") &&
+            exportText.includes("卡顿 2") &&
+            exportText.includes("最大卡顿 184 ms"),
+          exportText,
+        };
+      } finally {
+        state.videoFrameTimes = original.videoFrameTimes;
+        state.videoFrames = original.videoFrames;
+        state.actualVideoFps = original.actualVideoFps;
+        state.requestedFps = original.requestedFps;
+        state.negotiatedFps = original.negotiatedFps;
+        state.hostDiagnostics = original.hostDiagnostics;
+        state.h264DecoderQueue = original.decoderQueue;
+        state.h264DecoderLatencyMs = original.decoderLatency;
+        state.videoDecoderQueueMs = original.decoderQueueMs;
+        state.videoDroppedStaleFrames = original.droppedStale;
+        state.videoLastDropReason = original.lastDropReason;
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`video stutter diagnostics check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyH264LatencyQueueGuard(session) {
   const result = await evaluate(
     session,
@@ -6473,6 +6537,9 @@ async function run() {
     const lowFpsCheck = await verifyLowFpsDiagnostics(session);
     summary.checks.push("low-fps-diagnostics");
     print("OK", `Low FPS diagnostics: ${lowFpsCheck.lowText}`);
+    const videoStutterCheck = await verifyVideoStutterDiagnostics(session);
+    summary.checks.push("video-stutter-diagnostics");
+    print("OK", `Video stutter diagnostics: ${videoStutterCheck.exportText}`);
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
     summary.checks.push("h264-keyframe");
     print(

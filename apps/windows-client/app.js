@@ -161,6 +161,7 @@ const audioMaximumQueuedSeconds = 0.45;
 const audioResyncBufferSeconds = 0.12;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
+const videoStutterGapThresholdMs = 120;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -4478,10 +4479,13 @@ function getVideoFrameGapStats() {
   }
 
   const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  const stutterGaps = gaps.filter((gap) => gap >= videoStutterGapThresholdMs);
   return {
     sampleCount: times.length,
     averageGapMs: Math.round(total / gaps.length),
     maxGapMs: Math.round(Math.max(...gaps)),
+    stutterCount: stutterGaps.length,
+    maxStutterGapMs: stutterGaps.length ? Math.round(Math.max(...stutterGaps)) : 0,
   };
 }
 
@@ -4501,7 +4505,7 @@ function getVideoPerformanceExportStatus() {
   const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
   const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
-  const { sampleCount, averageGapMs, maxGapMs } = getVideoFrameGapStats();
+  const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const parts = [];
   parts.push(actual > 0 ? `实收 ${actual.toFixed(1)} FPS` : "实收 -- FPS");
   if (requested) parts.push(`请求 ${requested} Hz`);
@@ -4509,6 +4513,10 @@ function getVideoPerformanceExportStatus() {
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
     parts.push(`最大间隔 ${maxGapMs} ms`);
+    if (stutterCount > 0) {
+      parts.push(`卡顿 ${stutterCount}`);
+      parts.push(`最大卡顿 ${maxStutterGapMs} ms`);
+    }
   } else {
     parts.push("间隔样本不足");
   }

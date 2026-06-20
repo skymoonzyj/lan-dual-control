@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W2 Windows 视频卡顿事件诊断
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 的现场视频诊断能直接显示明显卡顿事件，辅助定位“不像 60Hz / 偶发卡顿”。
+完成内容：
+- `getVideoFrameGapStats()` 现在统计相邻帧间隔 >=120ms 的卡顿事件数和最大卡顿间隔。
+- 复制/导出诊断“现场视频”在出现明显卡顿时输出 `卡顿 <n>` 和 `最大卡顿 <ms> ms`。
+- 页面自测新增 `verifyVideoStutterDiagnostics`，用 2 次长间隔验证导出 `卡顿 2 / 最大卡顿 184 ms`。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于导出缺少 `卡顿 2 / 最大卡顿 184 ms`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：真实体验时仍需用户复制“现场视频”行；如果卡顿次数高但本机队列低，下一步查 Mac 采集/网络节奏；如果本机队列或过期丢帧高，再继续查 WebCodecs/H.264 本地队列。
+下一步建议：继续 W2 可做视频自适应队列/关键帧恢复；或在用户在场时按手工清单抓真实“现场视频/现场声音”诊断样本。
+是否改了协议：否；只改 Windows 控制端本地统计和诊断文案。
+是否需要另一端配合：暂不需要；真实体验复测时需要 Mac 端同步媒体基线或手工验收窗口。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W3 Windows 音频重同步预缓冲
 开发端：Windows Codex
 本轮目标：减少 Windows 控 Mac 时 WebAudio 队列溢出后刚清队列又贴边播放造成的声音断续。
@@ -2151,7 +2178,7 @@
 本轮目标：增强 Windows 控制端现场诊断，方便定位卡顿和声音断续。
 完成内容：
 - 复制/导出诊断的快速摘要新增“现场视频 / 现场声音”两行。
-- 现场视频导出实收 FPS、请求/协商 Hz、平均/最大帧间隔、视频帧数、远端丢帧和解码队列。
+- 现场视频导出实收 FPS、请求/协商 Hz、平均/最大帧间隔、卡顿次数、最大卡顿间隔、视频帧数、远端丢帧和解码队列。
 - 现场声音导出 WebAudio 当前队列毫秒、80/70/450/120 ms 缓冲阈值、接收/播放/丢弃计数和播放错误。
 - `test-windows-client-browser` 的 reconnect/复制诊断回归覆盖新增字段，先红灯确认字段缺失，再绿灯确认导出文本可复制。
 修改文件：
