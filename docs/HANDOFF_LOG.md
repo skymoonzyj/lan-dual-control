@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控制端消费 MacScriptHelpStatus
+开发端：Windows Codex
+本轮目标：接住 Mac 端新增的 `MacScriptHelpStatus=ok|failed` 稳定标签，让 Windows 控制端能直接显示 help 自检结果。
+完成内容：新增只读 `MacScriptHelpStatus` 解析；`ok` 进入证据“Mac 脚本 help 自检已通过”，`failed` 进入风险“Mac 脚本 help 自检失败”；页面 diagnostics-only 自测覆盖 ok/failed 两条路径。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 ok/failed 标签都没有证据/风险；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 控制端本地提示，不运行 Mac help 自检，也不改变 Mac 脚本覆盖本身。
+下一步建议：后续若 Mac help 自检 failed，优先由 Mac 端修复对应 help 副作用防线；Windows 端继续保持只读提示。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 控制端 UserPresence away 可见化
 开发端：Windows Codex
 本轮目标：让 Windows 控制端页面直接显示通讯板 userPresence=away 带来的安全边界，避免用户不在时误进密码/授权/真实输入流程。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 控制端消费 MacScriptHelpStatus
+- Windows 控制端现在会消费 Mac 新版 `MacScriptHelpStatus=ok|failed` 稳定标签：`ok` 会进入 Mac 提醒/值守证据并显示“Mac 脚本 help 自检已通过”，`failed` 会进入风险并显示“Mac 脚本 help 自检失败”。页面自测先红于 ok/failed 都没有可见摘要，再绿于 `test-windows-client-browser --diagnosticsOnly`。只读解析，不运行 Mac 脚本、不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows 控制端 UserPresence away 可见化
 - Windows 控制端现在会从 Mac 提醒/值守文本中识别 `UserPresence=away`、`UserPresenceAction=no-auth-only` 和 `BLOCKED_BY_USER_AWAY`，把 Mac 提醒区、值守摘要和复制/导出诊断里的风险翻译成“用户不在 / 只做无授权任务”。页面自测先红于缺少这两个中文提示，再绿于 `test-windows-client-browser --diagnosticsOnly`。只做本地解析和展示，不改协议、不认证、不请求或发送密码、不发 input/inject。
 

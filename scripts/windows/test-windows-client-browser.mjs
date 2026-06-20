@@ -2189,6 +2189,18 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const macScriptHelpOkStatusAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "Mac script help: ok 148/148 commands across 74 scripts; timeout=10000ms. MacScriptHelpStatus=ok commands=148/148 scripts=74 timeoutMs=10000.",
+            )
+          : null;
+      const macScriptHelpFailedStatusAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "Mac script help: failed 1/148 across 74 scripts; timeout=10000ms. MacScriptHelpStatus=failed failures=1 commands=148 scripts=74 timeoutMs=10000.",
+            )
+          : null;
       const cleanMacHeartbeatCommandAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2834,6 +2846,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacScriptHelpAttention?.summary === "" &&
           Array.isArray(cleanMacScriptHelpAttention?.labels) &&
           cleanMacScriptHelpAttention.labels.length === 0 &&
+          macScriptHelpOkStatusAttention?.summary === "" &&
+          macScriptHelpOkStatusAttention?.evidenceSummary.includes("Mac 脚本 help 自检已通过") &&
+          Array.isArray(macScriptHelpOkStatusAttention?.evidenceLabels) &&
+          macScriptHelpOkStatusAttention.evidenceLabels.length === 1 &&
+          macScriptHelpFailedStatusAttention?.summary.includes("Mac 脚本 help 自检失败") &&
+          !macScriptHelpFailedStatusAttention?.evidenceSummary.includes("Mac 脚本 help 自检已通过") &&
           cleanMacHeartbeatCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHeartbeatCommandAttention?.labels) &&
           cleanMacHeartbeatCommandAttention.labels.length === 0 &&
@@ -2952,6 +2970,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacClientPromptPasswordSmokeAttention,
         macDiscoveryPromptPasswordSmokeAttention,
         cleanMacScriptHelpAttention,
+        macScriptHelpOkStatusAttention,
+        macScriptHelpFailedStatusAttention,
         macHeartbeatRerunAttention,
         macHostMediaCommandAttention,
         macClientPageCommandAttention,

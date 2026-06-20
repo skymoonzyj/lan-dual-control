@@ -339,6 +339,7 @@ const macUnattendedRiskLabels = {
   "mac-client-prompt-password-smoke": "Mac client 前台密码真测命令已提供",
   "mac-client-browser-self-test": "Mac client 本地 browser 自测命令已提供",
   "mac-script-help-command": "Mac 脚本 help 安全自检命令已提供",
+  "mac-script-help-failed": "Mac 脚本 help 自检失败",
   "mac-formal-local-smoke": "Mac 本机短验收需处理",
   "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
   "windows-reverse-grant-status": "Windows 反控授权状态命令已提供",
@@ -4205,6 +4206,36 @@ function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
   );
 }
 
+function isSafeMacScriptHelpStatusSegment(segment) {
+  return (
+    !/\b(?:password|passwd|pwd|token|secret|cookie)\s*[:=]\s*\S+/i.test(segment) &&
+    !/(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(segment) &&
+    !/\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment)
+  );
+}
+
+function extractMacScriptHelpStatusRisks(text) {
+  const risks = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    const match = /\bMacScriptHelpStatus\s*=\s*(ok|failed)\b/i.exec(segment);
+    if (!match || !isSafeMacScriptHelpStatusSegment(segment)) continue;
+    const status = normalizeMacUnattendedToken(match[1]);
+    const failedCount = /\bfailures\s*=\s*(?!0\b)\d+/i.test(segment);
+    if (status === "failed" || failedCount) {
+      risks.push("mac-script-help-failed");
+    }
+  }
+  return [...new Set(risks)];
+}
+
+function hasCleanMacScriptHelpStatusEvidence(text) {
+  return splitMacStatusSegments(text).some((segment) => {
+    const match = /\bMacScriptHelpStatus\s*=\s*(ok|failed)\b/i.exec(segment);
+    if (!match || !isSafeMacScriptHelpStatusSegment(segment)) return false;
+    if (normalizeMacUnattendedToken(match[1]) !== "ok") return false;
+    return !/\bfailures\s*=\s*(?!0\b)\d+/i.test(segment);
+  });
+}
 function parseMacPositiveEvidenceLabels(text) {
   const source = String(text || "");
   const labels = [];
@@ -4256,6 +4287,9 @@ function parseMacPositiveEvidenceLabels(text) {
   ) {
     labels.push("Mac client 诊断已通过");
   }
+  if (hasCleanMacScriptHelpStatusEvidence(source)) {
+    labels.push("Mac 脚本 help 自检已通过");
+  }
   labels.push(...parseMacEvidenceFieldLabels(source));
   labels.push(...parseStandaloneMacEvidenceLabels(source));
   labels.push(...parsePostPassManualUxEvidenceLabels(source));
@@ -4274,7 +4308,8 @@ function parseMacUnattendedAttention(text) {
   const heartbeatHealthRisks = extractMacHeartbeatHealthRisks(source);
   const remoteAudioStatusRisks = extractMacRemoteAudioStatusRisks(source);
   const userPresenceRisks = extractUserPresenceRisks(source);
-  const risks = [...new Set([...userPresenceRisks, ...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
+  const macScriptHelpStatusRisks = extractMacScriptHelpStatusRisks(source);
+  const risks = [...new Set([...userPresenceRisks, ...macScriptHelpStatusRisks, ...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();
