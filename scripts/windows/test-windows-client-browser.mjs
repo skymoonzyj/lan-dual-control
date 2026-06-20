@@ -1525,6 +1525,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+        "MacClientPasswordLocation=Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -1628,6 +1629,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           : {};
       const macHostAuthPathText = [
         "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+        "MacClientPasswordLocation=Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板",
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
         "safety=no-password,no-input-inject",
       ].join("; ");
@@ -1649,6 +1651,24 @@ async function verifyDesktopOnlyHostPanel(session) {
               server: "http://192.168.31.68:17888",
               recentAlerts: [{ at: "2026-06-20 09:30:00", title: "Mac auth path", message: macHostAuthPathText }],
               lastAlert: { at: "2026-06-20 09:30:00", title: "Mac auth path", message: macHostAuthPathText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const macClientPasswordLocationText = "MacClientPasswordLocation=Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板";
+      const macClientPasswordLocationAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(macClientPasswordLocationText)
+          : null;
+      const macClientPasswordLocationView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2472],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 09:32:00", title: "Mac client password location", message: macClientPasswordLocationText }],
+              lastAlert: { at: "2026-06-20 09:32:00", title: "Mac client password location", message: macClientPasswordLocationText },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
@@ -2646,6 +2666,19 @@ async function verifyDesktopOnlyHostPanel(session) {
           macHostAuthPathView.statusText.includes("先在 Mac 前台同密重启 60Hz host") &&
           macHostAuthPathView.statusText.includes("不要把密码发到通讯板") &&
           !macHostAuthPathView.statusText.includes("风险：") &&
+          macClientPasswordLocationAttention?.summary === "" &&
+          macClientPasswordLocationAttention?.evidenceSummary.includes("Mac client 密码输入位置已提示") &&
+          macClientPasswordLocationAttention?.evidenceSummary.includes("Mac client 页面密码框填写 Windows 临时密码") &&
+          macClientPasswordLocationAttention?.evidenceSummary.includes("终端隐藏输入只用于 formal/browser runner") &&
+          macClientPasswordLocationAttention?.evidenceSummary.includes("不要把密码发到通讯板") &&
+          Array.isArray(macClientPasswordLocationAttention?.evidenceLabels) &&
+          macClientPasswordLocationAttention.evidenceLabels.length >= 4 &&
+          macClientPasswordLocationView.statusText.includes("证据：") &&
+          macClientPasswordLocationView.statusText.includes("Mac client 密码输入位置已提示") &&
+          macClientPasswordLocationView.statusText.includes("Mac client 页面密码框填写 Windows 临时密码") &&
+          macClientPasswordLocationView.statusText.includes("终端隐藏输入只用于 formal/browser runner") &&
+          macClientPasswordLocationView.statusText.includes("不要把密码发到通讯板") &&
+          !macClientPasswordLocationView.statusText.includes("风险：") &&
           positiveMacValidationAttention?.summary === "" &&
           Array.isArray(positiveMacValidationAttention?.labels) &&
           positiveMacValidationAttention.labels.length === 0 &&
@@ -2842,6 +2875,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         macHostAuthPathAttention,
         macHostAuthPathBareAttention,
         macHostAuthPathView,
+        macClientPasswordLocationAttention,
+        macClientPasswordLocationView,
         positiveMacValidationAttention,
         positiveMacValidationView,
         positiveMacFormalE2eAttention,
@@ -5371,6 +5406,7 @@ async function verifyReconnectControls(session) {
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+        "MacClientPasswordLocation=Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -5719,6 +5755,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 控制页密码框填写同一个临时密码") &&
             exportText.includes("先在 Mac 前台同密重启 60Hz host") &&
             exportText.includes("不要把密码发到通讯板") &&
+            exportText.includes("MacClientPasswordLocation=Mac client 页面连接 Windows 时") &&
+            exportText.includes("页面“连接密码”框") &&
+            exportText.includes("formal/browser runner 的终端隐藏输入只用于脚本") &&
             exportText.includes("capture=system-pcm-does-not-mute-local") &&
             exportText.includes("recommended=product-toggle-with-explicit-consent") &&
             exportText.includes("safety=no-volume-change") &&

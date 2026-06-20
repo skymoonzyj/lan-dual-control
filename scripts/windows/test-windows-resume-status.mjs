@@ -1400,6 +1400,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macClientFormalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
   const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
   const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+  const macClientPasswordLocationAction = "Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板";
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
@@ -1428,7 +1429,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacClientManualChecklist=${macClientManualChecklistAction} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} ${macManualUxBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacClientManualChecklist=${macClientManualChecklistAction} MacClientPasswordLocation=${macClientPasswordLocationAction} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} ${macManualUxBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -1547,6 +1548,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "message",
           from: "Mac Codex",
           text: "MacClientManualChecklist=Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；自动发送 input_event",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: `${macClientPasswordLocationAction} MacClientPasswordLocation=Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；password=secret-value`,
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacClientPasswordLocation=Mac client 页面连接 Windows 时，自动发送 input_event 或 inject",
         },
         {
           type: "message",
@@ -1706,6 +1717,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macClientManualChecklist.action === macClientManualChecklistAction, "MacClientManualChecklist action mismatch");
       assert(payload.board.macClientManualChecklist.source === "api-state", "MacClientManualChecklist should come from /api/state");
       assert(payload.board.macClientManualChecklist.rejectedCount >= 2, "unsafe MacClientManualChecklist summaries should be rejected");
+      assert(payload.board?.macClientPasswordLocation?.found === true, "MacClientPasswordLocation should be found in board state");
+      assert(payload.board.macClientPasswordLocation.action === macClientPasswordLocationAction, "MacClientPasswordLocation action mismatch");
+      assert(payload.board.macClientPasswordLocation.source === "api-state", "MacClientPasswordLocation should come from /api/state");
+      assert(payload.board.macClientPasswordLocation.rejectedCount >= 2, "unsafe MacClientPasswordLocation summaries should be rejected");
       assert(payload.board?.macRemoteAudioPlan?.found === true, "MacRemoteAudioPlan should be found in board state");
       assert(payload.board.macRemoteAudioPlan.command === macRemoteAudioPlanCommand, "MacRemoteAudioPlan command mismatch");
       assert(payload.board.macRemoteAudioPlan.source === "api-state", "MacRemoteAudioPlan should come from /api/state");
@@ -1799,6 +1814,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "MacClientFormalChecklist JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientManualChecklist=${macClientManualChecklistAction}.`, "MacClientManualChecklist JSON board summary");
+      assertIncludes(payload.boardSummary, `MacClientPasswordLocation=${macClientPasswordLocationAction}.`, "MacClientPasswordLocation JSON board summary");
       assertIncludes(payload.boardSummary, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "MacRemoteAudioPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan JSON board summary");
@@ -1843,6 +1859,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "MacClientFormalChecklist board summary");
       assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke board summary");
       assertIncludes(result.stdout, `MacClientManualChecklist=${macClientManualChecklistAction}.`, "MacClientManualChecklist board summary");
+      assertIncludes(result.stdout, `MacClientPasswordLocation=${macClientPasswordLocationAction}.`, "MacClientPasswordLocation board summary");
       assertIncludes(result.stdout, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "MacRemoteAudioPlan board summary");
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio board summary");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan board summary");
@@ -1884,6 +1901,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacClientFormalChecklist=${macClientFormalChecklistCommand}`, "MacClientFormalChecklist human output");
       assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}`, "MacClientFormalSmoke human output");
       assertIncludes(result.stdout, `MacClientManualChecklist=${macClientManualChecklistAction}`, "MacClientManualChecklist human output");
+      assertIncludes(result.stdout, `MacClientPasswordLocation=${macClientPasswordLocationAction}`, "MacClientPasswordLocation human output");
       assertIncludes(result.stdout, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}`, "MacRemoteAudioPlan human output");
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}`, "Mac remote audio human output");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}`, "MacInputSafetyPlan human output");

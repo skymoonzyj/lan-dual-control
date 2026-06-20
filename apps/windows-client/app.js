@@ -3677,6 +3677,31 @@ function parseMacHostAuthPathEvidenceLabels(text) {
   }
   return [...new Set(labels)];
 }
+
+function parseMacClientPasswordLocationEvidenceLabels(text) {
+  const source = String(text || "");
+  const match = /\bMacClientPasswordLocation\s*=\s*([^;\r\n]+)/i.exec(source);
+  if (!match) return [];
+  const value = match[1];
+  if (
+    !/Mac client 页面连接 Windows 时/.test(value) ||
+    !/Windows 当前临时密码/.test(value) ||
+    !/页面“连接密码”框/.test(value) ||
+    !/终端隐藏输入只用于脚本/.test(value) ||
+    !/不要把密码发通讯板/.test(value)
+  ) {
+    return [];
+  }
+  if (/\b(?:LAN_DUAL_PASSWORD|password|passwd|pwd|token|secret)\s*[:=]\s*\S+/i.test(value)) return [];
+  if (/(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(value)) return [];
+  if (/\b(?:input_event|input_events|inject)\b/i.test(value) || /自动发送/.test(value)) return [];
+  return [
+    "Mac client 密码输入位置已提示",
+    "Mac client 页面密码框填写 Windows 临时密码",
+    "终端隐藏输入只用于 formal/browser runner",
+    "不要把密码发到通讯板",
+  ];
+}
 function splitMacHeartbeatHealthReasonValues(segment) {
   const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
   if (!reason) return [];
@@ -3790,6 +3815,7 @@ function parseMacPositiveEvidenceLabels(text) {
   labels.push(...parseMacRemoteAudioPlanEvidenceLabels(source));
   labels.push(...parseMacInputSafetyPlanEvidenceLabels(source));
   labels.push(...parseMacHostAuthPathEvidenceLabels(source));
+  labels.push(...parseMacClientPasswordLocationEvidenceLabels(source));
   return [...new Set(labels)];
 }
 

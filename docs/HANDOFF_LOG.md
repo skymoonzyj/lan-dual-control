@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 端消费 MacClientPasswordLocation
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览和 Windows 控制页能读懂 Mac 侧上板的 Mac client 密码输入位置提示，减少 Mac 控 Windows 时“密码填哪”的现场混淆。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增 `MacClientPasswordLocation=` 安全解析，JSON `board.macClientPasswordLocation`、普通输出和 `--boardSummary` 都会显示固定无密提示。
+- Windows 控制页 Mac 提醒区、值守证据和复制/导出诊断新增同一提示的正向证据：Mac client 页面密码框填写 Windows 临时密码；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板。
+- 解析拒绝 `password=...`、token/secret、`input_event`、`inject` 或自动发送伪造候选；只读消费，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs` 先失败于 `MacClientManualChecklist should be found in board state`，暴露旧字段边界还未识别 `MacClientPasswordLocation=`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs`
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `macClientPasswordLocationAttention.evidenceLabels` 为空。
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 真实 Mac 侧需要继续上板 `MacClientPasswordLocation=` 固定无密文本；Windows 已兼容消费。
+下一步建议：
+- 白天真实手工体验时，Windows 控 Mac 仍看 Windows 页面“连接密码”框；Mac 控 Windows 看 Mac 页面“密码”框和 Windows resume/control 的 `MacClientPasswordLocation=` 提示。
+是否改了协议：否。
+是否需要另一端配合：不强制；Mac 端后续只要继续输出固定无密 `MacClientPasswordLocation=`，Windows 会自动显示。
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac client 密码输入位置提示
