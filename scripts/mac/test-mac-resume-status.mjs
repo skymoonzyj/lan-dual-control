@@ -293,6 +293,11 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHeartbeatStop=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background stop command`);
   assert(/MacManualUxStatus=/.test(text), `${label} should include Mac manual UX status guidance`);
   assert(/MacManualUxStatus=.*check-mac-manual-ux-status\.mjs/.test(text), `${label} should include the Mac manual UX status command`);
+  assert(/MacManualUxSendStatus=/.test(text), `${label} should include Mac manual UX Agent Link Board refresh guidance`);
+  assertMacManualUxSendStatusCommand(
+    String(text || "").split("MacManualUxSendStatus=")[1]?.split(". ")[0] || "",
+    `${label} Mac manual UX send-status command`,
+  );
   assert(/MacScriptHelp=/.test(text), `${label} should include Mac script help safety guidance`);
   assert(/test-mac-script-help\.mjs/.test(text), `${label} should include the Mac script help command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
@@ -863,6 +868,20 @@ function assertMacManualUxStatusCommand(command, label) {
   assert(!command.includes("--inputMode inject"), `${label} should not instruct inject mode`);
 }
 
+function assertMacManualUxSendStatusCommand(command, label) {
+  assert(/check-mac-manual-ux-status\.mjs/.test(command), `${label} should use check-mac-manual-ux-status`);
+  assert(command.includes("--server"), `${label} should preserve the Agent Link Board server`);
+  assert(command.includes("--sendStatus"), `${label} should post Mac Manual UX status`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--sendMessage"), `${label} should avoid status-message spam`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!command.includes("input_event"), `${label} should not send input events`);
+  assert(!command.includes("--inputMode inject"), `${label} should not instruct inject mode`);
+}
+
 function getRuntimeBuildBeforeLatestMacHostChange() {
   const latest = spawnSync("git", ["log", "--format=%H", "-1", "--", "apps/mac-host/Sources"], {
     cwd: repoRoot,
@@ -930,6 +949,7 @@ function checkHelp(args) {
     assert(/commands\.macInputSafetySendStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac input safety send-status JSON field`);
     assert(/commands\.macSafeInjectRehearsalCommand/.test(result.stdout), `${script} ${flag} should document Mac safe inject rehearsal JSON field`);
     assert(/commands\.macManualUxStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac manual UX status JSON field`);
+    assert(/commands\.macManualUxSendStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac manual UX send-status JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -1012,6 +1032,7 @@ function checkOfflineJson(args) {
   assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "offline JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatusCommand || "", "offline JSON Mac manual UX status command");
+  assertMacManualUxSendStatusCommand(payload.commands?.macManualUxSendStatusCommand || "", "offline JSON Mac manual UX send-status command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(String(payload.boardSummary || "").includes("--port 9"), "offline JSON boardSummary should include safe start port");
@@ -1222,6 +1243,7 @@ function checkOnlineJson(args) {
   assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "online JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "online JSON copy diagnostics action should mention password safety");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatusCommand || "", "online JSON Mac manual UX status command");
+  assertMacManualUxSendStatusCommand(payload.commands?.macManualUxSendStatusCommand || "", "online JSON Mac manual UX send-status command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "online JSON Mac script help command");
   assert(Array.isArray(payload.recommendations), "online payload should include recommendations");
   if (payload.macHeartbeatWatcher.running === false) {

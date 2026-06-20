@@ -325,6 +325,20 @@ function assertMacManualUxStatusCommand(command, label) {
   assertNotIncludes(command || "", "--inputMode inject", label);
 }
 
+function assertMacManualUxSendStatusCommand(command, label) {
+  assertIncludes(command || "", "check-mac-manual-ux-status.mjs", label);
+  assertIncludes(command || "", "--server", label);
+  assertIncludes(command || "", "--sendStatus", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "--sendMessage", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--json", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "--inputMode inject", label);
+}
+
 function assertWindowsHostStatusCommand(command, label) {
   assertIncludes(command || "", "node scripts/windows/start-windows-host.mjs", label);
   assertIncludes(command || "", "--status", label);
@@ -511,6 +525,7 @@ function assertCommandSet(commands, label) {
   assertMacInputSafetySendStatusCommand(commands?.macInputSafetySendStatusCommand || "", label);
   assertMacSafeInjectRehearsalCommand(commands?.macSafeInjectRehearsalCommand || "", label);
   assertMacManualUxStatusCommand(commands?.macManualUxStatusCommand || "", label);
+  assertMacManualUxSendStatusCommand(commands?.macManualUxSendStatusCommand || "", label);
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
   assertMacClientManualChecklistAction(commands?.macClientManualChecklistAction || "", label);
@@ -627,6 +642,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macInputSafetySendStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macSafeInjectRehearsalCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macManualUxStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macManualUxSendStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientDiscoverWindowsCallCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsHostStatusCommand", `${script} ${flag}`);
@@ -708,6 +724,11 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "check-mac-manual-ux-status.mjs", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacManualUxSendStatus=", "offline board summary");
+  assertMacManualUxSendStatusCommand(
+    (payload.boardSummary || "").split("MacManualUxSendStatus=")[1]?.split(". ")[0] || "",
+    "offline board summary Mac manual UX send status command",
+  );
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "install-mac-host-launch-agent.mjs", "offline board summary");
@@ -841,6 +862,11 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "check-mac-manual-ux-status.mjs", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacManualUxSendStatus=", "online board summary");
+      assertMacManualUxSendStatusCommand(
+        (payload.boardSummary || "").split("MacManualUxSendStatus=")[1]?.split(". ")[0] || "",
+        "online board summary Mac manual UX send status command",
+      );
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "online board summary");
       assertIncludes(payload.boardSummary || "", "install-mac-host-launch-agent.mjs", "online board summary");

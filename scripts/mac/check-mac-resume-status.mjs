@@ -347,6 +347,10 @@ Machine-readable JSON fields:
                              It reads Agent Link Board only, prints the
                              user-present checklist, and does not request
                              passwords, send user-auth requests, or send input.
+  commands.macManualUxSendStatusCommand
+                             Secret-free manual UX status refresh command. It
+                             posts Mac Manual UX status only, without sending
+                             messages, calls, passwords, auth, or input.
   macHeartbeatWatcher        Read-only background watcher status snapshot from
                              start-mac-heartbeat-watcher --status --json,
                              including lastHeartbeat when log evidence exists.
@@ -1909,6 +1913,10 @@ function makeMacManualUxStatusCommand() {
   return "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
 }
 
+function makeMacManualUxSendStatusCommand() {
+  return `node scripts/mac/check-mac-manual-ux-status.mjs --server ${defaults.server} --sendStatus --boardSummary`;
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -2384,6 +2392,7 @@ function formatBoardSummary(report) {
       `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
       `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
       `MacManualUxStatus=${report.commands.macManualUxStatusCommand}.`,
+      `MacManualUxSendStatus=${report.commands.macManualUxSendStatusCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].filter(Boolean).join(" ");
@@ -2450,6 +2459,7 @@ function formatBoardSummary(report) {
     `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
     `MacManualUxStatus=${report.commands.macManualUxStatusCommand}.`,
+    `MacManualUxSendStatus=${report.commands.macManualUxSendStatusCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     board.macManualUxStandby
       ? "Manual UX standby: keep Mac host/client/heartbeat online; validate connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics with the user present; do not rerun password formal E2E unless a new call is opened."
@@ -2588,6 +2598,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac heartbeat background stop: ${report.commands.macHeartbeatStopCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac manual UX status: ${report.commands.macManualUxStatusCommand}`);
+  console.log(`[NEXT] Mac manual UX board-status refresh: ${report.commands.macManualUxSendStatusCommand}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   if (report.suggestedAction?.id) {
     console.log(`[NEXT] Suggested action: ${report.suggestedAction.id} · ${report.suggestedAction.reason}`);
@@ -2681,6 +2692,7 @@ async function main() {
       macHeartbeatStopCommand: makeMacHeartbeatStopCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macManualUxStatusCommand: makeMacManualUxStatusCommand(),
+      macManualUxSendStatusCommand: makeMacManualUxSendStatusCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
     recommendations,

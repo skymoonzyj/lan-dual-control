@@ -10,6 +10,9 @@
 ## 2026-06-20 W2 Windows 视频首帧等待可见性
 - Windows 控制端现在会在连接进入 streaming 后记录 `videoWaitingSince`；如果超过 3 秒还没有收到第一帧视频，远程画面状态行会显示 `等待视频首帧` 和 `已等待 <秒>s`，复制/导出诊断“现场视频”也会追加同样字段。这样可区分“WebSocket/认证已通但首帧没到”和“收到过视频后的帧率/卡顿问题”。页面自测先红于 `videoFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 
+## 2026-06-20 Mac Manual UX first-screen sendStatus command
+- Mac `heartbeat`、`resume` 和 `unattended` 三个第一屏现在都会在原有 `MacManualUxStatus=` 只读检查入口旁边输出 `MacManualUxSendStatus=`：`node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendStatus --boardSummary`。这让任一开工入口都能直接刷新 Agent Link Board 的 `Mac Manual UX` 状态，避免旧 `ready/awake` 摘要误导下一轮；该命令只发布状态，不发送消息、不发 call、不请求密码、不认证、不发送 input_event/inject。
+
 ## 2026-06-20 W3 Windows 音频首帧等待可见性
 - Windows 控制端现在会在连接已建立、声音开启且对端已协商音频后记录 `audioWaitingSince`；如果超过 3 秒还没有收到第一个音频帧，页面声音状态行会显示 `等待音频首帧` 和 `已等待 <秒>s`，复制/导出诊断“现场声音”也会追加同样字段。这样可区分“从一开始就没有音频帧到达”和“收过音频后中途断流”。页面自测先红于 `audioFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 

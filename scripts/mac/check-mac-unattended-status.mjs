@@ -128,6 +128,9 @@ Machine-readable JSON fields:
   commands.macManualUxStatus      Secret-free read-only post-PASS manual UX
                                   status command; it only reports which
                                   checks still need a person at the keyboard.
+  commands.macManualUxSendStatus  Secret-free manual UX status refresh command;
+                                  posts status only, without messages, calls,
+                                  passwords, auth, or input.
   commands.macClientManualChecklist
                                   User-visible Mac client manual checklist
                                   action for local page session diagnostics;
@@ -721,6 +724,7 @@ function makeCommands(args) {
     macInputSafetySendStatus: makeMacInputSafetySendStatusCommand(args),
     macSafeInjectRehearsal: makeMacSafeInjectRehearsalCommand(args),
     macManualUxStatus: makeMacManualUxStatusCommand(),
+    macManualUxSendStatus: makeMacManualUxSendStatusCommand(),
     macClientManualChecklist: makeMacClientManualChecklistAction(),
     macHostSafeStart: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStart: makeMacMaxFpsSafeStartCommand(args),
@@ -1001,6 +1005,10 @@ function makeMacManualUxStatusCommand() {
   return "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
 }
 
+function makeMacManualUxSendStatusCommand() {
+  return `node scripts/mac/check-mac-manual-ux-status.mjs --server ${shellQuote(defaults.server)} --sendStatus --boardSummary`;
+}
+
 function makeMacClientManualChecklistAction() {
   return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 }
@@ -1103,7 +1111,7 @@ function makeBoardSummary(report) {
   const authPath = formatMacHostAuthPathSummary(report.macHostAuthPath);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${authPath}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacRemoteAudioStatus=${report.commands.macRemoteAudioStatus}; MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatus}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacInputSafetyStatus=${report.commands.macInputSafetyStatus}; MacInputSafetySendStatus=${report.commands.macInputSafetySendStatus}; MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; WindowsHostStatus=${report.commands.windowsHostStatus}; WindowsHostReadiness=${report.commands.windowsHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacRemoteAudioStatus=${report.commands.macRemoteAudioStatus}; MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatus}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacInputSafetyStatus=${report.commands.macInputSafetyStatus}; MacInputSafetySendStatus=${report.commands.macInputSafetySendStatus}; MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacManualUxSendStatus=${report.commands.macManualUxSendStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; WindowsHostStatus=${report.commands.windowsHostStatus}; WindowsHostReadiness=${report.commands.windowsHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -1320,6 +1328,7 @@ function printHuman(report) {
   console.log(`- Mac input safety board-status refresh: ${report.commands.macInputSafetySendStatus}`);
   console.log(`- Mac safe inject rehearsal plan: ${report.commands.macSafeInjectRehearsal}`);
   console.log(`- Mac manual UX status: ${report.commands.macManualUxStatus}`);
+  console.log(`- Mac manual UX board-status refresh: ${report.commands.macManualUxSendStatus}`);
   console.log(`- Mac client manual checklist: ${report.commands.macClientManualChecklist}`);
   if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);

@@ -187,7 +187,8 @@ Machine-readable JSON fields:
                               macInputSafetyStatusCommand,
                               macInputSafetySendStatusCommand,
                               macSafeInjectRehearsalCommand,
-                              macManualUxStatusCommand, and
+                              macManualUxStatusCommand,
+                              macManualUxSendStatusCommand, and
                               macLaunchAgentPlanCommand for dry-run
                               power/audio/input/manual UX/LaunchAgent plans,
                               macClientDiscoverWindowsCallCommand for explicit
@@ -900,6 +901,7 @@ function buildCommands(args) {
     macInputSafetySendStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --checkBoard --server ${args.server} --sendStatus --boardSummary`,
     macSafeInjectRehearsalCommand: `node scripts/mac/plan-mac-safe-inject-rehearsal.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macManualUxStatusCommand: "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary",
+    macManualUxSendStatusCommand: `node scripts/mac/check-mac-manual-ux-status.mjs --server ${args.server} --sendStatus --boardSummary`,
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
@@ -1195,6 +1197,7 @@ function makeBoardSummary(report) {
     `MacInputSafetySendStatus=${report.commands.macInputSafetySendStatusCommand}.`,
     `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
     `MacManualUxStatus=${report.commands.macManualUxStatusCommand}.`,
+    `MacManualUxSendStatus=${report.commands.macManualUxSendStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,

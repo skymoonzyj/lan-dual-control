@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac Manual UX first-screen sendStatus command
+开发端：Mac Codex
+本轮目标：让 Mac 端任一开工第一屏都能直接刷新 `Mac Manual UX` 通讯板状态，避免旧 `ready/awake` 摘要误导下一轮手工体验判断。
+完成内容：
+- `check-mac-heartbeat`、`check-mac-resume-status` 和 `check-mac-unattended-status` 的 commands / 普通输出 / `--boardSummary` 新增 `MacManualUxSendStatus=`。
+- 新命令调用 `check-mac-manual-ux-status --server http://192.168.31.68:17888 --sendStatus --boardSummary`，只发布无密 `MacManualUx=` 状态摘要。
+- 不使用 `--sendMessage`，不发送 call；输出继续保留 `MacManualUxStatus=` 只读检查入口。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000` 先失败于 help 缺少 `macManualUxSendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macManualUxSendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macManualUxSendStatus`。
+- 绿灯：上述三项测试均通过；后续完整验证见本轮提交前记录。
+遗留问题：这不是发起真实手工体验；真实体验仍需用户在场，并先说明目标、安全边界和预计时间。
+下一步建议：若通讯板 `Mac Manual UX` 摘要旧，先复制 `MacManualUxSendStatus=` 刷新，再判断是否需要用户在场手工体验。
+是否改了协议：否；只新增 Mac 侧脚本摘要/命令字段。
+是否需要另一端配合：暂不需要；Windows 可继续只读消费 `MacManualUxStatus=`，如后续要展示新刷新命令可由 Windows 端自行选择。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W2 Windows 视频断流可见性

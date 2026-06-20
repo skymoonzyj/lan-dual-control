@@ -396,6 +396,23 @@ function assertMacManualUxStatusCommand(command, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacManualUxSendStatusCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/mac/check-mac-manual-ux-status.mjs", label);
+  assertIncludes(text, "--server", label);
+  assertIncludes(text, "--sendStatus", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "--sendMessage", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--apply", label);
+  assertNotIncludes(text, "sudo", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--json", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function assertWindowsHostStatusCommand(command, label) {
   const text = String(command || "");
   assertIncludes(text, "node scripts/windows/start-windows-host.mjs", label);
@@ -562,6 +579,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macInputSafetySendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macSafeInjectRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macManualUxStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macManualUxSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientManualChecklist", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
@@ -719,6 +737,7 @@ function checkMissingLaunchAgentJson(args) {
   assertMacInputSafetySendStatusCommand(payload.commands?.macInputSafetySendStatus || "", "missing LaunchAgent commands.macInputSafetySendStatus");
   assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsal || "", "missing LaunchAgent commands.macSafeInjectRehearsal");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "missing LaunchAgent commands.macManualUxStatus");
+  assertMacManualUxSendStatusCommand(payload.commands?.macManualUxSendStatus || "", "missing LaunchAgent commands.macManualUxSendStatus");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "missing LaunchAgent commands.macClientManualChecklist");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedFormal");
@@ -833,6 +852,11 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacManualUxStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacManualUxSendStatus=", "missing LaunchAgent board summary");
+  assertMacManualUxSendStatusCommand(
+    String(payload.boardSummary || "").split("MacManualUxSendStatus=")[1]?.split("; ")[0] || "",
+    "missing LaunchAgent board summary MacManualUxSendStatus",
+  );
   assertIncludes(payload.boardSummary, "MacClientManualChecklist=", "missing LaunchAgent board summary");
   assertMacClientManualChecklistAction(
     payload.boardSummary.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
@@ -931,6 +955,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertMacInputSafetySendStatusCommand(payload.commands?.macInputSafetySendStatus || "", "custom LaunchAgent commands.macInputSafetySendStatus");
   assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsal || "", "custom LaunchAgent commands.macSafeInjectRehearsal");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "custom LaunchAgent commands.macManualUxStatus");
+  assertMacManualUxSendStatusCommand(payload.commands?.macManualUxSendStatus || "", "custom LaunchAgent commands.macManualUxSendStatus");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "custom LaunchAgent commands.macClientManualChecklist");
   assertIncludes(payload.commands?.macLaunchAgentLoad || "", missingPath, "custom LaunchAgent commands.macLaunchAgentLoad");
   assertIncludes(payload.commands?.macLaunchAgentPrint || "", label, "custom LaunchAgent commands.macLaunchAgentPrint");
@@ -959,6 +984,11 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   );
   assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacManualUxSendStatus=", "custom LaunchAgent board summary");
+  assertMacManualUxSendStatusCommand(
+    String(payload.boardSummary || "").split("MacManualUxSendStatus=")[1]?.split("; ")[0] || "",
+    "custom LaunchAgent board summary MacManualUxSendStatus",
+  );
   assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "custom LaunchAgent board summary");
@@ -1258,6 +1288,11 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "board summary");
   assertIncludes(text, "MacManualUxStatus=", "board summary");
   assertIncludes(text, "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs", "board summary");
+  assertIncludes(text, "MacManualUxSendStatus=", "board summary");
+  assertMacManualUxSendStatusCommand(
+    String(text || "").split("MacManualUxSendStatus=")[1]?.split("; ")[0] || "",
+    "board summary MacManualUxSendStatus",
+  );
   assertIncludes(text, "MacClientManualChecklist=", "board summary");
   assertMacClientManualChecklistAction(
     text.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
