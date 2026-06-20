@@ -11,6 +11,25 @@ const windowsHostServer = resolve(windowsHostDir, "server.mjs");
 const startWindowsHostScript = resolve(scriptDir, "start-windows-host.mjs");
 const testPassword = "diagnostics-secret-password";
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/windows/test-windows-host-diagnostics.mjs [options]
+
+Options:
+  --help, -h        Show this help without running checks
+
+Description:
+  Starts a local mock Windows host, authenticates with a fixture password, and
+  verifies /diagnostics plus status summaries remain secret-free and record
+  session progress. Help mode is side-effect-free and does not start services,
+  request passwords, authenticate, or send input/inject events.
+`);
+}
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -291,6 +310,11 @@ async function assertLegacyDiagnosticsGuidance() {
 }
 
 async function main() {
+  if (helpRequested(process.argv)) {
+    printHelp();
+    return;
+  }
+
   await assertLegacyDiagnosticsGuidance();
 
   const port = await reserveEphemeralPort();
