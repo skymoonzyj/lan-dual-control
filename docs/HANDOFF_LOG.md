@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 Windows H.264 通讯板诊断补 Mac 发送侧字段
+开发端：Windows Codex
+本轮目标：让 `W2H264BoardDiagnosis=` 能同时带出 Mac 发送总帧、差分帧、关键帧间隔和关键帧参数集标记，用来和 Windows 真连收到侧字段对照。
+完成内容：`diagnose-w2-h264-board` 现在解析 Mac `h264Frames/h264Delta/keyGapFramesMax/keyGapMsMax/keyGapFramesLast/keyGapMsLast/keyTailFrames/keyTailMs/firstKeyParam/lastKeyParam`，JSON、普通文本和 `--boardSummary` 都会输出这些字段；`W2H264BoardDiagnosis=` 新增 `macStream=frames/delta/keyGapMax/keyGapLast/keyTail/firstKeyParam/lastKeyParam`。
+修改文件：scripts/windows/diagnose-w2-h264-board.mjs；scripts/windows/test-diagnose-w2-h264-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯专项回归先失败于 `expected Mac h264Frames`，真实通讯板又暴露说明文字 `firstKeyParam=yes|no` 被误解析；补回归后绿灯 `node scripts/windows/test-diagnose-w2-h264-board.mjs --timeoutMs 30000` 通过，覆盖 `macStream=frames:300 delta:297 keyGapMax:60/1000 keyGapLast:58/966 keyTail:12/200 firstKeyParam:yes lastKeyParam:yes` 和说明文字忽略。
+遗留问题：真实通讯板当前仍缺新的 `W2W3Retest=`，所以实际诊断仍会等待用户跑 `WinClientRetest=`；本轮只增强复测后的读板归因。
+下一步建议：用户真连后把 `W2W3Retest=` 上板，再运行 `diagnose-w2-h264-board --boardSummary`。若 Mac `macStream` 正常但 Windows `recv/decoded` 异常，继续按接收或 WebCodecs 解码路径排查。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；需要 Mac 端继续提供 `h264Frames/h264Delta/keyGap/keyTail/firstKeyParam` 等无密媒体摘要。不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 通讯板诊断严格过滤说明文字
 开发端：Windows Codex
 本轮目标：修复 `diagnose-w2-h264-board` 把通讯板说明文字里的 `W2W3Retest h264=` 或反引号 `W2W3Retest=` 当成真实复测证据的问题。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 通讯板诊断补 Mac 发送侧字段
+- `diagnose-w2-h264-board` 现在会把 Mac 侧 `MacHostMedia` / readiness / media 摘要里的 `h264Frames/h264Delta/keyGapFramesMax/keyGapMsMax/keyGapFramesLast/keyGapMsLast/keyTailFrames/keyTailMs/firstKeyParam/lastKeyParam` 一并解析进 JSON、普通输出和 `W2H264BoardDiagnosis=`。下一次真实 `WinClientRetest=` 上板后，可以在同一行对照 Mac 发送总帧/差分帧/关键帧间隔/尾部 gap 与 Windows `recv/skippedDelta/lastNal/decoded`，更快判断卡顿或黑屏发生在发送、接收还是 WebCodecs 解码路径。同时，说明文字里的 `firstKeyParam=yes|no` / `lastKeyParam=yes|no` 不会再被当成真实 Mac 媒体证据。本轮只读通讯板，不改协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W2 Windows H.264 通讯板诊断严格过滤说明文字
 - `diagnose-w2-h264-board` 现在只把真正含 `W2W3Retest=` 且 `h264=` 段内带 `status/decoded/recv/key/sps/pps/idr/needsKeyframe/lastNal` 等真实字段的文本当作 Windows 复测证据。普通通讯板说明、推送消息或反引号里的 `W2W3Retest=` / `W2W3Retest h264=` 不再会生成全 0 假证据；真实板当前无复测时会输出 `reason=waiting-for-w2w3-retest` 和 `Next=RunWinClientRetest`，同时保留 Mac `h264Key/sps/pps/idr/keyParam` 背景证据。不改协议、不认证、不请求密码、不发 input/inject。
 ## 2026-06-21 W2 Windows H.264 通讯板对照诊断

@@ -181,7 +181,7 @@ function makeState({ windowsText, macText, extraText = "" }) {
   };
 }
 
-const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000";
+const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 h264Frames=300 h264Delta=297 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000 keyGapFramesLast=58 keyGapMsLast=966 keyTailFrames=12 keyTailMs=200 firstKeyParam=yes lastKeyParam=yes";
 
 function assertSecretSafe(output, label) {
   assertNotIncludes(output, "super-secret-token", label);
@@ -216,6 +216,11 @@ async function checkWindowsDecodePath(args) {
     assert(payload.windows?.recv === 68, `expected recv=68: ${jsonResult.stdout}`);
     assert(payload.windows?.sps === 1 && payload.windows?.pps === 1 && payload.windows?.idr === 1, `expected SPS/PPS/IDR counts: ${jsonResult.stdout}`);
     assert(payload.mac?.firstKeyNal === "7/8/5", `expected Mac firstKeyNal: ${jsonResult.stdout}`);
+    assert(payload.mac?.h264Frames === 300, `expected Mac h264Frames: ${jsonResult.stdout}`);
+    assert(payload.mac?.h264Delta === 297, `expected Mac h264Delta: ${jsonResult.stdout}`);
+    assert(payload.mac?.keyGapFramesLast === 58, `expected Mac keyGapFramesLast: ${jsonResult.stdout}`);
+    assert(payload.mac?.keyTailMs === 200, `expected Mac keyTailMs: ${jsonResult.stdout}`);
+    assert(payload.mac?.firstKeyParam === "yes" && payload.mac?.lastKeyParam === "yes", `expected Mac key param flags: ${jsonResult.stdout}`);
     assertIncludes(payload.next, "InspectWebCodecsConfigureDecodeQueue", "decode-path next action");
     assertSecretSafe(jsonResult.stdout + jsonResult.stderr, "decode-path JSON");
 
@@ -226,6 +231,7 @@ async function checkWindowsDecodePath(args) {
     assertIncludes(summaryResult.stdout, "windows=recv:68 key:1 sps:1 pps:1 idr:1 decoded:0 lastNal:1", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "mac=firstKeyNal:7/8/5 lastKeyNal:7/8/5 lastNal:1", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "macKey=h264Key:3 sps:3 pps:3 idr:3 keyParam:3", "decode-path boardSummary");
+    assertIncludes(summaryResult.stdout, "macStream=frames:300 delta:297 keyGapMax:60/1000 keyGapLast:58/966 keyTail:12/200 firstKeyParam:yes lastKeyParam:yes", "decode-path boardSummary");
     assertIncludes(summaryResult.stdout, "Safety=read-only,no-password,no-auth,no-input,no-inject", "decode-path boardSummary");
     assertSecretSafe(summaryResult.stdout + summaryResult.stderr, "decode-path boardSummary");
     assert(requests.every((request) => request.method === "GET" && request.url === "/api/state"), `diagnosis should only read /api/state: ${JSON.stringify(requests)}`);
@@ -268,6 +274,18 @@ async function checkBacktickedRetestLabelIgnored(args) {
   });
   console.log("[OK] W2 H.264 board diagnosis ignores backticked W2W3Retest labels");
 }
+async function checkMacParamExplanationIgnored(args) {
+  const explanatoryMacText = "Mac M13 说明：发送侧摘要将增加 firstKeyParam=yes|no、lastKeyParam=yes|no，用于后续对照。";
+  await withFakeBoard(makeState({ windowsText: "Windows online, no W2W3Retest yet.", macText: explanatoryMacText }), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary"], args);
+    assert(result.exitCode === 1, `Mac param explanation should not be treated as media evidence\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "status=waiting reason=waiting-for-w2w3-retest", "Mac param explanation boardSummary");
+    assertIncludes(result.stdout, "macStream=frames:na delta:na keyGapMax:na/na keyGapLast:na/na keyTail:na/na firstKeyParam:na lastKeyParam:na", "Mac param explanation boardSummary");
+    assertNotIncludes(result.stdout, "yes|no", "Mac param explanation boardSummary");
+    assertSecretSafe(result.stdout + result.stderr, "Mac param explanation boardSummary");
+  });
+  console.log("[OK] W2 H.264 board diagnosis ignores explanatory Mac key-param mentions");
+}
 async function checkPlaceholderNalEvidenceIgnored(args) {
   const windowsText = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 needsKeyframe=yes recv=0 key=0 sps=0 pps=0 idr=0 lastNal=na";
   const placeholderMacText = "MacHostMedia=media=ok h264Key=<n> sps=<n> pps=<n> idr=<n> firstKeyNal=<types> firstNal=<types>";
@@ -308,6 +326,7 @@ async function main() {
   await checkWaitingForRetest(args);
   await checkExplanatoryW2TextIgnored(args);
   await checkBacktickedRetestLabelIgnored(args);
+  await checkMacParamExplanationIgnored(args);
   await checkPlaceholderNalEvidenceIgnored(args);
   await checkDecodedSurfaceReady(args);
   console.log("[OK] W2 H.264 board diagnosis regression passed");

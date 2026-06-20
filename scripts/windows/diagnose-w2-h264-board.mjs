@@ -34,6 +34,12 @@ const tokenKeys = new Set([
   "keyGapMsMax",
   "keyTailFrames",
   "keyTailMs",
+  "h264Frames",
+  "h264Delta",
+  "keyGapFramesLast",
+  "keyGapMsLast",
+  "firstKeyParam",
+  "lastKeyParam",
 ]);
 
 function printHelp() {
@@ -120,7 +126,7 @@ function isPlaceholderTokenValue(value) {
 
 function parseTokens(text) {
   const tokens = {};
-  const matcher = /(?:^|\s)([A-Za-z][A-Za-z0-9_-]*)=([^\s,;，；]+)/g;
+  const matcher = /(?:^|\s)([A-Za-z][A-Za-z0-9_-]*)=([^\s,;，；、]+)/g;
   let match;
   while ((match = matcher.exec(text)) !== null) {
     const key = match[1];
@@ -266,6 +272,9 @@ function extractMacEvidence(entries) {
       "lastKeyNal",
       "keyGapFramesMax",
       "keyTailFrames",
+      "h264Frames",
+      "h264Delta",
+      "keyGapFramesLast",
     ].some((key) => tokens[key] !== undefined);
     if (!hasEvidence) continue;
     return {
@@ -282,6 +291,12 @@ function extractMacEvidence(entries) {
       keyGapMsMax: tokens.keyGapMsMax !== undefined ? toNumber(tokens.keyGapMsMax, 0) : undefined,
       keyTailFrames: tokens.keyTailFrames !== undefined ? toNumber(tokens.keyTailFrames, 0) : undefined,
       keyTailMs: tokens.keyTailMs !== undefined ? toNumber(tokens.keyTailMs, 0) : undefined,
+      h264Frames: tokens.h264Frames !== undefined ? toNumber(tokens.h264Frames, 0) : undefined,
+      h264Delta: tokens.h264Delta !== undefined ? toNumber(tokens.h264Delta, 0) : undefined,
+      keyGapFramesLast: tokens.keyGapFramesLast !== undefined ? toNumber(tokens.keyGapFramesLast, 0) : undefined,
+      keyGapMsLast: tokens.keyGapMsLast !== undefined ? toNumber(tokens.keyGapMsLast, 0) : undefined,
+      firstKeyParam: tokens.firstKeyParam ? String(tokens.firstKeyParam) : undefined,
+      lastKeyParam: tokens.lastKeyParam ? String(tokens.lastKeyParam) : undefined,
       updatedAt: entry.at,
     };
   }
@@ -382,6 +397,7 @@ function boardSummaryFor(payload) {
     `windows=recv:${compactNumber(windows.recv)} key:${compactNumber(windows.key)} sps:${compactNumber(windows.sps)} pps:${compactNumber(windows.pps)} idr:${compactNumber(windows.idr)} decoded:${compactNumber(windows.decoded)} lastNal:${compactNumber(windows.lastNal)}`,
     `mac=firstKeyNal:${compactNumber(mac.firstKeyNal)} lastKeyNal:${compactNumber(mac.lastKeyNal)} lastNal:${compactNumber(mac.lastNal)}`,
     `macKey=h264Key:${compactNumber(mac.h264Key)} sps:${compactNumber(mac.sps)} pps:${compactNumber(mac.pps)} idr:${compactNumber(mac.idr)} keyParam:${compactNumber(mac.keyParam)}`,
+    `macStream=frames:${compactNumber(mac.h264Frames)} delta:${compactNumber(mac.h264Delta)} keyGapMax:${compactNumber(mac.keyGapFramesMax)}/${compactNumber(mac.keyGapMsMax)} keyGapLast:${compactNumber(mac.keyGapFramesLast)}/${compactNumber(mac.keyGapMsLast)} keyTail:${compactNumber(mac.keyTailFrames)}/${compactNumber(mac.keyTailMs)} firstKeyParam:${compactNumber(mac.firstKeyParam)} lastKeyParam:${compactNumber(mac.lastKeyParam)}`,
     `Next=${payload.next}`,
     `Safety=${safety}`,
   ].join(" ");
@@ -396,6 +412,7 @@ function textFor(payload) {
     `next: ${payload.next}`,
     `windows: recv=${compactNumber(windows.recv)} key=${compactNumber(windows.key)} sps=${compactNumber(windows.sps)} pps=${compactNumber(windows.pps)} idr=${compactNumber(windows.idr)} decoded=${compactNumber(windows.decoded)} lastNal=${compactNumber(windows.lastNal)} needsKeyframe=${compactNumber(windows.needsKeyframe)} reason=${compactNumber(windows.reason)}`,
     `mac: h264Key=${compactNumber(mac.h264Key)} sps=${compactNumber(mac.sps)} pps=${compactNumber(mac.pps)} idr=${compactNumber(mac.idr)} firstKeyNal=${compactNumber(mac.firstKeyNal)} lastKeyNal=${compactNumber(mac.lastKeyNal)} lastNal=${compactNumber(mac.lastNal)}`,
+    `mac stream: frames=${compactNumber(mac.h264Frames)} delta=${compactNumber(mac.h264Delta)} keyGapMax=${compactNumber(mac.keyGapFramesMax)}/${compactNumber(mac.keyGapMsMax)} keyGapLast=${compactNumber(mac.keyGapFramesLast)}/${compactNumber(mac.keyGapMsLast)} keyTail=${compactNumber(mac.keyTailFrames)}/${compactNumber(mac.keyTailMs)} firstKeyParam=${compactNumber(mac.firstKeyParam)} lastKeyParam=${compactNumber(mac.lastKeyParam)}`,
     `safety: ${safety}`,
   ].join("\n");
 }
