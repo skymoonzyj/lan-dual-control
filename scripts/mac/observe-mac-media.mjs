@@ -737,9 +737,17 @@ function formatH264ProbeSummary(h264) {
     formatH264NalTypes("lastNal", h264.lastNalTypes),
     formatH264Interval("keyGapFramesMax", h264.keyFrameIntervalFrames, 0),
     formatH264Interval("keyGapMsMax", h264.keyFrameIntervalMs, 0),
+    formatH264IntervalLast("keyGapFramesLast", h264.keyFrameIntervalFrames, 0),
+    formatH264IntervalLast("keyGapMsLast", h264.keyFrameIntervalMs, 0),
     formatH264TailGap("keyTailFrames", h264.keyFrameTailGapFrames),
     formatH264TailGap("keyTailMs", h264.keyFrameTailGapMs),
   ].filter(Boolean).join(",");
+}
+
+function formatH264IntervalLast(label, value, decimals) {
+  const last = Number(value?.last);
+  if (!Number.isFinite(last) || last <= 0) return "";
+  return `${label}=${decimals > 0 ? last.toFixed(decimals) : Math.round(last)}`;
 }
 
 function formatH264TailGap(label, value) {

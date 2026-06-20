@@ -741,12 +741,14 @@ function makeH264Observation(h264) {
       min: Math.round(keyFrameIntervalFrames.min),
       avg: Number(keyFrameIntervalFrames.avg.toFixed(2)),
       max: Math.round(keyFrameIntervalFrames.max),
+      last: Math.round(keyFrameIntervalFrames.last),
     },
     keyFrameIntervalMs: {
       count: keyFrameIntervalMs.count,
       min: Math.round(keyFrameIntervalMs.min),
       avg: Number(keyFrameIntervalMs.avg.toFixed(2)),
       max: Math.round(keyFrameIntervalMs.max),
+      last: Math.round(keyFrameIntervalMs.last),
     },
     nalTypes: countsToObject(h264.nalTypes),
   };
@@ -911,12 +913,13 @@ function summarizeFrameTiming(stats) {
 }
 
 function summarizeNumberList(values) {
-  if (values.length === 0) return { count: 0, min: 0, avg: 0, max: 0 };
+  if (values.length === 0) return { count: 0, min: 0, avg: 0, max: 0, last: 0 };
   return {
     count: values.length,
     min: Math.min(...values),
     avg: values.reduce((sum, value) => sum + value, 0) / values.length,
     max: Math.max(...values),
+    last: values.at(-1),
   };
 }
 

@@ -633,6 +633,8 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("lastNal="), "boardSummary should include last H.264 frame NAL types");
     assert(lines[0].includes("keyGapFramesMax=5"), "boardSummary should include H.264 keyframe max frame gap");
     assert(lines[0].includes("keyGapMsMax="), "boardSummary should include H.264 keyframe max time gap");
+    assert(lines[0].includes("keyGapFramesLast="), "boardSummary should include latest H.264 keyframe frame gap");
+    assert(lines[0].includes("keyGapMsLast="), "boardSummary should include latest H.264 keyframe time gap");
     assert(lines[0].includes("keyTailFrames="), "boardSummary should include H.264 tail frame gap after the last keyframe");
     assert(lines[0].includes("keyTailMs="), "boardSummary should include H.264 tail time gap after the last keyframe");
     assert(lines[0].includes("resource=off"), "boardSummary should mark resource sampling off by default");
