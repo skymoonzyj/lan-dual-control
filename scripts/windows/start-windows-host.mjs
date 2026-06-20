@@ -688,6 +688,12 @@ function windowsHostSessionSummary(status = {}) {
   const closed = session.closedAt ? " closed=true" : " closed=false";
   return `WindowsHostSession=stage:${session.stage || "unknown"} auth=${auth} videoFrames=${Number(session.videoFramesSent) || 0} audioFrames=${Number(session.audioFramesSent) || 0}${negotiated}${closed}`;
 }
+function windowsHostDiagnosticsSummary(status = {}) {
+  if (status.windowsHostDiagnostics) return "WindowsHostDiagnostics=available";
+  if (!status.ok) return "";
+  const reason = status.windowsHostDiagnosticsError ? ` reason=${compactText(status.windowsHostDiagnosticsError)}` : "";
+  return `WindowsHostDiagnostics=unavailable restart=only-if-session-debug-needed${reason}`;
+}
 
 function windowsHostStartAction(args = {}) {
   return {
@@ -894,7 +900,9 @@ function makeBoardSummary(status) {
   const buildStatusText = buildStatus ? ` ${buildStatus}.` : "";
   const sessionStatus = status.windowsHostSessionSummary || windowsHostSessionSummary(status);
   const sessionStatusText = sessionStatus ? ` ${sessionStatus}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"};${buildStatusText}${sessionStatusText} screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  const diagnosticsStatus = status.windowsHostDiagnosticsSummary || windowsHostDiagnosticsSummary(status);
+  const diagnosticsStatusText = diagnosticsStatus ? ` ${diagnosticsStatus}.` : "";
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"};${buildStatusText}${sessionStatusText}${diagnosticsStatusText} screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -961,6 +969,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsHostBuildStatus: null,
     windowsHostDiagnostics: null,
     windowsHostDiagnosticsError: "",
+    windowsHostDiagnosticsSummary: "",
     windowsHostSessionSummary: "",
     macClientReadinessCommands: [],
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
@@ -1011,8 +1020,8 @@ async function getStatus(args) {
       status.windowsHostDiagnostics = await requestJson(status.probe.diagnosticsUrl, Math.min(args.timeoutMs, 3000));
     } catch (diagnosticsError) {
       status.windowsHostDiagnosticsError = diagnosticsError.message;
-      status.warnings.push(`Windows host diagnostics unavailable: ${compactText(diagnosticsError.message)}`);
     }
+    status.windowsHostDiagnosticsSummary = windowsHostDiagnosticsSummary(status);
     status.windowsHostSessionSummary = windowsHostSessionSummary(status);
     status.boardSummary = makeBoardSummary(status);
     return status;
@@ -1081,6 +1090,7 @@ async function printStatus(args) {
     console.log(`[INFO] Reverse control: ${reverseControlSummary(status.capabilities?.reverseControl)}`);
     console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discoveryLike)}`);
     console.log(`[INFO] Session diagnostics: ${status.windowsHostSessionSummary || windowsHostSessionSummary(status)}`);
+    console.log(`[INFO] Diagnostics endpoint: ${status.windowsHostDiagnosticsSummary || windowsHostDiagnosticsSummary(status)}`);
     for (const warning of status.warnings.filter((line) => !line.startsWith("Running Windows host build "))) {
       console.log(`[WARN] ${warning}`);
     }

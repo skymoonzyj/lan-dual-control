@@ -48,6 +48,33 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows host 旧诊断端点非阻塞提示
+开发端：Windows Codex
+本轮目标：避免旧 Windows host 缺少 `/diagnostics` 时被误判为远控阻塞或必须立即重启。
+完成内容：
+- `start-windows-host --status --boardSummary` 在线摘要新增 `WindowsHostDiagnostics=available|unavailable`。
+- 旧 runtime 没有 `/diagnostics` 时输出 `WindowsHostDiagnostics=unavailable restart=only-if-session-debug-needed reason=<...>`，明确只有追会话超时才需要重启到新 build。
+- `test-windows-host-diagnostics` 新增假旧 host 覆盖，确认旧 host 在线时摘要保持可用且不泄露连接密码。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-diagnostics.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-host-diagnostics.mjs` 先失败于旧 host 摘要缺少 `WindowsHostDiagnostics=unavailable`。
+- 绿灯：同一测试通过，覆盖旧 host 和新 `/diagnostics` 两条路径。
+遗留问题：
+- 当前正在运行的旧 Windows host 只有重启后才会真正暴露 `/diagnostics`；但这不是普通远控连接 blocker。
+下一步建议：
+- 若 Mac browser smoke 超时需要会话层证据，再安排 Windows 用户本机重启 host；否则继续按现有 discovery/连接流程推进。
+是否改了协议：否。只改状态摘要和文档口径。
+是否需要另一端配合：不需要立即配合；Mac 端只需按新摘要区分“诊断端点未生效”和“远控不可用”。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows host 会话诊断
 开发端：Windows Codex
 本轮目标：给 Mac browser smoke 超时增加 Windows 侧无密证据，判断是否已完成认证、会话和首帧。

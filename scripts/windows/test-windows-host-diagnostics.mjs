@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,7 +39,7 @@ function withTimeout(promise, ms, label) {
 
 function reserveEphemeralPort(host = "127.0.0.1") {
   return new Promise((resolvePort, rejectPort) => {
-    const server = createServer();
+    const server = createNetServer();
     server.once("error", rejectPort);
     server.once("listening", () => {
       const address = server.address();
@@ -189,7 +190,7 @@ function assertSecretFree(diagnostics) {
 }
 
 function runStatusSummary(port) {
-  const result = spawnSync(process.execPath, [
+  const child = spawn(process.execPath, [
     startWindowsHostScript,
     "--status",
     "--host",
@@ -206,13 +207,92 @@ function runStatusSummary(port) {
     },
     windowsHide: true,
   });
-  const output = `${result.stdout || ""}${result.stderr || ""}`;
-  assert(result.status === 0, `status summary should exit 0, got ${result.status}: ${output}`);
-  assert(!output.includes(testPassword), "status summary must not include the connection password");
-  return String(result.stdout || "").trim();
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+  child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+  return withTimeout(new Promise((resolveRun, rejectRun) => {
+    child.once("error", rejectRun);
+    child.once("exit", (code, signal) => {
+      const output = `${stdout}${stderr}`;
+      if (code !== 0) {
+        rejectRun(new Error(`status summary should exit 0, got ${code ?? signal}: ${output}`));
+        return;
+      }
+      try {
+        assert(!output.includes(testPassword), "status summary must not include the connection password");
+        resolveRun(String(stdout || "").trim());
+      } catch (error) {
+        rejectRun(error);
+      }
+    });
+  }), 15000, "Windows host status summary");
+}
+function startLegacyDiscoveryOnlyHost() {
+  const server = createHttpServer((request, response) => {
+    const path = String(request.url || "").split("?")[0];
+    if (path === "/discovery") {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({
+        type: "lan_dual_discovery",
+        protocolVersion: 1,
+        deviceId: `legacy-windows-host-${port}`,
+        deviceName: "Legacy Windows Host",
+        platform: "windows",
+        role: "host",
+        host: "127.0.0.1",
+        port,
+        controlPort: port,
+        runtime: {
+          processId: 12345,
+          startedAt: new Date(0).toISOString(),
+          uptimeSeconds: 60,
+          buildId: "legacy-diagnostics-test",
+        },
+        capabilities: {
+          screen: { capturePipeline: "windows-ffmpeg-gdigrab-mjpeg", videoCodec: "jpeg" },
+          audio: { mode: "mock" },
+          input: { mode: "system" },
+          clipboardText: true,
+          clipboardFile: true,
+          reverseControl: true,
+          reverseControlMode: "deny",
+          reverseControlPolicy: { supported: true, mode: "deny", requiresConfirmation: true, autoAccept: false },
+        },
+        lastSeenAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    response.end("LAN dual control Windows host skeleton. Use WebSocket to connect.\n");
+  });
+  return new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      resolveListen({ server, port });
+    });
+  });
+}
+async function assertLegacyDiagnosticsGuidance() {
+  const { server, port } = await startLegacyDiscoveryOnlyHost();
+  try {
+    const summary = await runStatusSummary(port);
+    assert(summary.includes("WindowsHostSession=diagnostics-unavailable"), `legacy summary should keep session unavailable marker: ${summary}`);
+    assert(summary.includes("WindowsHostDiagnostics=unavailable"), `legacy summary should expose diagnostics availability: ${summary}`);
+    assert(summary.includes("restart=only-if-session-debug-needed"), `legacy summary should mark restart as optional unless debugging smoke: ${summary}`);
+    assert(!summary.includes(testPassword), "legacy status summary must not include the connection password");
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
 }
 
 async function main() {
+  await assertLegacyDiagnosticsGuidance();
+
   const port = await reserveEphemeralPort();
   const host = startHost(port);
   let stdout = "";
@@ -267,7 +347,7 @@ async function main() {
     assert(active.videoFramesSent >= 1, "latest session should count sent video frames");
     assert(active.session?.width === 640 && active.session?.height === 360, "latest session should record negotiated size");
 
-    const statusSummary = runStatusSummary(port);
+    const statusSummary = await runStatusSummary(port);
     assert(statusSummary.includes("WindowsHostSession=stage:streaming"), `status summary should include streaming diagnostics: ${statusSummary}`);
     assert(statusSummary.includes("videoFrames="), `status summary should include video frame count: ${statusSummary}`);
 
