@@ -214,12 +214,17 @@ function collectBoardTexts(state) {
       texts.push(`${device}: ${compactText(status)}`);
     }
   }
-  if (Array.isArray(state.recentEvents)) {
-    for (const event of state.recentEvents.slice(-20)) {
-      texts.push(compactText(event));
-    }
+  for (const event of boardEvents(state).slice(-20)) {
+    texts.push(compactText(event));
   }
   return texts.filter(Boolean);
+}
+
+function boardEvents(state) {
+  const events = [];
+  if (Array.isArray(state?.events)) events.push(...state.events);
+  if (Array.isArray(state?.recentEvents)) events.push(...state.recentEvents);
+  return events;
 }
 
 function parseManualChecklist(texts) {
@@ -373,8 +378,9 @@ function hasManualUxConfirmation(state, call) {
       if (manualUxConfirmationTextCandidates(status).some((text) => isManualUxConfirmationText(text))) return true;
     }
   }
-  if (Array.isArray(state?.recentEvents)) {
-    for (const event of state.recentEvents) {
+  const events = boardEvents(state);
+  if (events.length > 0) {
+    for (const event of events) {
       if (!isManualUxConfirmationSender(event?.from)) continue;
       if (!happenedDuringCallWindow(event?.at, call)) continue;
       if (manualUxConfirmationTextCandidates(event).some((text) => isManualUxConfirmationText(text))) return true;

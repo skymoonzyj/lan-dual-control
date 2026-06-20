@@ -434,6 +434,15 @@ function confirmedMacManualUxCallBoardState() {
   };
 }
 
+function confirmedMacManualUxCallEventsOnlyBoardState() {
+  const state = confirmedMacManualUxCallBoardState();
+  const { recentEvents, ...withoutRecentEvents } = state;
+  return {
+    ...withoutRecentEvents,
+    events: recentEvents,
+  };
+}
+
 function referencedConfirmationTagBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -846,6 +855,21 @@ async function checkConfirmedManualUxCallIsReady(args) {
   console.log("[OK] Mac manual UX status treats a current call confirmation as ready");
 }
 
+async function checkEventsArrayConfirmationIsAccepted(args) {
+  await withFakeBoard(confirmedMacManualUxCallEventsOnlyBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `events-only confirmation JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "events-only confirmation JSON");
+    assert(payload.status === "ready", `events-only confirmation should be ready, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed === true, `events-only confirmation should be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=ready", "events-only confirmation boardSummary");
+    assertIncludes(payload.boardSummary, "manualUxConfirmed", "events-only confirmation boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `events-only read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "events-only confirmation JSON");
+  });
+  console.log("[OK] Mac manual UX status accepts confirmations from real Agent Link events");
+}
+
 async function checkStaleManualUxConfirmationDoesNotReadyNewCall(args) {
   await withFakeBoard(staleConfirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -1035,6 +1059,7 @@ async function main() {
   await checkUserAwakeSendCallPostsManualUxCall(args);
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkConfirmedManualUxCallIsReady(args);
+  await checkEventsArrayConfirmationIsAccepted(args);
   await checkReferencedConfirmationTagDoesNotReadyCall(args);
   await checkDescriptiveManualUxTagMentionDoesNotConfirm(args);
   await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
