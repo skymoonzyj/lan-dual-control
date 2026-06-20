@@ -5343,6 +5343,7 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264FallbackRecoveryCount === 2 &&
           Number(state.h264FallbackRecoveryPauseCount) > 0 &&
           Number(state.h264FallbackRecoveryPausedUntil) > performance.now() &&
+          fallbackRecoveryPausedExportText.includes("恢复暂停 1 次") &&
           fallbackRecoveryPausedExportText.includes("恢复暂停") &&
           fallbackRecoveryPausedExportText.includes("最近回退：第三次等待关键帧");
 

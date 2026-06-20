@@ -16,6 +16,30 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W2 Windows H.264 恢复暂停追溯诊断
+开发端：Windows Codex
+本轮目标：让 Windows 控制端在 H.264/JPEG 恢复循环触发暂停后, 即使用户稍后才复制诊断, 也能追溯到暂停发生过。
+完成内容：
+- 现场视频诊断和复制/导出诊断新增恢复暂停次数。
+- 当前暂停窗口内继续显示剩余时间, 但改为暂停剩余秒数, 避免和累计次数混在一起。
+- 页面自测覆盖第二次恢复后第三次 fallback 触发暂停, 并要求导出文本包含恢复暂停 1 次。
+修改文件：
+- apps/windows-client/app.js
+- scripts/windows/test-windows-client-browser.mjs
+- docs/CURRENT_STATUS.md
+- docs/NEXT_ACTIONS.md
+- docs/04-task-board.md
+- docs/HANDOFF_LOG.md
+- docs/ACTIVE_LOCKS.md
+验证方式：
+- 红灯：node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 先失败于 fallbackRecoveryPause=false, 导出诊断缺少恢复暂停 1 次。
+- 绿灯：node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 通过。
+遗留问题：这只增强 Windows 端诊断可追溯性；如果暂停次数持续增长, 仍要继续查 Mac 关键帧/GOP、采集编码稳定性、网络丢关键帧或 WebCodecs 背压。
+下一步建议：现场再遇到卡或不像 60Hz 时, 先复制诊断看回退恢复、恢复暂停、暂停剩余、本地队列和卡顿统计, 再决定查 Mac 编码端还是 Windows 本地解码队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真机观感测试需要用户在场。
 
 ## 2026-06-20 Windows Codex
 

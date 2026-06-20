@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W2 视频恢复暂停最新口径：Windows 控制端如果短时间内多次从 JPEG 兜底恢复 H.264，会暂停自动恢复并保持 JPEG 保画面；复制诊断会保留 `恢复暂停 <n> 次`，当前仍在暂停窗口内时还会显示 `暂停剩余 <秒>s`。现场看到这条，先理解为控制端主动防抖，不要马上反复重连；下一步查 Mac 关键帧/GOP、采集编码稳定性、网络丢关键帧或 WebCodecs 解码背压。
 - 用户在场状态刷新口径：只有用户在当前线程重新明确说“我在场/回来了/可以授权/可以操作”后，且 Agent Link Board `/api/state.userPresence` 仍停在 `away`，新版联络板才可运行 `node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"` 同步结构化状态；用户离开时同理用 `--status away`。这只刷新协作门禁，不会请求密码、系统授权、真实 input/inject 或修改声音输出；进入任何需要用户操作的步骤前仍要先响铃并说明目标、安全边界和预计耗时。若当前运行中的联络板还没更新到新版服务端，命令可能返回 404，此时先发普通消息说明，等联络板服务重启后再用结构化 presence。当前权威仍以 `/api/state.userPresence` 为准。
 - W2 视频恢复循环最新口径：Windows 控制端现在会在 H.264/JPEG fallback 成功恢复后保留 `回退恢复 <n> 次` 和 `最近回退：<原因>`。现场复制诊断若只是短暂 `回退恢复 1 次`，优先理解为自动兜底后已回 H.264；如果次数持续增加，再查 Mac 关键帧/GOP、采集编码稳定性、网络丢关键帧或 WebCodecs 解码背压。
 - M2 上板刷新口径：如果通讯板 `Mac Input Safety` 仍显示旧 `UserPresence=present` 或旧 ready 摘要，而 `/api/state.userPresence` 已是 `away`，Mac 端直接跑 `node scripts/mac/check-mac-input-safety-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --server http://192.168.31.68:17888 --sendStatus --boardSummary` 刷新。`away` 时会发送 blocked/no-auth-only 摘要并保持非零退出，这是预期的 fail-closed，不代表脚本坏了；不要因此请求密码、授权或真实 input/inject。

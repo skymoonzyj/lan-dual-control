@@ -1187,9 +1187,13 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   if (fallbackLastReason) {
     parts.push(`最近回退：${fallbackLastReason}`);
   }
+  const fallbackRecoveryPauseCount = Number(diagnostics.h264FallbackRecoveryPauseCount);
+  if (Number.isFinite(fallbackRecoveryPauseCount) && fallbackRecoveryPauseCount > 0) {
+    parts.push(`恢复暂停 ${fallbackRecoveryPauseCount} 次`);
+  }
   const fallbackRecoveryPausedMs = Number(diagnostics.h264FallbackRecoveryPausedMs);
   if (Number.isFinite(fallbackRecoveryPausedMs) && fallbackRecoveryPausedMs > 0) {
-    parts.push(`恢复暂停 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
+    parts.push(`暂停剩余 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
   }
 
   return parts.join(" / ");
@@ -4610,6 +4614,7 @@ function getVideoPerformanceExportStatus() {
   const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const fallbackRecoveryCount = Number(state.h264FallbackRecoveryCount || state.hostDiagnostics?.h264FallbackRecoveryCount) || 0;
   const fallbackLastReason = String(state.h264FallbackLastReason || state.hostDiagnostics?.h264FallbackLastReason || "").trim();
+  const fallbackRecoveryPauseCount = Number(state.h264FallbackRecoveryPauseCount || state.hostDiagnostics?.h264FallbackRecoveryPauseCount) || 0;
   const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
@@ -4636,7 +4641,8 @@ function getVideoPerformanceExportStatus() {
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (fallbackRecoveryCount > 0) parts.push(`回退恢复 ${fallbackRecoveryCount} 次`);
   if (fallbackLastReason) parts.push(`最近回退：${fallbackLastReason}`);
-  if (fallbackRecoveryPausedMs > 0) parts.push(`恢复暂停 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
+  if (fallbackRecoveryPauseCount > 0) parts.push(`恢复暂停 ${fallbackRecoveryPauseCount} 次`);
+  if (fallbackRecoveryPausedMs > 0) parts.push(`暂停剩余 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
   if (decoderStatus && decoderStatus !== "idle") parts.push(`解码 ${labelFromMap(decoderStatus, videoDecoderStatusLabels)}`);
   return parts.join(" · ");
 }
