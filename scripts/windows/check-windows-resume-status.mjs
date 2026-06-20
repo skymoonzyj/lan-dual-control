@@ -140,6 +140,10 @@ clipboard, input_ack, and diagnostics in that order.
   boundary; summary extraction accepts only status=plan-only, default=log,
   realInput=blocked-until-user-watching, required=--confirmUserWatching,
   eventSet=safe, and safety=no-password,no-input-events,no-inject.
+  It also includes MacInputSafetyStatus for the current Mac real-input gate;
+  status extraction accepts only safe short fields such as blocked/ready,
+  inputMode, realInput, --confirmUserWatching, eventSet=safe, no-password
+  safety tokens, and checkedAt; password/secret/input_event candidates are rejected.
   It also includes MacManualUxStatus for the secret-free post-PASS manual UX
   first-screen status path; command extraction accepts only the read-only
   --boardSummary form.
@@ -622,6 +626,25 @@ function emptyMacInputSafety(source = "none", textCount = 0, rejectedCount = 0) 
     required: "",
     eventSet: "",
     safety: [],
+    summary: "not-seen",
+  };
+}
+
+function emptyMacInputSafetyStatus(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    segmentCount: 0,
+    rejectedCount,
+    status: "",
+    reason: "",
+    inputMode: "",
+    realInput: "",
+    required: "",
+    eventSet: "",
+    safety: [],
+    checkedAt: "",
     summary: "not-seen",
   };
 }
@@ -1764,6 +1787,133 @@ function extractMacInputSafetyFromBoardState(state) {
 function extractMacInputSafetyFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacInputSafetyFromTexts(value ? [value] : [], source);
+}
+
+const macInputSafetyStatusAllowedStatuses = new Set(["blocked", "ready", "warning", "unknown"]);
+const macInputSafetyStatusAllowedInputModes = new Set(["log", "inject", "unknown", "not-available"]);
+const macInputSafetyStatusAllowedRealInputs = new Set(["blocked", "blocked-until-user-watching", "ready-for-user-watched-inject", "unknown"]);
+const macInputSafetyStatusAllowedRequired = new Set(["--confirmUserWatching", "none"]);
+const macInputSafetyStatusAllowedEventSets = new Set(["safe"]);
+const macInputSafetyStatusAllowedSafety = new Set(["no-password", "no-auth", "no-input-events", "no-inject", "requires-user-watching", "confirm-user-watching"]);
+const macInputSafetyStatusSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌/i;
+const macInputSafetyStatusBoundaryPattern = /\s+(?:MacHostReadiness|MacHostSafeStart|MacMaxFpsSafeStart|MacFormalLocalSmoke|MacClientDiscoverWindows|MacClientFormalChecklist|MacClientFormalSmoke|MacClientManualChecklist|MacClientPasswordLocation|MacRemoteAudioPlan|MacRemoteAudio|MacManualUxStatus|MacManualUx|MacHeartbeatOnce|MacHeartbeatWatch|MacHeartbeatStart|MacHeartbeatStatus|MacHeartbeatStop|MacHeartbeat|MacCodexHealth|MacPowerHealth|MacUnattendedHealth|MacEvidence|WindowsLanRisk|Next)\s*(?:=|:|\b)/i;
+
+function normalizeMacInputSafetyStatusSegment(segment) {
+  const value = String(segment || "");
+  const label = value.match(/\b(?:MacInputSafetyStatus\s*=|Mac input safety status\s*:)/i);
+  if (!label) return value;
+  const offset = (label.index || 0) + label[0].length;
+  const tail = value.slice(offset);
+  const boundary = tail.search(macInputSafetyStatusBoundaryPattern);
+  return boundary >= 0 ? value.slice(0, offset + boundary) : value;
+}
+
+function splitMacInputSafetyStatusSegments(text) {
+  const value = String(text || "");
+  const matches = [...value.matchAll(/\b(?:MacInputSafetyStatus\s*=|Mac input safety status\s*:)/gi)];
+  return matches.map((match, index) => {
+    const start = match.index || 0;
+    const end = index + 1 < matches.length ? matches[index + 1].index || value.length : value.length;
+    return normalizeMacInputSafetyStatusSegment(value.slice(start, end));
+  });
+}
+
+function extractMacInputSafetyStatusLabelValue(segment) {
+  const match = String(segment || "").match(/\b(?:MacInputSafetyStatus\s*=\s*|Mac input safety status\s*:\s*)([a-z0-9][a-z0-9_-]*)/i);
+  return match ? stripCommandToken(match[1]).replace(/[.]+$/g, "") : "";
+}
+
+function isMacInputSafetyStatusReasonSafe(reason) {
+  if (!reason) return true;
+  return /^[a-z0-9][a-z0-9_-]{0,80}$/i.test(reason) && !macInputSafetyStatusSecretPattern.test(reason);
+}
+
+function isMacInputSafetyStatusCheckedAtSafe(checkedAt) {
+  if (!checkedAt) return true;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(checkedAt) && !Number.isNaN(Date.parse(checkedAt));
+}
+
+function parseMacInputSafetyStatusSegment(segment, source = "text") {
+  const value = normalizeMacInputSafetyStatusSegment(segment);
+  if (!value || macInputSafetyStatusSecretPattern.test(value)) return null;
+  const status = extractMacInputSafetyField(value, "status") || extractMacInputSafetyStatusLabelValue(value);
+  const reason = extractMacInputSafetyField(value, "reason");
+  const inputMode = extractMacInputSafetyField(value, "inputMode");
+  const realInput = extractMacInputSafetyField(value, "realInput");
+  const required = extractMacInputSafetyField(value, "required");
+  const eventSet = extractMacInputSafetyField(value, "eventSet");
+  const safetyRaw = extractMacInputSafetyField(value, "safety");
+  const checkedAt = extractMacInputSafetyField(value, "checkedAt");
+  const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
+  const validSafety = safety.length > 0 && safety.includes("no-password") && safety.every((item) => macInputSafetyStatusAllowedSafety.has(item));
+  if (
+    !macInputSafetyStatusAllowedStatuses.has(status) ||
+    !isMacInputSafetyStatusReasonSafe(reason) ||
+    !macInputSafetyStatusAllowedInputModes.has(inputMode) ||
+    !macInputSafetyStatusAllowedRealInputs.has(realInput) ||
+    !macInputSafetyStatusAllowedRequired.has(required) ||
+    !macInputSafetyStatusAllowedEventSets.has(eventSet) ||
+    !validSafety ||
+    !isMacInputSafetyStatusCheckedAtSafe(checkedAt)
+  ) {
+    return null;
+  }
+  const parts = [
+    `status=${status}`,
+    ...(reason ? [`reason=${reason}`] : []),
+    `inputMode=${inputMode}`,
+    `realInput=${realInput}`,
+    `required=${required}`,
+    `eventSet=${eventSet}`,
+    `safety=${safety.join(",")}`,
+    ...(checkedAt ? [`checkedAt=${checkedAt}`] : []),
+  ];
+  return {
+    found: true,
+    source,
+    status,
+    reason,
+    inputMode,
+    realInput,
+    required,
+    eventSet,
+    safety,
+    checkedAt,
+    summary: parts.join(" "),
+  };
+}
+
+function extractMacInputSafetyStatusFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacInputSafetyStatusSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacInputSafetyStatusSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacInputSafetyStatus(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacInputSafetyStatusFromBoardState(state) {
+  return extractMacInputSafetyStatusFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacInputSafetyStatusFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacInputSafetyStatusFromTexts(value ? [value] : [], source);
 }
 
 const macManualUxAllowedStatuses = new Set(["ready", "waiting", "call-ready", "calling"]);
@@ -3531,6 +3681,7 @@ async function getBoardSnapshot(args) {
       macManualUxStatus: emptyMacSafeStart("skipped"),
       macManualUx: emptyMacManualUx("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
+      macInputSafetyStatus: emptyMacInputSafetyStatus("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
       macHeartbeatStart: emptyMacSafeStart("skipped"),
@@ -3576,6 +3727,7 @@ async function getBoardSnapshot(args) {
       macManualUxStatus: extractMacManualUxStatusFromBoardState(stateResult.state),
       macManualUx: extractMacManualUxFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
+      macInputSafetyStatus: extractMacInputSafetyStatusFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
       macHeartbeatStart: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStart", "start"),
@@ -3627,6 +3779,7 @@ async function getBoardSnapshot(args) {
     macManualUxStatus: extractMacManualUxStatusFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macManualUx: extractMacManualUxFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macInputSafetyStatus: extractMacInputSafetyStatusFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStart: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStart", "start", result.ok ? "codex-link-client" : "unavailable"),
@@ -4765,6 +4918,9 @@ function makeBoardSummary(report) {
       : []),
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
+      : []),
+    ...(report.board.macInputSafetyStatus?.found
+      ? [`MacInputSafetyStatus=${report.board.macInputSafetyStatus.summary}.`]
       : []),
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,

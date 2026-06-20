@@ -1149,6 +1149,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
   const macInputSafetyBoardText = "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.";
+  const macInputSafetyStatusSummary = "status=ready reason=log-mode-permissions-ok inputMode=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-auth,no-input-events,no-inject";
+  const macInputSafetyStatusBoardText = `MacInputSafetyStatus=ready reason=log-mode-permissions-ok host=online inputMode=log permissions=ok realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe blockers=none warnings=none. MacInputSafetyPlan=${macInputSafetyPlanCommand}. MacInputLogSmoke=node scripts/mac/smoke-mac-input-log.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary. Safety=no-password,no-auth,no-input-events,no-inject.`;
   const heartbeatNow = Date.now();
   const freshCheckedAt = new Date(heartbeatNow - 60_000).toISOString();
   const freshCodexUpdatedAt = new Date(heartbeatNow - 65_000).toISOString();
@@ -1161,7 +1163,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacClientManualChecklist=${macClientManualChecklistAction} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} ${macManualUxBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacClientManualChecklist=${macClientManualChecklistAction} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} ${macInputSafetyStatusBoardText} MacManualUxStatus=${macManualUxStatusCommand} ${macManualUxBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -1334,6 +1336,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         {
           type: "message",
           from: "Mac Codex",
+          text: "MacInputSafetyStatus=status=ready reason=user-watching inputMode=log realInput=ready-for-user-watched-inject required=--confirmUserWatching eventSet=full safety=no-password,requires-user-watching checkedAt=2026-06-20T09:16:00.000Z",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacInputSafetyStatus=status=blocked reason=user-not-watching inputMode=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,password=secret-value,no-inject checkedAt=2026-06-20T09:16:00.000Z",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
           text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --password secret-value --boardSummary",
         },
         {
@@ -1453,6 +1465,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macInputSafety.safety?.includes("no-input-events"), "PowerShell Mac input safety should include no-input-events safety");
       assert(payload.board.macInputSafety.safety?.includes("no-inject"), "PowerShell Mac input safety should include no-inject safety");
       assert(payload.board.macInputSafety.rejectedCount >= 2, "PowerShell unsafe Mac input safety summaries should be rejected");
+      assert(payload.board?.macInputSafetyStatus?.found === true, "PowerShell MacInputSafetyStatus should be found");
+      assert(payload.board.macInputSafetyStatus.summary === macInputSafetyStatusSummary, "PowerShell MacInputSafetyStatus summary mismatch");
+      assert(payload.board.macInputSafetyStatus.status === "ready", "PowerShell MacInputSafetyStatus status mismatch");
+      assert(payload.board.macInputSafetyStatus.reason === "log-mode-permissions-ok", "PowerShell MacInputSafetyStatus reason mismatch");
+      assert(payload.board.macInputSafetyStatus.inputMode === "log", "PowerShell MacInputSafetyStatus inputMode mismatch");
+      assert(payload.board.macInputSafetyStatus.realInput === "blocked-until-user-watching", "PowerShell MacInputSafetyStatus realInput mismatch");
+      assert(payload.board.macInputSafetyStatus.eventSet === "safe", "PowerShell MacInputSafetyStatus event set mismatch");
+      assert(payload.board.macInputSafetyStatus.safety?.includes("no-auth"), "MacInputSafetyStatus should include no-auth safety");
+      assert(payload.board.macInputSafetyStatus.safety?.includes("no-password"), "PowerShell MacInputSafetyStatus should include no-password safety");
+      assert(payload.board.macInputSafetyStatus.rejectedCount >= 2, "PowerShell unsafe MacInputSafetyStatus summaries should be rejected");
       assert(payload.board?.macHeartbeatOnce?.found === true, "PowerShell MacHeartbeatOnce should be found");
       assert(payload.board.macHeartbeatOnce.command === heartbeatOnceCommand, "PowerShell MacHeartbeatOnce command mismatch");
       assert(payload.board.macHeartbeatOnce.rejectedCount >= 2, "PowerShell unsafe or incomplete MacHeartbeatOnce should be rejected");
@@ -1487,6 +1509,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacManualUxReconfirm=${macManualUxReconfirmCommand}.`, "PowerShell MacManualUx reconfirm JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "PowerShell MacManualUx timeout ack JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety JSON board summary");
+      assertIncludes(payload.boardSummary, `MacInputSafetyStatus=${macInputSafetyStatusSummary}.`, "PowerShell MacInputSafetyStatus JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "PowerShell MacHeartbeatWatch JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatStart=${heartbeatStartCommand}.`, "PowerShell MacHeartbeatStart JSON board summary");
@@ -1528,6 +1551,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(output, `MacManualUxReconfirm=${macManualUxReconfirmCommand}.`, "PowerShell MacManualUx reconfirm board summary");
       assertIncludes(output, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "PowerShell MacManualUx timeout ack board summary");
       assertIncludes(output, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety board summary");
+      assertIncludes(output, `MacInputSafetyStatus=${macInputSafetyStatusSummary}.`, "PowerShell MacInputSafetyStatus board summary");
       assertIncludes(output, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce board summary");
       assertIncludes(output, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "PowerShell MacHeartbeatWatch board summary");
       assertIncludes(output, `MacHeartbeatStart=${heartbeatStartCommand}.`, "PowerShell MacHeartbeatStart board summary");

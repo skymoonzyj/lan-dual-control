@@ -57,6 +57,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 预接入 MacInputSafetyStatus
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏能读懂 Mac 端即将上板的真实输入安全门禁状态，同时保持只读和无密边界。
+完成内容：
+- `check-windows-resume-status` 新增 `MacInputSafetyStatus=` / `Mac input safety status:` 白名单解析，输出 JSON `board.macInputSafetyStatus`、普通输出和 `--boardSummary`。
+- 解析只接受 blocked/ready/warning/unknown、`inputMode=log|inject|unknown|not-available`、`realInput=blocked-until-user-watching|ready-for-user-watched-inject|blocked|unknown`、`required=--confirmUserWatching|none`、`eventSet=safe`、白名单 safety 和 ISO `checkedAt`。
+- 疑似 password/token/secret、非 safe 事件集、未知 safety 或不合法时间戳会被拒绝；该状态只读展示，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+- Node 与 PowerShell wrapper 回归覆盖当前 status 优先、unsafe status 拒绝、JSON、`--boardSummary` 和普通输出。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于缺少 `MacInputSafetyStatus`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 需要 Mac 端后续把真实 `MacInputSafetyStatus=` 生产字段推送并上板；Windows 现在只是提前具备安全消费能力。
+下一步建议：
+- Mac 端 M2 推送后，Windows 开工第一屏先看 `MacInputSafetyStatus=` 是否为 blocked/ready，再决定是否发起用户在场的真实输入单步验收。
+是否改了协议：否。只扩展 Windows 只读通讯板摘要消费。
+是否需要另一端配合：需要 Mac 端继续完成并上报 `MacInputSafetyStatus=`；无需共享密码。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 消费 MacCodexHealth
 开发端：Windows Codex
 本轮目标：让 Windows 开工第一屏直接读懂 Mac Codex 自身健康状态，避免把 Mac Codex stale/blocked 和 Mac host/client 远控链路混在一起。
