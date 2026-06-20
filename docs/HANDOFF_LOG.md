@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 手工体验第一屏 PowerShell 7 包装入口
+开发端：Windows Codex
+本轮目标：让用户现场在 PowerShell 7 里用短命令查看 Windows 手工体验第一屏，不必记 Node 长命令。
+完成内容：
+- 新增 `scripts/windows/check-windows-manual-ux-status.ps1`，支持 `-Server`、`-TimeoutMs`、`-CheckBoard`、`-RequireReady`、`-Json`、`-BoardSummary`、`-Help/-h`。
+- 包装脚本只透传到 `check-windows-manual-ux-status.mjs`，保持只读通讯板；不启动服务、不认证、不请求或发送密码、不发 input/inject。
+- `test-windows-manual-ux-status` 覆盖 PowerShell help、ready boardSummary 和 waiting `-RequireReady -Json` fail-closed。
+- `test-windows-powershell-help` 默认帮助覆盖加入该 wrapper。
+修改文件：
+- `scripts/windows/check-windows-manual-ux-status.ps1`
+- `scripts/windows/test-windows-manual-ux-status.mjs`
+- `scripts/windows/test-windows-powershell-help.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-powershell-help.mjs --script check-windows-manual-ux-status.ps1 --shell pwsh.exe --timeoutMs 10000` 先失败于脚本不存在。
+- 红灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000` 先失败于 PowerShell 找不到 `check-windows-manual-ux-status.ps1`。
+- 绿灯待最终验证记录补齐。
+遗留问题：
+- 这只是现场入口简化；真实手工体验仍需要用户在场输入 Mac 临时密码并逐项确认画面/声音/剪贴板等。
+下一步建议：
+- 用户在 Windows 现场准备验收时优先跑 `scripts/windows/check-windows-manual-ux-status.ps1 -BoardSummary`；若显示 `status=reconfirm`，先让 Mac 重新发起新的 5-10 分钟手工体验 call。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实体验时 Mac 端按 manual UX call 流程配合。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 手工体验第一屏消费 timeout/reconfirm
 开发端：Windows Codex
 本轮目标：让 `check-windows-manual-ux-status` 不再把已经超时的 Mac manual UX call 当作普通等待/可测状态，并把 Mac client 页面手工清单带到 Windows 手工体验第一屏。

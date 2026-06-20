@@ -11,6 +11,7 @@ const defaultScripts = [
   "allow-windows-reverse-control.ps1",
   "check-mac-formal-e2e.ps1",
   "check-windows-host-readiness.ps1",
+  "check-windows-manual-ux-status.ps1",
   "check-windows-resume-status.ps1",
   "check-windows-video-encoder-support.ps1",
   "start-windows-host.ps1",

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const script = "scripts/windows/check-windows-manual-ux-status.mjs";
+const powershellScript = "scripts/windows/check-windows-manual-ux-status.ps1";
 const defaultTimeoutMs = 20000;
 const defaultChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
 const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
@@ -86,6 +87,40 @@ function run(extraArgs, args) {
   });
 }
 
+function runPowerShell(extraArgs, args) {
+  return new Promise((resolveRun) => {
+    const child = spawn("pwsh.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", powershellScript,
+      ...extraArgs,
+    ], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
 async function withFakeBoard(state, callback) {
   const server = http.createServer((request, response) => {
     const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
@@ -379,6 +414,39 @@ async function checkUsableEntryCurrentCallIsReady(args) {
   console.log("[OK] Windows manual UX status treats usable-entry currentCall as manual UX ready");
 }
 
+async function checkPowerShellWrapperHelp(args) {
+  const result = await runPowerShell(["-Help"], args);
+  assert(result.exitCode === 0, `PowerShell wrapper help should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+  assertIncludes(result.stdout, "Usage:", "PowerShell wrapper help");
+  assertIncludes(result.stdout, "-Server", "PowerShell wrapper help");
+  assertIncludes(result.stdout, "-RequireReady", "PowerShell wrapper help");
+  assertIncludes(result.stdout, "-BoardSummary", "PowerShell wrapper help");
+  assertNotIncludes(result.stdout, "Mac host password:", "PowerShell wrapper help");
+  console.log("[OK] Windows manual UX PowerShell wrapper help is pure");
+}
+
+async function checkPowerShellWrapperBoardSummary(args) {
+  await withFakeBoard(readyBoardState(), async (serverUrl) => {
+    const result = await runPowerShell(["-Server", serverUrl, "-BoardSummary"], args);
+    assert(result.exitCode === 0, `PowerShell wrapper board summary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "WindowsManualUx=status=ready", "PowerShell wrapper board summary");
+    assertIncludes(result.stdout, "Next=ManualUxTest", "PowerShell wrapper board summary");
+    assertIncludes(result.stdout, "Safety=no-password,no-input-inject", "PowerShell wrapper board summary");
+    assertNotIncludes(result.stdout, "test-password", "PowerShell wrapper board summary");
+  });
+  console.log("[OK] Windows manual UX PowerShell wrapper prints secret-free board summary");
+}
+
+async function checkPowerShellWrapperRequireReadyFailure(args) {
+  await withFakeBoard(waitingBoardState(), async (serverUrl) => {
+    const result = await runPowerShell(["-Server", serverUrl, "-RequireReady", "-Json"], args);
+    assert(result.exitCode === 1, `PowerShell wrapper requireReady waiting state should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "PowerShell wrapper waiting JSON");
+    assert(payload.status === "waiting", `PowerShell wrapper waiting status mismatch: ${payload.status}`);
+    assertIncludes(payload.boardSummary, "WindowsManualUx=status=waiting", "PowerShell wrapper waiting boardSummary");
+  });
+  console.log("[OK] Windows manual UX PowerShell wrapper fails closed before standby signal");
+}
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -386,11 +454,14 @@ async function main() {
     return;
   }
   await checkHelp(args);
+  await checkPowerShellWrapperHelp(args);
   await checkReadyJson(args);
   await checkLoopbackTargetIsNotAdvertised(args);
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
+  await checkPowerShellWrapperBoardSummary(args);
   await checkRequireReadyFailure(args);
+  await checkPowerShellWrapperRequireReadyFailure(args);
   await checkTimeoutReconfirmAndMacClientChecklist(args);
   await checkUsableEntryCurrentCallIsReady(args);
   console.log("[OK] Windows manual UX status checks passed");
