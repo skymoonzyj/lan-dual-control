@@ -295,6 +295,7 @@ function formatMediaBoardSummaryFixture(summary) {
   const formatter = [
     functionBlock(source, "formatMediaBoardSummary"),
     functionBlock(source, "formatMediaH264BoardSummary"),
+    functionBlock(source, "formatH264NalTypesBoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
   ].join("\n");
   return Function("summary", `${formatter}\nreturn formatMediaBoardSummary(summary);`)(summary);
@@ -370,6 +371,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatMediaProbeTarget"),
     functionBlock(source, "formatMediaBoardSummary"),
     functionBlock(source, "formatMediaH264BoardSummary"),
+    functionBlock(source, "formatH264NalTypesBoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
     functionBlock(source, "formatHostBuildBoardSummary"),
     functionBlock(source, "formatHostMediaBoardSummary"),
@@ -599,13 +601,14 @@ function checkMediaBoardSummaryStatusFormatting() {
                 ppsFrames: 2,
                 idrFrames: 2,
                 keyFramesWithParameterSets: 2,
+                firstKeyFrameNalTypes: [7, 8, 5],
               },
             },
           },
         },
       }],
-    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2",
-    "media board summary should surface ok status and H.264 keyframe evidence",
+    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2 firstKeyNal=7,8,5",
+    "media board summary should surface ok status, H.264 keyframe evidence, and first keyframe NAL types",
   );
   assert(
     formatMediaBoardSummaryFixture({

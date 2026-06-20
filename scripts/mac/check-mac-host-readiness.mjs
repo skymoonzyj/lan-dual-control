@@ -1163,7 +1163,19 @@ function formatMediaH264BoardSummary(details) {
     `pps=${ppsFrames}`,
     `idr=${idrFrames}`,
     `keyParam=${keyParam}`,
-  ].join(" ");
+    formatH264NalTypesBoardSummary("firstKeyNal", h264.firstKeyFrameNalTypes),
+    formatH264NalTypesBoardSummary("firstNal", h264.firstNalTypes),
+  ].filter(Boolean).join(" ");
+}
+
+function formatH264NalTypesBoardSummary(label, value) {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  const nalTypes = value
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item >= 0 && item <= 31)
+    .slice(0, 12);
+  if (nalTypes.length === 0) return "";
+  return `${label}=${nalTypes.join(",")}`;
 }
 
 function normalizeMediaStatus(value, ok, passed, failed) {
