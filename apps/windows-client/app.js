@@ -166,6 +166,9 @@ const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
 const h264FallbackRecoveryCooldownMs = 2500;
 const h264FallbackRecoveryStableJpegFrames = 3;
+const h264FallbackRecoveryLoopWindowMs = 15000;
+const h264FallbackRecoveryLoopThreshold = 2;
+const h264FallbackRecoveryPauseMs = 10000;
 const videoStutterGapThresholdMs = 120;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
@@ -560,6 +563,9 @@ const state = {
   h264FallbackRecoveryRequested: false,
   h264FallbackRecoveryCount: 0,
   h264FallbackLastReason: "",
+  h264FallbackRecoveryPausedUntil: 0,
+  h264FallbackRecoveryPauseCount: 0,
+  h264FallbackRecoveryTimestamps: [],
   audioFrames: 0,
   audioLevel: 0,
   audioContext: null,
@@ -659,6 +665,8 @@ const state = {
     h264FallbackReason: "",
     h264FallbackRecoveryCount: 0,
     h264FallbackLastReason: "",
+    h264FallbackRecoveryPausedMs: 0,
+    h264FallbackRecoveryPauseCount: 0,
     streamFallbackReason: "",
     maxScreenFps: null,
     runtime: null,
@@ -877,6 +885,8 @@ function getEmptyHostDiagnostics() {
     h264FallbackReason: "",
     h264FallbackRecoveryCount: 0,
     h264FallbackLastReason: "",
+    h264FallbackRecoveryPausedMs: 0,
+    h264FallbackRecoveryPauseCount: 0,
     streamFallbackReason: "",
     maxScreenFps: null,
     runtime: null,
@@ -1176,6 +1186,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const fallbackLastReason = String(diagnostics.h264FallbackLastReason || "").trim();
   if (fallbackLastReason) {
     parts.push(`最近回退：${fallbackLastReason}`);
+  }
+  const fallbackRecoveryPausedMs = Number(diagnostics.h264FallbackRecoveryPausedMs);
+  if (Number.isFinite(fallbackRecoveryPausedMs) && fallbackRecoveryPausedMs > 0) {
+    parts.push(`恢复暂停 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
   }
 
   return parts.join(" / ");
@@ -2935,6 +2949,9 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
     state.h264FallbackRecoveryRequested = false;
     state.h264FallbackRecoveryCount = 0;
     state.h264FallbackLastReason = "";
+    state.h264FallbackRecoveryPausedUntil = 0;
+    state.h264FallbackRecoveryPauseCount = 0;
+    state.h264FallbackRecoveryTimestamps = [];
   }
 }
 
@@ -4593,6 +4610,7 @@ function getVideoPerformanceExportStatus() {
   const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const fallbackRecoveryCount = Number(state.h264FallbackRecoveryCount || state.hostDiagnostics?.h264FallbackRecoveryCount) || 0;
   const fallbackLastReason = String(state.h264FallbackLastReason || state.hostDiagnostics?.h264FallbackLastReason || "").trim();
+  const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const parts = [];
@@ -4618,6 +4636,7 @@ function getVideoPerformanceExportStatus() {
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (fallbackRecoveryCount > 0) parts.push(`回退恢复 ${fallbackRecoveryCount} 次`);
   if (fallbackLastReason) parts.push(`最近回退：${fallbackLastReason}`);
+  if (fallbackRecoveryPausedMs > 0) parts.push(`恢复暂停 ${Math.ceil(fallbackRecoveryPausedMs / 1000)}s`);
   if (decoderStatus && decoderStatus !== "idle") parts.push(`解码 ${labelFromMap(decoderStatus, videoDecoderStatusLabels)}`);
   return parts.join(" · ");
 }
@@ -8289,6 +8308,8 @@ function updateH264DecoderDiagnostics(extra = {}) {
     h264FallbackReason: state.h264FallbackReason,
     h264FallbackRecoveryCount: state.h264FallbackRecoveryCount,
     h264FallbackLastReason: state.h264FallbackLastReason,
+    h264FallbackRecoveryPausedMs: getH264FallbackRecoveryPausedMs(),
+    h264FallbackRecoveryPauseCount: state.h264FallbackRecoveryPauseCount,
     ...extra,
   });
 }
@@ -8422,6 +8443,30 @@ function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
   }
 }
 
+function getH264FallbackRecoveryPausedMs(now = performance.now()) {
+  const pausedUntil = Number(state.h264FallbackRecoveryPausedUntil) || 0;
+  return Math.max(0, Math.ceil(pausedUntil - now));
+}
+
+function recordH264FallbackRecovery(now = performance.now()) {
+  const recent = (Array.isArray(state.h264FallbackRecoveryTimestamps)
+    ? state.h264FallbackRecoveryTimestamps
+    : [])
+    .map((timestamp) => Number(timestamp))
+    .filter((timestamp) => Number.isFinite(timestamp) && now - timestamp <= h264FallbackRecoveryLoopWindowMs);
+  recent.push(now);
+  state.h264FallbackRecoveryTimestamps = recent;
+  state.h264FallbackRecoveryCount = (Number(state.h264FallbackRecoveryCount) || 0) + 1;
+  if (recent.length >= h264FallbackRecoveryLoopThreshold) {
+    state.h264FallbackRecoveryPausedUntil = Math.max(
+      Number(state.h264FallbackRecoveryPausedUntil) || 0,
+      now + h264FallbackRecoveryPauseMs,
+    );
+    state.h264FallbackRecoveryPauseCount = (Number(state.h264FallbackRecoveryPauseCount) || 0) + 1;
+    addLog("视频恢复暂停", "H.264 短时间反复回退，先保持 JPEG 保画面");
+  }
+}
+
 function maybeRecoverH264VideoFallback(frame = {}) {
   if (!state.h264FallbackActive || state.h264FallbackRecoveryRequested) {
     return false;
@@ -8440,10 +8485,11 @@ function maybeRecoverH264VideoFallback(frame = {}) {
   }
 
   state.h264FallbackRecoveryJpegFrames = (Number(state.h264FallbackRecoveryJpegFrames) || 0) + 1;
+  const now = performance.now();
   const dueAt = Number(state.h264FallbackRecoveryDueAt) || 0;
   if (
     state.h264FallbackRecoveryJpegFrames < h264FallbackRecoveryStableJpegFrames ||
-    (dueAt > 0 && performance.now() < dueAt) ||
+    (dueAt > 0 && now < dueAt) ||
     !supportsWebCodecsH264() ||
     !state.connected ||
     typeof state.client?.sendDisplaySettings !== "function"
@@ -8451,8 +8497,13 @@ function maybeRecoverH264VideoFallback(frame = {}) {
     return false;
   }
 
+  if (getH264FallbackRecoveryPausedMs(now) > 0) {
+    updateH264DecoderDiagnostics();
+    return false;
+  }
+
   state.h264FallbackRecoveryRequested = true;
-  state.h264FallbackRecoveryCount = (Number(state.h264FallbackRecoveryCount) || 0) + 1;
+  recordH264FallbackRecovery(now);
   state.h264FallbackActive = false;
   state.h264FallbackReason = "";
   state.h264DecoderNeedsKeyFrame = true;

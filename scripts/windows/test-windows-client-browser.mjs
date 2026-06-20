@@ -5053,6 +5053,11 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalFallbackRecoveryRequested = state.h264FallbackRecoveryRequested;
       const originalFallbackRecoveryCount = state.h264FallbackRecoveryCount;
       const originalFallbackLastReason = state.h264FallbackLastReason;
+      const originalFallbackRecoveryPausedUntil = state.h264FallbackRecoveryPausedUntil;
+      const originalFallbackRecoveryPauseCount = state.h264FallbackRecoveryPauseCount;
+      const originalFallbackRecoveryTimestamps = Array.isArray(state.h264FallbackRecoveryTimestamps)
+        ? state.h264FallbackRecoveryTimestamps.slice()
+        : [];
       const originalConnected = state.connected;
       const originalClient = state.client;
       const originalVideoFrames = state.videoFrames;
@@ -5237,6 +5242,9 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264FallbackReason = "";
         state.h264FallbackRecoveryCount = 0;
         state.h264FallbackLastReason = "";
+        state.h264FallbackRecoveryPausedUntil = 0;
+        state.h264FallbackRecoveryPauseCount = 0;
+        state.h264FallbackRecoveryTimestamps = [];
         state.videoLastDropReason = "";
         state.videoDroppedStaleFrames = 0;
         state.videoFrames = 0;
@@ -5299,16 +5307,61 @@ async function verifyH264LatencyQueueGuard(session) {
           fallbackRecoveryExportText.includes("回退恢复 1 次") &&
           fallbackRecoveryExportText.includes("最近回退：");
 
+        const renderStableJpegFrames = async (startFrameId) => {
+          for (let offset = 0; offset < 3; offset += 1) {
+            await renderVideoFrame({
+              dataUrl: makeJpegDataUrl(),
+              codec: "jpeg",
+              encoding: "data-url",
+              width: 1920,
+              height: 1080,
+              frameId: startFrameId + offset,
+            });
+          }
+        };
+
+        requestJpegVideoFallback("第二次等待关键帧", { dropReason: "keyframe-wait-timeout-fallback" });
+        state.h264FallbackRecoveryDueAt = performance.now() - 1;
+        await renderStableJpegFrames(394);
+        const secondRecoveryExportText = getVideoPerformanceExportStatus();
+        const secondFallbackRecovery =
+          fallbackSettings.length === 4 &&
+          fallbackSettings[3]?.preferredVideoCodec === "h264" &&
+          fallbackSettings[3]?.preferredVideoEncoding === "annexb" &&
+          state.h264FallbackRecoveryCount === 2 &&
+          secondRecoveryExportText.includes("回退恢复 2 次");
+
+        requestJpegVideoFallback("第三次等待关键帧", { dropReason: "keyframe-wait-timeout-fallback" });
+        state.h264FallbackRecoveryDueAt = performance.now() - 1;
+        await renderStableJpegFrames(397);
+        const fallbackRecoveryPausedExportText = getVideoPerformanceExportStatus();
+        const fallbackRecoveryPause =
+          fallbackSettings.length === 5 &&
+          fallbackSettings[4]?.preferredVideoCodec === "mjpeg" &&
+          state.h264FallbackActive === true &&
+          state.h264DecoderStatus === "fallback" &&
+          state.h264FallbackRecoveryCount === 2 &&
+          Number(state.h264FallbackRecoveryPauseCount) > 0 &&
+          Number(state.h264FallbackRecoveryPausedUntil) > performance.now() &&
+          fallbackRecoveryPausedExportText.includes("恢复暂停") &&
+          fallbackRecoveryPausedExportText.includes("最近回退：第三次等待关键帧");
+
         return {
-          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback && fallbackRecovery,
+          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause,
           deltaOk,
           keyPreserved,
           webCodecsQueueBackpressure,
           keyFrameWaitFallback,
           fallbackRecovery,
+          secondFallbackRecovery,
+          fallbackRecoveryPause,
           fallbackRecoveryCount: state.h264FallbackRecoveryCount,
           fallbackLastReason: state.h264FallbackLastReason,
+          fallbackRecoveryPausedUntil: state.h264FallbackRecoveryPausedUntil,
+          fallbackRecoveryPauseCount: state.h264FallbackRecoveryPauseCount,
           fallbackRecoveryExportText,
+          secondRecoveryExportText,
+          fallbackRecoveryPausedExportText,
           keyFrameWaitFallbackExportText,
           fallbackSettings,
           fallbackReason: state.h264FallbackReason,
@@ -5348,6 +5401,9 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264FallbackRecoveryRequested = originalFallbackRecoveryRequested;
         state.h264FallbackRecoveryCount = originalFallbackRecoveryCount;
         state.h264FallbackLastReason = originalFallbackLastReason;
+        state.h264FallbackRecoveryPausedUntil = originalFallbackRecoveryPausedUntil;
+        state.h264FallbackRecoveryPauseCount = originalFallbackRecoveryPauseCount;
+        state.h264FallbackRecoveryTimestamps = originalFallbackRecoveryTimestamps;
         state.connected = originalConnected;
         state.client = originalClient;
         state.videoFrames = originalVideoFrames;
