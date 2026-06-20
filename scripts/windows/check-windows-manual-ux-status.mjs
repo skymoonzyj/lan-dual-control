@@ -178,6 +178,80 @@ function hasInputOrInjectValue(value) {
   return /\b(?:input_event|input_events|inject)\b/i.test(String(value || "")) || /自动发送/.test(String(value || ""));
 }
 
+function emptyUserPresence(source = "none") {
+  return {
+    found: false,
+    source,
+    status: "unknown",
+    label: "",
+    reason: "",
+    instruction: "",
+    updatedAt: "",
+    updatedBy: "",
+    action: "unknown",
+    blocker: "",
+    summary: "status=unknown source=none action=unknown",
+  };
+}
+
+const userPresenceSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码\s*[:=]|密钥|口令|令牌/i;
+
+function safeIsoTimestamp(value) {
+  const text = normalizedText(value);
+  if (!text) return false;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text) && Number.isFinite(Date.parse(text));
+}
+
+function safeUserPresenceText(value, maxLength = 120) {
+  const text = normalizedText(value).replace(/[.]+$/g, "");
+  if (!text || userPresenceSecretPattern.test(text)) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function normalizeUserPresenceStatus(value) {
+  const text = normalizedText(value).toLowerCase();
+  if (["present", "awake", "user-present", "user_awake", "用户在场", "在场"].includes(text)) return "present";
+  if (["away", "sleeping", "asleep", "user-away", "user_sleeping", "用户不在", "不在", "休息", "睡觉"].includes(text)) return "away";
+  if (["unknown", "none", ""].includes(text)) return "unknown";
+  return "unknown";
+}
+
+function userPresenceAction(status) {
+  if (status === "present") return "explain-before-auth";
+  if (status === "away") return "no-auth-only";
+  return "unknown";
+}
+
+function normalizeBoardUserPresence(state, source = "api-state") {
+  const presence = state?.userPresence;
+  if (!presence || typeof presence !== "object") return emptyUserPresence(source);
+  const status = normalizeUserPresenceStatus(presence.status || presence.state);
+  const action = userPresenceAction(status);
+  const updatedAt = safeIsoTimestamp(presence.updatedAt) ? presence.updatedAt : "";
+  const result = {
+    found: status !== "unknown" || Boolean(presence.status || presence.state),
+    source,
+    status,
+    label: safeUserPresenceText(presence.label, 80),
+    reason: safeUserPresenceText(presence.reason, 120),
+    instruction: safeUserPresenceText(presence.instruction, 180),
+    updatedAt,
+    updatedBy: safeUserPresenceText(presence.updatedBy, 80),
+    action,
+    blocker: status === "away" ? "BLOCKED_BY_USER_AWAY" : "",
+  };
+  const parts = [
+    `status=${result.status}`,
+    `source=${result.source}`,
+    ...(result.updatedAt ? [`updatedAt=${result.updatedAt}`] : []),
+    ...(result.label ? [`label=${result.label}`] : []),
+    `action=${result.action}`,
+    ...(result.blocker ? [`blocker=${result.blocker}`] : []),
+  ];
+  result.summary = parts.join(" ");
+  return result;
+}
+
 function collectBoardTexts(state) {
   const texts = [];
   if (state.currentCall) texts.push(compactText(state.currentCall));
@@ -399,6 +473,7 @@ function extractMacManualUx(texts) {
 
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
+  const userPresence = normalizeBoardUserPresence(state, "api-state");
   const combined = texts.join("\n");
   const macManualUx = extractMacManualUx(texts);
   const macClientManualChecklist = extractMacClientManualChecklist(texts);
@@ -414,12 +489,15 @@ function makeReport(state, server) {
   const baseReady = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || (macManualUx.found && macManualUx.status === "ready" && macManualUx.next === "ManualUxTest");
   const needsReconfirm = macManualUx.found && (macManualUx.manualUxCall === "timeout" || macManualUx.next === "ReconfirmManualUxCall" || macManualUx.warnings?.includes("manual-ux-call-timeout"));
   const needsConfirmation = macManualUx.found && !needsReconfirm && macManualUx.status === "calling" && macManualUx.next === "WaitForManualUxConfirmation";
-  const status = needsReconfirm ? "reconfirm" : needsConfirmation ? "confirming" : baseReady ? "ready" : "waiting";
+  const userAway = userPresence.status === "away";
+  const status = userAway ? "waiting" : needsReconfirm ? "reconfirm" : needsConfirmation ? "confirming" : baseReady ? "ready" : "waiting";
   const ready = status === "ready";
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
   const warnings = [];
   const blockers = [];
+  if (userPresence.blocker) blockers.push(userPresence.blocker);
+  if (userAway) warnings.push("user-away");
   if (needsReconfirm) blockers.push("manual-ux-call-timeout");
   if (needsConfirmation) blockers.push("manual-ux-confirmation-required");
   if (!baseReady && !needsReconfirm && !needsConfirmation) blockers.push("manual-ux-standby-not-detected");
@@ -434,6 +512,7 @@ function makeReport(state, server) {
     target: macManualUx.target && macManualUx.target !== "unknown" ? macManualUx.target : firstPrivateEndpoint(texts, server),
     targetSource: macManualUx.targetSource || "unknown",
     signals,
+    userPresence,
     macManualUx,
     macClientManualChecklist,
     manualChecklist: {
@@ -449,13 +528,18 @@ function makeReport(state, server) {
     },
     blockers,
     warnings,
-    nextActions: ready
+    nextActions: userAway
       ? [
-          "Open Windows control page and keep Mac host in log mode unless user explicitly approves inject.",
-          "Check connection, video, audio, clipboard text/file, window, fullscreen, original quality, and copy diagnostics.",
-          "Record real manual UX findings instead of returning to formal E2E password flow.",
+          "User is away on Agent Link Board; keep this as no-auth/no-input coordination only.",
+          "Do not request credentials, system authorization, real input/inject, or human audio/visual confirmation until userPresence becomes present.",
         ]
-      : needsReconfirm
+      : ready
+        ? [
+            "Open Windows control page and keep Mac host in log mode unless user explicitly approves inject.",
+            "Check connection, video, audio, clipboard text/file, window, fullscreen, original quality, and copy diagnostics.",
+            "Record real manual UX findings instead of returning to formal E2E password flow.",
+          ]
+        : needsReconfirm
         ? [
             "Ask Mac to reconfirm the timed-out manual UX call before starting a new user-present test window.",
             "Do not send MAC_MANUAL_UX_CONFIRMED for an old timed-out call.",
@@ -493,6 +577,10 @@ function makeBoardSummary(report) {
     "Safety=no-password,no-input-inject",
     "NoFormalE2ERerun=true",
   ];
+  if (report.userPresence?.found) {
+    parts.push(`UserPresence=${report.userPresence.status} source=${report.userPresence.source}${report.userPresence.updatedAt ? ` updatedAt=${report.userPresence.updatedAt}` : ""}`);
+    parts.push(`UserPresenceAction=${report.userPresence.action}${report.userPresence.blocker ? ` blocker=${report.userPresence.blocker}` : ""}`);
+  }
   if (report.macManualUx?.found) parts.push(`MacManualUx=${report.macManualUx.summary}`);
   if (report.macManualUx?.manualUxReconfirmCommand) parts.push(`MacManualUxReconfirm=${report.macManualUx.manualUxReconfirmCommand}`);
   if (report.macClientManualChecklist?.found) parts.push(`MacClientManualChecklist=${report.macClientManualChecklist.action}`);
@@ -507,6 +595,10 @@ function printHuman(report) {
   console.log(`[INFO] Target: ${report.target} (${report.targetSource || "unknown"})`);
   console.log(`[INFO] Checklist: ${report.manualChecklist.labels.join(" / ")} (${report.manualChecklist.summary})`);
   console.log(`[INFO] Signals: ${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(", ") || "none"}`);
+  if (report.userPresence?.found) {
+    console.log(`[INFO] UserPresence=${report.userPresence.summary}`);
+    console.log(`[INFO] UserPresenceAction=${report.userPresence.action}${report.userPresence.blocker ? ` blocker=${report.userPresence.blocker}` : ""}`);
+  }
   if (report.macManualUx?.found) console.log(`[INFO] MacManualUx: ${report.macManualUx.summary}`);
   if (report.macManualUx?.manualUxReconfirmCommand) console.log(`[INFO] MacManualUxReconfirm=${report.macManualUx.manualUxReconfirmCommand}`);
   if (report.macClientManualChecklist?.found) console.log(`[INFO] MacClientManualChecklist=${report.macClientManualChecklist.action}`);
@@ -536,6 +628,7 @@ function makeOfflineReport(server, error) {
       macManualUx: false,
       macClientManualChecklist: false,
     },
+    userPresence: emptyUserPresence("unavailable"),
     macManualUx: emptyMacManualUx(),
     macClientManualChecklist: emptyMacClientManualChecklist(),
     manualChecklist: {

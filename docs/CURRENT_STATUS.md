@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows manual UX 消费 userPresence
+- `check-windows-manual-ux-status --boardSummary` 现在也优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=<present|away> source=api-state updatedAt=<...>` / `UserPresenceAction=<explain-before-auth|no-auth-only>`。`present` 表示手工体验可进入需要用户配合的说明流程；`away` 会把第一屏降为 waiting，并额外显示 `BLOCKED_BY_USER_AWAY` / `warnings=user-away`，只做无授权协调。旧历史消息里的“休息/睡觉/USER_SLEEPING/USER_AWAKE”不能覆盖结构化 `userPresence`；字段缺失时保持 unknown。本轮不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows 消费 userPresence
 - `check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=<present|away> source=api-state updatedAt=<...>` / `UserPresenceAction=<explain-before-auth|no-auth-only>`。`present` 表示可以安排需要用户授权/输入密码/现场审核的任务，但必须先说明目标、用户要做什么、安全边界和预计耗时；`away` 会额外显示 `BLOCKED_BY_USER_AWAY`，表示只做无授权任务。旧历史消息里的“休息/睡觉/USER_SLEEPING”不能覆盖结构化 `userPresence`；字段缺失时保持 unknown。本轮不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 

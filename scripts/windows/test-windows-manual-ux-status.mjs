@@ -222,6 +222,54 @@ function waitingBoardState() {
     recentEvents: [],
   };
 }
+function userPresencePresentBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    userPresence: {
+      status: "present",
+      label: "用户在场",
+      instruction: "可以安排需要用户授权/输入密码/现场审核的任务，但发起方必须先写清目标、需要用户做什么、安全边界和预计耗时。",
+      reason: "用户当前在场，可以授权",
+      updatedAt: "2026-06-20T09:38:09.199Z",
+      updatedBy: "Supervisor",
+    },
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: "2026-06-20T09:00:00.000Z",
+        type: "message",
+        from: "Supervisor",
+        text: "旧历史 USER_SLEEPING / 睡觉 / 休息：这条只能作兼容 fallback，不能覆盖 /api/state.userPresence。",
+      },
+    ],
+  };
+}
+
+function userPresenceAwayBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    userPresence: {
+      status: "away",
+      label: "用户不在",
+      instruction: "只做无授权任务，需用户操作时标记 BLOCKED_BY_USER_AWAY。",
+      reason: "用户当前不在场；secret-value should be sanitized",
+      updatedAt: "2026-06-20T10:00:00.000Z",
+      updatedBy: "Supervisor",
+    },
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: "2026-06-20T09:59:00.000Z",
+        type: "message",
+        from: "Supervisor",
+        text: "旧历史 USER_AWAKE：这条只能作兼容 fallback，不能覆盖 /api/state.userPresence。",
+      },
+    ],
+  };
+}
+
 function timeoutReconfirmBoardState() {
   return {
     updatedAt: "2026-06-20T09:10:00.000Z",
@@ -360,6 +408,32 @@ async function checkBoardSummary(args) {
   console.log("[OK] Windows manual UX status prints secret-free board summary");
 }
 
+async function checkBoardUserPresenceJson(args) {
+  await withFakeBoard(userPresencePresentBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `userPresence present JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "userPresence present JSON");
+    assert(payload.userPresence?.found === true, "userPresence present should be found from /api/state");
+    assert(payload.userPresence.status === "present", `userPresence present status mismatch: ${JSON.stringify(payload.userPresence)}`);
+    assert(payload.userPresence.source === "api-state", "userPresence present should prefer /api/state");
+    assert(payload.userPresence.updatedAt === "2026-06-20T09:38:09.199Z", "userPresence present updatedAt mismatch");
+    assertIncludes(payload.boardSummary, "UserPresence=present", "userPresence present boardSummary");
+    assertIncludes(payload.boardSummary, "UserPresenceAction=explain-before-auth", "userPresence present boardSummary");
+    assertNotIncludes(payload.boardSummary, "USER_SLEEPING", "userPresence present should override old sleep history");
+    assertNotIncludes(payload.boardSummary, "BLOCKED_BY_USER_AWAY", "userPresence present boardSummary");
+  });
+
+  await withFakeBoard(userPresenceAwayBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary"], args);
+    assert(result.exitCode === 0, `userPresence away boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "UserPresence=away", "userPresence away boardSummary");
+    assertIncludes(result.stdout, "UserPresenceAction=no-auth-only", "userPresence away boardSummary");
+    assertIncludes(result.stdout, "BLOCKED_BY_USER_AWAY", "userPresence away boardSummary");
+    assertNotIncludes(result.stdout + result.stderr, "secret-value", "userPresence away boardSummary");
+  });
+  console.log("[OK] Windows manual UX status reads Agent Link userPresence from /api/state");
+}
+
 async function checkRequireReadyFailure(args) {
   await withFakeBoard(waitingBoardState(), async (serverUrl) => {
     const result = await run(["--server", serverUrl, "--requireReady", "--json"], args);
@@ -465,6 +539,7 @@ async function main() {
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
   await checkPowerShellWrapperBoardSummary(args);
+  await checkBoardUserPresenceJson(args);
   await checkRequireReadyFailure(args);
   await checkPowerShellWrapperRequireReadyFailure(args);
   await checkTimeoutReconfirmAndMacClientChecklist(args);

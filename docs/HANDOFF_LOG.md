@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 C2 Windows manual UX userPresence 补强
+开发端：Windows Codex
+本轮目标：让 Windows 手工体验第一屏也以 Agent Link Board `/api/state.userPresence` 为准，避免用户离开时仍提示进入需要现场配合的体验流程。
+完成内容：
+- `check-windows-manual-ux-status` 新增 JSON `userPresence`，只读读取结构化 `/api/state.userPresence`。
+- `--boardSummary` 和普通输出新增 `UserPresence=` / `UserPresenceAction=`；`present` 输出 `explain-before-auth`，`away` 输出 `no-auth-only blocker=BLOCKED_BY_USER_AWAY`。
+- `away` 会让手工体验第一屏保持 waiting，并显示 `warnings=user-away`，即使 Mac manual UX standby 已出现也不进入需要用户现场配合的 ready。
+修改文件：
+- `scripts/windows/check-windows-manual-ux-status.mjs`
+- `scripts/windows/test-windows-manual-ux-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000` 先失败于 `userPresence present should be found from /api/state`。
+- 绿灯：`node --check scripts/windows/check-windows-manual-ux-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-manual-ux-status.mjs`
+- 绿灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000`
+遗留问题：真实手工体验仍需要用户在场、先说明目标/安全边界/预计耗时，再输入密码或做现场审核；本轮只做状态门禁和显示。
+下一步建议：下一次准备手工体验时，Windows 先看 `UserPresence=`；`away` 时只做无授权协调，`present` 时再安排用户现场动作。
+是否改了协议：否；只消费 Agent Link Board 既有 `/api/state.userPresence` 字段。
+是否需要另一端配合：不需要密码或真实远控配合；Mac 端只需拉取最新提交后继续按通讯板状态协作。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 C2 userPresence Windows 接入
 开发端：Windows Codex
 本轮目标：让 Windows 开工第一屏以 Agent Link Board `/api/state.userPresence` 为准，不再被历史“休息/睡觉/USER_SLEEPING”消息误导。
