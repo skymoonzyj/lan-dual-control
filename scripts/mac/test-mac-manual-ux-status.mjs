@@ -758,6 +758,15 @@ function assertManualUxMissingSignal(payload, label) {
   assertSecretSafe(JSON.stringify(payload.manualUxMissingSignal), `${label} missing signal`);
 }
 
+function assertManualUxUserPresence(payload, expectedState, label) {
+  const presence = payload.coordination?.userPresence || {};
+  assert(presence.state === expectedState, `${label} userPresence state mismatch: ${JSON.stringify(presence)}`);
+  assertIncludes(payload.boardSummary || "", `ManualUxUserPresence=state=${expectedState}`, `${label} boardSummary`);
+  assertIncludes(payload.boardSummary || "", "source=", `${label} boardSummary user presence source`);
+  assertIncludes(payload.boardSummary || "", "at=", `${label} boardSummary user presence timestamp`);
+  assertSecretSafe(JSON.stringify(presence), `${label} userPresence`);
+}
+
 async function checkHelp(args) {
   const result = await run(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0. stderr=${result.stderr}`);
@@ -910,6 +919,7 @@ async function checkRequireReadyFailure(args) {
     assertIncludes(payload.boardSummary, "MacManualUx=status=waiting", "waiting JSON boardSummary");
     assertOperatorAction(payload, "wait-manual-ux-standby", "waiting JSON");
     assertManualUxMissingSignal(payload, "waiting JSON");
+    assertManualUxUserPresence(payload, "unknown", "waiting JSON");
     assertSecretSafe(JSON.stringify(payload), "waiting JSON");
   });
   console.log("[OK] Mac manual UX status requireReady fails closed before standby signal");
@@ -950,6 +960,7 @@ async function checkUserAwakeCallProducesManualUxCallPlan(args) {
     assertOperatorAction(payload, "send-manual-ux-call", "USER_AWAKE currentCall JSON");
     assert(payload.manualUxMissingSignal == null, `USER_AWAKE currentCall should not expose missing signal: ${JSON.stringify(payload.manualUxMissingSignal)}`);
     assertNotIncludes(payload.boardSummary, "ManualUxMissingSignal=", "USER_AWAKE boardSummary");
+    assertManualUxUserPresence(payload, "awake", "USER_AWAKE currentCall JSON");
     assertSecretSafe(JSON.stringify(payload), "USER_AWAKE currentCall JSON");
   });
   console.log("[OK] Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan");
@@ -1125,6 +1136,7 @@ async function checkExpiredManualUxCallWaitsForUserAwake(args) {
     assertIncludes(payload.boardSummary, "warnings=manual-ux-call-timeout,user-sleeping", "expired manual UX while sleeping boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "expired manual UX while sleeping boardSummary");
     assertOperatorAction(payload, "wait-user-awake", "expired manual UX while sleeping JSON");
+    assertManualUxUserPresence(payload, "sleeping", "expired manual UX while sleeping JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired sleeping state should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "expired manual UX while user sleeping JSON");
   });
@@ -1301,6 +1313,7 @@ async function checkUserAwakeSafetyExplanationClearsSleepGate(args) {
     assertIncludes(payload.boardSummary, "ManualUxCallCommand=", "USER_AWAKE safety explanation boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "USER_AWAKE safety explanation boardSummary");
     assertOperatorAction(payload, "send-manual-ux-call", "USER_AWAKE safety explanation JSON");
+    assertManualUxUserPresence(payload, "awake", "USER_AWAKE safety explanation JSON");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only USER_AWAKE safety explanation should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "USER_AWAKE safety explanation JSON");
   });

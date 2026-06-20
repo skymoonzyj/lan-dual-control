@@ -693,6 +693,20 @@ function makeManualUxMissingSignal(blockers) {
   };
 }
 
+function boardToken(value, fallback = "none") {
+  const text = normalizedText(value);
+  if (!text) return fallback;
+  return text.replace(/[^A-Za-z0-9_.:@+-]+/g, "_");
+}
+
+function makeUserPresenceSummary(userPresence) {
+  return [
+    `state=${boardToken(userPresence?.state || "unknown", "unknown")}`,
+    `source=${boardToken(userPresence?.source)}`,
+    `at=${boardToken(userPresence?.at)}`,
+  ].join(",");
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const eventSources = boardEventSources(state);
@@ -851,6 +865,7 @@ function makeBoardSummary(report) {
     `Target=${report.target}`,
     `Next=${next}`,
     `ManualUxAction=${operatorAction.id}`,
+    `ManualUxUserPresence=${makeUserPresenceSummary(report.coordination?.userPresence)}`,
     "Safety=no-password,no-input-inject",
     "NoFormalE2ERerun=true",
   ];
@@ -894,6 +909,8 @@ function printHuman(report) {
   if (report.manualUxMissingSignal) {
     console.log(`[INFO] Missing signal: ${report.manualUxMissingSignal.id} - ${report.manualUxMissingSignal.request}`);
   }
+  const userPresence = report.coordination?.userPresence || {};
+  console.log(`[INFO] User presence: ${userPresence.state || "unknown"} source=${userPresence.source || "none"} at=${userPresence.at || "none"}`);
   console.log(`[INFO] Operator action: ${report.operatorAction.id} - ${report.operatorAction.description}`);
   console.log("[INFO] Safety: 不请求密码；不发送用户认证请求；不发送 input；不回旧 formal E2E 复跑。");
   for (const action of report.nextActions) {
