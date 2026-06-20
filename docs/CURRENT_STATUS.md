@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Mac client 密码输入位置
+- Mac 控 Windows 页面现在在密码框下固定显示“在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断”。复制/导出诊断新增 `密码输入位置` 行，同步带出同一条无密说明；自测覆盖页面提示、诊断复制和连接密码不泄漏。该改动不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Mac formal/status
 - Mac 控 Windows formal checklist / smoke 的反控请求演练摘要已步骤化：`reverseControlRehearsal` 和 `Reverse rehearsal` 现在明确 Step 1 Mac 点击“请求反控”并预期 `LAN008/default deny`，Step 2 Windows 在 Windows host 本机 loopback 跑 `WindowsOpenOneTimeReverseGrant` 开 30 秒一次性授权，且明确 `Do not run the grant from Mac`，Step 3 Mac 点击“重试反控”并确认 `临时授权已使用`。PowerShell 首选、Node fallback、无密码、无 `input_event`、无 `inject` 的安全边界保持不变；不改协议、不认证、不请求密码、不发 input/inject。
 

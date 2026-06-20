@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac client 密码输入位置提示
+开发端：Mac Codex
+本轮目标：让 Mac 控 Windows 页面明确告诉现场用户 Windows 临时密码应该填在哪里，并确保复制诊断只带无密说明。
+完成内容：
+- Mac client 密码框下新增固定提示：`在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断。`
+- 复制/导出诊断新增 `密码输入位置` 行，带出同一条无密说明；仍不输出连接密码或英文 `password` 字样。
+- Mac client 浏览器自测新增页面提示、诊断导出和复制诊断断言，覆盖提示存在、实际密码不泄漏和不新增协议/输入事件。
+- 已先拉取并合入 Windows 最新 `4d096e6`，本轮改动避开 Windows client / Windows entry test 区域。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000` 先失败于 `Mac client password location hint mismatch: {"passwordLocationHint":""}`。
+- 绿灯：同一条 Mac client browser self-test 通过，覆盖发现、连接、反控 LAN008 -> 授权 -> accepted、复制授权命令、诊断复制、最近连接、输入/剪贴板和断开重置。
+- 绿灯：`node --check apps/mac-client/app.js`
+- 绿灯：`node --check apps/mac-client/server.mjs`
+- 绿灯：`node --check scripts/windows/test-mac-client-browser.mjs`
+- 收尾：`git diff --check`
+- 收尾：`rg -n "^(<<<<<<<|=======|>>>>>>>)" <本轮文件>` 无冲突标记。
+遗留问题：
+- 这只是现场提示和诊断增强；真实 Mac 控 Windows 仍需要用户在页面里输入 Windows host 当前临时密码。
+下一步建议：
+- 白天继续真实手工体验时，Windows 控 Mac 看 Windows 页面“连接密码”提示；Mac 控 Windows 看 Mac 页面“密码”框下方提示。两端密码都不要发通讯板。
+是否改了协议：否。
+是否需要另一端配合：不需要；Windows 端拉取后可直接看到 Mac 页面提示和诊断字段。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 控制页连接密码位置提示

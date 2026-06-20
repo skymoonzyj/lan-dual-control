@@ -1091,6 +1091,7 @@ async function verifyMacClientLogExport({ args, session }) {
           "- 下次重连：",
           "- 远端运行：",
           "- 密码安全：",
+          "- 密码输入位置：",
           "- 反控策略：",
           "- 视频状态：",
           "- 文本剪贴板：",
@@ -1179,6 +1180,7 @@ async function verifyMacClientLogExport({ args, session }) {
     "连接状态",
     "手工清单",
     "密码安全",
+    "密码输入位置",
     "显示与媒体",
     "输入与剪贴板",
     "事件记录",
@@ -1400,6 +1402,7 @@ function buildSnapshotExpression() {
       reconnectNowHidden: document.querySelector("#reconnectNowButton")?.hidden !== false,
       reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
       passwordSafety: text("#passwordSafetyStatus"),
+      passwordLocationHint: text("#passwordLocationHint"),
       copyLogButtonDisabled: document.querySelector("#copyLogButton")?.disabled || false,
       logCopyStatus: text("#logCopyStatus"),
       exportLogButtonDisabled: document.querySelector("#exportLogButton")?.disabled || false,
@@ -2839,6 +2842,18 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       throw new Error(`Mac client password safety status mismatch: ${JSON.stringify({
         expectedPasswordSafety,
         passwordSafety: defaultSettingsSnapshot.passwordSafety,
+      })}`);
+    }
+    if (
+      !defaultSettingsSnapshot.passwordLocationHint.includes("在这里输入") ||
+      !defaultSettingsSnapshot.passwordLocationHint.includes("Windows 临时密码") ||
+      !defaultSettingsSnapshot.passwordLocationHint.includes("不要发到通讯板") ||
+      !defaultSettingsSnapshot.passwordLocationHint.includes("不保存") ||
+      defaultSettingsSnapshot.passwordLocationHint.includes(args.clientPassword || "demo-password") ||
+      /password/i.test(defaultSettingsSnapshot.passwordLocationHint)
+    ) {
+      throw new Error(`Mac client password location hint mismatch: ${JSON.stringify({
+        passwordLocationHint: defaultSettingsSnapshot.passwordLocationHint,
       })}`);
     }
     if (args.enableAudio) {

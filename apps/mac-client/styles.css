@@ -180,6 +180,15 @@ select:focus {
   line-height: 1.4;
 }
 
+.password-location-hint {
+  display: block;
+  max-width: 28rem;
+  color: #7a351f;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
 .password-safety-status[data-kind="ok"] {
   background: rgba(28, 75, 60, 0.12);
   color: var(--forest);
