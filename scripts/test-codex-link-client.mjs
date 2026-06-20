@@ -185,7 +185,7 @@ async function checkPresencePost(args) {
       "presence",
       "--status", "present",
       "--updatedBy", "Mac Codex",
-      "--reason", "user returned in current chat",
+      "--reason", "presence refresh",
     ], args);
     assert(result.status === 0, `presence should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
     assert(result.stdout.trim() === "ok", `presence should print ok. stdout=${result.stdout}`);
@@ -193,7 +193,7 @@ async function checkPresencePost(args) {
     assert(presencePost, `presence should post /api/presence: ${JSON.stringify(requests)}`);
     assert(presencePost.body.status === "present", `presence status mismatch: ${JSON.stringify(presencePost.body)}`);
     assert(presencePost.body.updatedBy === "Mac Codex", `presence updatedBy mismatch: ${JSON.stringify(presencePost.body)}`);
-    assert(presencePost.body.reason === "user returned in current chat", `presence reason mismatch: ${JSON.stringify(presencePost.body)}`);
+    assert(presencePost.body.reason === "presence refresh", `presence reason mismatch: ${JSON.stringify(presencePost.body)}`);
     assertNotIncludes(JSON.stringify(presencePost.body), "password", "presence POST");
     assertNotIncludes(JSON.stringify(presencePost.body), "input_event", "presence POST");
   });

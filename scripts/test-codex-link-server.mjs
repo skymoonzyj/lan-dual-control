@@ -141,7 +141,7 @@ async function checkPresenceEndpoint(args) {
       body: JSON.stringify({
         status: "present",
         updatedBy: "Mac Codex",
-        reason: "user returned in current chat",
+        reason: "presence refresh",
       }),
     });
     if (!response.ok) {

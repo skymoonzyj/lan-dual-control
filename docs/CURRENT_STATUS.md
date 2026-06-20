@@ -3,8 +3,7 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
-
-## 2026-06-20 C2 Agent Link Board presence API
+## 2026-06-20 C3 Agent Link Board presence API
 - `scripts/codex-link-server.mjs` 现在保留 state 文件里的 `userPresence` 和 `pinnedTasks`，避免联络板服务重启后把“用户在场/不在场”和置顶任务清掉；新增 `POST /api/presence`，只接受 `present/away` 及常见中英文同义词，写入结构化 `state.userPresence` 并追加 `presence` 事件。`scripts/codex-link-client.mjs` 新增 `presence --status present|away --updatedBy <agent> --reason <text>`，可从命令行同步用户是否在场。该入口只同步协作状态，不代表可以跳过提示音、目标说明、安全边界或预计耗时；不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 W2 Windows H.264 fallback/recovery 循环诊断

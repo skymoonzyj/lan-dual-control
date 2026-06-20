@@ -198,7 +198,7 @@ function printHelp() {
   node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
   node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
-  node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "user returned"
+  node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"
   node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"
   node scripts/codex-link-client.mjs --server http://host:17888 call --from "Windows Codex" --need "Mac Codex" --goal "test" --ask "please verify"
   node scripts/codex-link-client.mjs --server http://host:17888 clear-call`);

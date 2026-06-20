@@ -44,9 +44,9 @@
 
 ## 2026-06-20 Mac Codex
 
-日期：2026-06-20 C2 Agent Link Board presence API
+日期：2026-06-20 C3 Agent Link Board presence API
 开发端：Mac Codex
-本轮目标：把“用户在场/不在场”从历史留言补成 Agent Link Board 可机器读取的结构化状态，避免用户已回来但 `/api/state.userPresence` 仍停在 `away`。
+本轮目标：把“用户在场/不在场”从历史留言补成 Agent Link Board 可机器读取的结构化状态，避免协作状态过期或重启后丢失时误导授权/真实输入门禁。
 完成内容：
 - `codex-link-server` 新增 `POST /api/presence`，规范化 `present/away` 及常见中英文同义词，写入 `state.userPresence` 并追加 `presence` 事件。
 - `codex-link-server` 重启加载 state 时保留 `userPresence` 和 `pinnedTasks`，避免重启丢失用户在场状态和 W/M/C 置顶任务。
@@ -66,8 +66,8 @@
 - 红灯：`node scripts/test-codex-link-server.mjs --timeoutMs 10000` 先失败于 `server should preserve userPresence: undefined`。
 - 绿灯：`node scripts/test-codex-link-client.mjs --timeoutMs 10000` 通过。
 - 绿灯：`node scripts/test-codex-link-server.mjs --timeoutMs 10000` 通过。
-遗留问题：当前正在运行的联络板服务若尚未重启到新版，`presence` 命令可能返回 404；这种情况下先用普通消息同步，服务端更新后再用结构化 presence。
-下一步建议：用户回来或离开时优先用 `codex-link-client presence --status present|away` 刷新结构化门禁；随后再用各自状态脚本刷新 Mac Input Safety / Windows resume 等派生摘要。
+遗留问题：当前正在运行的联络板服务若尚未重启到新版，`presence` 命令可能返回 404；这种情况下以 `/api/state.userPresence` 为权威，只做无授权任务，服务端更新后再用结构化 presence。
+下一步建议：只有用户在当前线程重新明确表示回来/在场/可授权时，才用 `codex-link-client presence --status present` 刷新结构化门禁；用户离开时用 `--status away`。随后再用各自状态脚本刷新 Mac Input Safety / Windows resume 等派生摘要。
 是否改了协议：否；只扩展 Agent Link Board 协作 API/CLI，不改远控 WebSocket 协议。
 是否需要另一端配合：需要运行联络板服务的一端在方便时重启到新版，之后两端即可用 `presence` 命令。
 
