@@ -164,6 +164,8 @@ const audioAdaptiveUnderrunWindowSeconds = 2;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
+const h264FallbackRecoveryCooldownMs = 2500;
+const h264FallbackRecoveryStableJpegFrames = 3;
 const videoStutterGapThresholdMs = 120;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
@@ -553,6 +555,9 @@ const state = {
   h264DecodedFrames: 0,
   h264FallbackActive: false,
   h264FallbackReason: "",
+  h264FallbackRecoveryDueAt: 0,
+  h264FallbackRecoveryJpegFrames: 0,
+  h264FallbackRecoveryRequested: false,
   audioFrames: 0,
   audioLevel: 0,
   audioContext: null,
@@ -2911,6 +2916,9 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   if (resetFallback) {
     state.h264FallbackActive = false;
     state.h264FallbackReason = "";
+    state.h264FallbackRecoveryDueAt = 0;
+    state.h264FallbackRecoveryJpegFrames = 0;
+    state.h264FallbackRecoveryRequested = false;
   }
 }
 
@@ -8207,6 +8215,7 @@ function renderVideoFrame(frame) {
         : state.hostDiagnostics.streamFallbackReason,
   };
   updateHostDiagnostics(frameDiagnostics);
+  maybeRecoverH264VideoFallback(frame);
 
   if (
     !state.hostDiagnostics.warnedMockFrame &&
@@ -8368,6 +8377,9 @@ function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
   const fallbackDropReason = String(dropReason || "").trim();
   state.h264FallbackActive = true;
   state.h264FallbackReason = reason || "H.264 解码失败";
+  state.h264FallbackRecoveryDueAt = performance.now() + h264FallbackRecoveryCooldownMs;
+  state.h264FallbackRecoveryJpegFrames = 0;
+  state.h264FallbackRecoveryRequested = false;
   state.h264DecoderStatus = "fallback";
   resetVideoDecoder();
   state.h264DecoderStatus = "fallback";
@@ -8384,6 +8396,46 @@ function requestJpegVideoFallback(reason, { dropReason = "" } = {}) {
   }
 }
 
+function maybeRecoverH264VideoFallback(frame = {}) {
+  if (!state.h264FallbackActive || state.h264FallbackRecoveryRequested) {
+    return false;
+  }
+
+  const frameCodec = String(frame.codec ?? "").toLowerCase();
+  const frameEncoding = String(frame.encoding ?? "").toLowerCase();
+  const dataUrl = String(frame.dataUrl ?? "").toLowerCase();
+  const isJpegFrame =
+    frameCodec === "jpeg" ||
+    frameCodec === "mjpeg" ||
+    frameEncoding === "data-url" ||
+    dataUrl.startsWith("data:image/jpeg");
+  if (!isJpegFrame) {
+    return false;
+  }
+
+  state.h264FallbackRecoveryJpegFrames = (Number(state.h264FallbackRecoveryJpegFrames) || 0) + 1;
+  const dueAt = Number(state.h264FallbackRecoveryDueAt) || 0;
+  if (
+    state.h264FallbackRecoveryJpegFrames < h264FallbackRecoveryStableJpegFrames ||
+    (dueAt > 0 && performance.now() < dueAt) ||
+    !supportsWebCodecsH264() ||
+    !state.connected ||
+    typeof state.client?.sendDisplaySettings !== "function"
+  ) {
+    return false;
+  }
+
+  state.h264FallbackRecoveryRequested = true;
+  state.h264FallbackActive = false;
+  state.h264FallbackReason = "";
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264SkippedDeltaFrames = 0;
+  state.h264DecoderStatus = "recovering";
+  updateH264DecoderDiagnostics();
+  state.client.sendDisplaySettings(buildDisplaySettingsMessage());
+  addLog("视频恢复", "JPEG 兜底稳定，已尝试恢复 H.264 低延迟");
+  return true;
+}
 function recordH264DecodeError(error) {
   state.h264DecoderErrorCount += 1;
   state.h264DecoderStatus = "error";

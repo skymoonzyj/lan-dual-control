@@ -5046,6 +5046,9 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalDecodedFrames = state.h264DecodedFrames;
       const originalFallbackActive = state.h264FallbackActive;
       const originalFallbackReason = state.h264FallbackReason;
+      const originalFallbackRecoveryDueAt = state.h264FallbackRecoveryDueAt;
+      const originalFallbackRecoveryJpegFrames = state.h264FallbackRecoveryJpegFrames;
+      const originalFallbackRecoveryRequested = state.h264FallbackRecoveryRequested;
       const originalConnected = state.connected;
       const originalClient = state.client;
       const originalVideoFrames = state.videoFrames;
@@ -5201,13 +5204,18 @@ async function verifyH264LatencyQueueGuard(session) {
           webCodecsQueueExportText.includes("本地过期丢帧 10") &&
           webCodecsQueueExportText.includes("原因 queue-overflow-wait-keyframe");
 
+        if (typeof maybeRecoverH264VideoFallback !== "function") {
+          return { ok: false, reason: "missing H.264 fallback recovery helper" };
+        }
+
         const fallbackSettings = [];
-        const makeDeltaPayload = () => {
-          const bytes = new Uint8Array([0, 0, 0, 1, 0x41, 0, 0, 0]);
+        const makeBase64 = (bytes) => {
           let binary = "";
           for (const byte of bytes) binary += String.fromCharCode(byte);
           return btoa(binary);
         };
+        const makeDeltaPayload = () => makeBase64(new Uint8Array([0, 0, 0, 1, 0x41, 0, 0, 0]));
+        const makeJpegDataUrl = () => "data:image/jpeg;base64," + makeBase64(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
         state.connected = true;
         state.client = {
           sendDisplaySettings(message) {
@@ -5248,12 +5256,45 @@ async function verifyH264LatencyQueueGuard(session) {
           keyFrameWaitFallbackExportText.includes("原因 keyframe-wait-timeout-fallback") &&
           keyFrameWaitFallbackExportText.includes("解码 JPEG 回退");
 
+        state.h264FallbackRecoveryDueAt = performance.now() - 1;
+        await renderVideoFrame({
+          dataUrl: makeJpegDataUrl(),
+          codec: "jpeg",
+          encoding: "data-url",
+          width: 1920,
+          height: 1080,
+          frameId: 391,
+        });
+        await renderVideoFrame({
+          dataUrl: makeJpegDataUrl(),
+          codec: "jpeg",
+          encoding: "data-url",
+          width: 1920,
+          height: 1080,
+          frameId: 392,
+        });
+        await renderVideoFrame({
+          dataUrl: makeJpegDataUrl(),
+          codec: "jpeg",
+          encoding: "data-url",
+          width: 1920,
+          height: 1080,
+          frameId: 393,
+        });
+        const fallbackRecovery =
+          fallbackSettings.length === 2 &&
+          fallbackSettings[1]?.preferredVideoCodec === "h264" &&
+          fallbackSettings[1]?.preferredVideoEncoding === "annexb" &&
+          state.h264FallbackActive === false &&
+          state.h264DecoderStatus === "recovering";
+
         return {
-          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback,
+          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback && fallbackRecovery,
           deltaOk,
           keyPreserved,
           webCodecsQueueBackpressure,
           keyFrameWaitFallback,
+          fallbackRecovery,
           keyFrameWaitFallbackExportText,
           fallbackSettings,
           fallbackReason: state.h264FallbackReason,
@@ -5288,6 +5329,9 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264DecodedFrames = originalDecodedFrames;
         state.h264FallbackActive = originalFallbackActive;
         state.h264FallbackReason = originalFallbackReason;
+        state.h264FallbackRecoveryDueAt = originalFallbackRecoveryDueAt;
+        state.h264FallbackRecoveryJpegFrames = originalFallbackRecoveryJpegFrames;
+        state.h264FallbackRecoveryRequested = originalFallbackRecoveryRequested;
         state.connected = originalConnected;
         state.client = originalClient;
         state.videoFrames = originalVideoFrames;
@@ -6738,7 +6782,7 @@ async function run() {
     summary.checks.push("h264-latency-queue");
     print(
       "OK",
-      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} keyFallback=${latencyQueueCheck.keyFrameWaitFallback ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
+      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} keyFallback=${latencyQueueCheck.keyFrameWaitFallback ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
     );
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");

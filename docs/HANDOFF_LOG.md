@@ -16,6 +16,31 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W2 Windows H.264 JPEG fallback 冷却恢复
+开发端：Windows Codex
+本轮目标：让 H.264 等关键帧超时切到 JPEG 兜底后，稳定后能自动尝试回到 H.264 低延迟链路。
+完成内容：
+- `requestJpegVideoFallback` 会设置恢复冷却时间、JPEG 稳定帧计数和一次性恢复标记。
+- Windows 控制端收到至少 3 帧 JPEG 且 2.5 秒冷却期已过后，会用现有 `display_settings` 请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`。
+- 恢复请求只在浏览器支持 WebCodecs H.264、当前已连接且 client 可发送 display settings 时触发；不会循环刷请求。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `missing H.264 fallback recovery helper`。
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过并输出 `recovery=yes`。
+遗留问题：这只是 Windows 控制端本地恢复请求；若现场反复 JPEG/H.264 循环，仍需继续查 Mac 端关键帧/GOP、编码稳定性或网络丢关键帧。
+下一步建议：真实体验时复制“现场视频”诊断，观察是否仍有 `keyframe-wait-timeout-fallback` 高频出现；若有，让 Mac 端补关键帧间隔/编码端日志。
+是否改了协议：否；复用现有 `display_settings`。
+是否需要另一端配合：暂不需要；真实现场若仍循环回退，再让 Mac 端配合查 H.264 关键帧策略。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 M1 Mac remote audio consent/restore guard

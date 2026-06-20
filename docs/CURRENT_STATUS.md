@@ -6,11 +6,15 @@
 ## 2026-06-20 M1 Mac remote audio consent/restore guard
 - `plan-mac-remote-audio --json/--boardSummary` 现在除原有 `status=plan-only`、`capture=system-pcm-does-not-mute-local`、三条 `RemoteOnlyOptions=` 和 `safety=no-volume-change,no password/input/inject` 外，还结构化输出 `consentChecklist[]` 与 `restoreChecklist[]`。一行摘要追加 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，明确任何静音、切输出设备或产品开关前，都必须先说明当前 Mac 本机可能仍会出声、选择唯一路线并确认恢复复查路径。脚本仍只读，不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject；这不是 remote-only 已启用的证据。
 
+## 2026-06-20 W2 Windows H.264 JPEG fallback 冷却恢复
+- Windows 控制端在 `keyframe-wait-timeout-fallback` 触发 MJPEG/JPEG 兜底后，不再永久停在 JPEG：fallback 会设置 2.5 秒恢复冷却，并要求至少 3 帧 JPEG 稳定画面；满足条件且浏览器支持 WebCodecs H.264 时，会通过现有 `display_settings` 再请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`，让画面先保住、随后自动尝试回到低延迟链路。页面自测先红于缺少 `maybeRecoverH264VideoFallback`，再绿于 `test-windows-client-browser --diagnosticsOnly` 输出 `recovery=yes`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W3/M1 Windows 控制端消费 MacRemoteAudioStatus
 - Windows 控制端现在能从 Mac 提醒/值守文本中识别 `MacRemoteAudioStatus=` 或 `MacRemoteAudio=` 的只读远程声音状态；当看到 `status=local-playback-active`、`localOutput=audible`、`remoteOnly=not-active` 或 `local-output-audible` 时，会在 Mac 值守风险里显示“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。这只是把双路声音风险翻成中文提示，不会静音 Mac、不切输出设备、不认证、不请求或发送密码、不发 input/inject。页面自测先红于缺少 `Mac 本机仍会出声` 风险，再绿于 `test-windows-client-browser --diagnosticsOnly`。
 
 ## 2026-06-20 W2 Windows H.264 等关键帧超时恢复
 - Windows 控制端 H.264 背压重同步后，如果连续跳过 90 个 delta 仍没有等到关键帧，会触发已有 JPEG/MJPEG fallback 请求，避免画面长时间停在“等待关键帧”。fallback 会通过 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，并在现场视频诊断里留下 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `keyFrameWaitFallback=false`，绿灯确认 `keyFallback=yes`。本轮只改 Windows 控制端本地 H.264 恢复逻辑和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W3 Windows 音频连续低水位稳定预缓冲
 - Windows 控制端 WebAudio 仍保持首次低水位 80ms 低延迟补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，记录 `audioStablePrebufferCount` 和 `audioLastBufferReason=queue-underrun-stable-prebuffer`。复制/导出诊断“现场声音”会在既有 `补缓冲 <n>` 外新增 `稳缓冲 <n>`，用于判断声音断续是否已经进入连续 underrun 稳定模式。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯第二次仍为 80ms，绿灯确认 `Audio buffer guards ... stable=1`。本轮只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
@@ -34,6 +38,7 @@
 
 ## 2026-06-20 Windows 反控临时授权 userPresence gate
 - `allow-windows-reverse-control` 现在支持 `--checkBoard --server <Agent Link Board>`：打开一次性反控授权前会只读读取 `/api/state.userPresence`。`present` 时继续允许本机 loopback 打开约 30 秒一次性授权，并在 JSON/普通输出/`--boardSummary` 显示 `UserPresence=present` / `UserPresenceAction=explain-before-grant`；`away` 时不调用 `/reverse-control/grant`，非零退出并输出 `BLOCKED_BY_USER_AWAY` / `UserPresenceAction=no-auth-only`。PowerShell 入口同步支持 `-CheckBoard -Server <url>`。默认不加 `--checkBoard` 的旧本机授权行为保持兼容；本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows manual UX 消费 userPresence
 - `check-windows-manual-ux-status --boardSummary` 现在也优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=<present|away> source=api-state updatedAt=<...>` / `UserPresenceAction=<explain-before-auth|no-auth-only>`。`present` 表示手工体验可进入需要用户配合的说明流程；`away` 会把第一屏降为 waiting，并额外显示 `BLOCKED_BY_USER_AWAY` / `warnings=user-away`，只做无授权协调。旧历史消息里的“休息/睡觉/USER_SLEEPING/USER_AWAKE”不能覆盖结构化 `userPresence`；字段缺失时保持 unknown。本轮不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
@@ -46,6 +51,7 @@
 
 ## 2026-06-20 MacCodexHealth 稳定短字段
 - `check-mac-heartbeat --checkBoard --boardSummary` 现在会在原有 `codex=...` / `MacHeartbeatHealth=` 之外输出稳定 `MacCodexHealth=<ok|warning|blocked|unknown> reason=<ok|codex-reconnect-signal|codex-reconnect-stuck|mac-codex-stale|...> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...>`；JSON 同步提供 `macCodexHealth`。`check-mac-resume-status --boardSummary` 会从 heartbeat watcher 最近一次心跳派生并显示同一短字段。该字段只包含短 token、时间戳和年龄阈值，不回显 Mac Codex note 原文；不认证、不请求或发送密码、不发 call/input/inject。
+
 ## 2026-06-20 Windows 消费 MacCodexHealth
 - `check-windows-resume-status --checkBoard` 现在会安全消费 Agent Link Board 上的 `MacCodexHealth=`，输出 JSON `board.macCodexHealth`、普通输出和 `--boardSummary` 的 `MacCodexHealth=<status> checkedAt=<...> reason=<reason> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...> blockers=<...> warnings=<...>`。该字段专门表示 Mac Codex 自己的工作/心跳状态，用来区分 “Mac Codex stale/blocked” 和 “Mac host / Mac client / 手工体验链路” 的真实状态；只接受短安全 token，拒绝 password/token/secret、命令形态和 input/inject 候选，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 

@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W2 视频恢复最新口径补充：Windows 控制端触发 `keyframe-wait-timeout-fallback` 后会先请求 MJPEG/JPEG 保画面；如果接下来 2.5 秒冷却期已过且至少收到 3 帧稳定 JPEG，会再用同一 `display_settings` 请求恢复 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`。现场看到短暂 JPEG 回退不代表永久降级；若反复回退/恢复循环，下一步查 Mac 端关键帧/GOP、采集编码稳定性或网络丢关键帧。
 - W3/M1 远端独占声音最新口径：Windows 控制端现在会把 Mac 上板/提醒里的 `MacRemoteAudioStatus=status=local-playback-active`、`localOutput=audible` 或 `remoteOnly=not-active` 翻成 Mac 值守风险“Mac 本机仍会出声 / 远端独占声音未开启 / 远端独占声音需用户明确同意 / 不会自动改 Mac 音量”。看到这条时说明当前仍可能双路声音；不要把它当作已静音或已切输出设备，也不要让脚本自动改 Mac 音量，后续仍按用户明确同意后的手动静音/虚拟输出/product toggle 路线处理。
 - W2 视频最新口径补充：Windows 控制端 H.264 背压后等待关键帧时，如果连续跳过 90 个 delta 仍没有关键帧，会主动请求 MJPEG/JPEG fallback，诊断显示 `原因 keyframe-wait-timeout-fallback` 和 `解码 JPEG 回退`。现场若看到这条，优先理解为 Windows 为恢复画面主动兜底；下一步查 Mac H.264 关键帧恢复速度、采集端 GOP/keyframe 策略或网络导致关键帧长期不到达。
 - W3 音频最新口径补充：Windows 控制端现在保留首次低水位 80ms 补缓冲；如果 2 秒内再次低于 70ms，会临时改用 120ms 稳定预缓冲，并在“现场声音”里输出 `稳缓冲 <n>` 与 `原因 queue-underrun-stable-prebuffer`。现场声音若 `补缓冲` 增长但 `稳缓冲` 很少，说明只是偶发供流间歇；若 `稳缓冲` 持续增长，优先查 Mac 采集/网络音频供流抖动或下一步做更完整 jitter buffer。
