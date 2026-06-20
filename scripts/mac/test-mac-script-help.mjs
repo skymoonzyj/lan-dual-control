@@ -220,6 +220,7 @@ function makeBoardSummary(summary) {
   if (summary.ok) {
     return [
       `Mac script help: ok ${summary.commandsChecked}/${summary.commandsChecked} commands across ${scope}; timeout=${summary.timeoutMs}ms.`,
+      `MacScriptHelpStatus=ok commands=${summary.commandsChecked}/${summary.commandsChecked} scripts=${summary.scriptsChecked} timeoutMs=${summary.timeoutMs}.`,
       "Pure --help/-h only; no service startup, password prompt, Agent Link read, host auth, input, or inject output detected.",
     ].join(" ");
   }
@@ -230,6 +231,7 @@ function makeBoardSummary(summary) {
   const more = summary.failed.length > 5 ? `; +${summary.failed.length - 5} more` : "";
   return [
     `Mac script help: failed ${summary.failed.length}/${commandCount} across ${scope}; timeout=${summary.timeoutMs}ms.`,
+    `MacScriptHelpStatus=failed failures=${summary.failed.length} commands=${summary.commandsChecked} scripts=${summary.scriptsChecked} timeoutMs=${summary.timeoutMs}.`,
     `Failed=${failedNames || "unknown"}${more}.`,
     "No password/input/inject was intentionally sent; inspect local command output before posting details.",
   ].join(" ");

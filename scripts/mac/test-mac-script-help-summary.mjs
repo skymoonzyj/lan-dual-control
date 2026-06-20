@@ -91,6 +91,7 @@ function assertBoardSummary(text, label) {
   assert(lines.length === 1, `${label} should be exactly one line, got ${lines.length}`);
   assert(/^Mac script help: ok\b/.test(trimmed), `${label} should start with ok summary`);
   assert(/commands across 1 script/.test(trimmed), `${label} should mention scoped script count`);
+  assert(/MacScriptHelpStatus=ok commands=2\/2 scripts=1 timeoutMs=10000\b/.test(trimmed), `${label} should include stable MacScriptHelpStatus fields`);
   assert(/Pure --help\/-h only/.test(trimmed), `${label} should describe pure help scope`);
   assert(/no service startup/.test(trimmed), `${label} should mention no service startup`);
   assert(/password prompt/.test(trimmed), `${label} should mention password prompt safety`);
