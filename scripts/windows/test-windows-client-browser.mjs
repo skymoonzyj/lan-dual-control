@@ -5655,7 +5655,7 @@ async function verifyReconnectControls(session) {
           quickSummaryLiveAudio:
             exportText.includes("- 现场声音：") &&
             exportText.includes("队列 120 ms") &&
-            exportText.includes("缓冲 80/70/450 ms") &&
+            exportText.includes("缓冲 80/70/450/120 ms") &&
             exportText.includes("接收 24") &&
             exportText.includes("重同步 1") &&
             exportText.includes("原因 queue-overflow-flush-old") &&
@@ -5841,7 +5841,7 @@ async function verifyReconnectControls(session) {
           liveAudioStatus:
             exportText.includes("- 现场声音统计：") &&
             exportText.includes("队列 120 ms") &&
-            exportText.includes("缓冲 80/70/450 ms") &&
+            exportText.includes("缓冲 80/70/450/120 ms") &&
             exportText.includes("重同步 1") &&
             exportText.includes("原因 queue-overflow-flush-old"),
           audioLevel: exportText.includes("- 声音电平：37%"),
@@ -6231,12 +6231,12 @@ async function verifyAudioPlaybackBufferGuards(session) {
         starts.length = 0;
         stops.length = 0;
         const overflowPlayed = await playPcmAudioFrame(makeFrame());
+        const resyncPrebuffered = starts[0] >= 20.115 && starts[0] < 20.2;
         const flushedOldQueue =
           overflowPlayed &&
           starts.length === 1 &&
           stops.length === 2 &&
-          starts[0] >= 20.07 &&
-          starts[0] < 20.2 &&
+          resyncPrebuffered &&
           state.audioDroppedFrames === 2 &&
           state.audioResyncCount === 1 &&
           state.audioLastDropReason === "queue-overflow-flush-old";
@@ -6250,6 +6250,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           overflowDropped: state.audioDroppedFrames,
           overflowStops: stops.length,
           overflowStart: starts[0] || 0,
+          resyncPrebuffered,
           overflowResyncCount: state.audioResyncCount,
           overflowDropReason: state.audioLastDropReason,
         };

@@ -158,6 +158,7 @@ const defaultHostDiagnosticsText = "诊断：等待连接。";
 const audioInitialBufferSeconds = 0.08;
 const audioMinimumBufferSeconds = 0.07;
 const audioMaximumQueuedSeconds = 0.45;
+const audioResyncBufferSeconds = 0.12;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const audioStatusRenderIntervalMs = 140;
@@ -3019,7 +3020,7 @@ function resyncAudioQueue(reason, now) {
   state.audioDroppedFrames += Math.max(1, flushed);
   state.audioResyncCount = (Number(state.audioResyncCount) || 0) + 1;
   state.audioLastDropReason = reason;
-  state.audioNextPlayTime = now + audioInitialBufferSeconds;
+  state.audioNextPlayTime = now + audioResyncBufferSeconds;
   return flushed;
 }
 
@@ -4537,7 +4538,7 @@ function getAudioPerformanceExportStatus() {
   const queueMs = getAudioQueueMs();
   const resyncCount = Number(state.audioResyncCount) || 0;
   const dropReason = String(state.audioLastDropReason || "").trim();
-  const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)} ms`;
+  const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
   if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
   if (dropReason) parts.push(`原因 ${dropReason}`);
