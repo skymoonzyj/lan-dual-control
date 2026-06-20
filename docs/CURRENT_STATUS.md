@@ -7,6 +7,9 @@
 ## 2026-06-21 M5 Mac H.264 keyframe 证据上板
 - `observe-mac-video` 现在会解析 H.264 Annex B NAL 类型，并在 JSON 里输出 `h264.keyFrames/spsFrames/ppsFrames/idrFrames/keyFramesWithParameterSets`；`--requireH264Keyframe` 会要求至少一个同时包含 SPS/PPS/IDR 的关键帧，否则失败。`observe-mac-media` 默认随 H.264 基线启用该强校验，`check-mac-host-readiness --probeMedia --boardSummary` 的 `media=ok` 后会追加 `h264Key=<n> sps=<n> pps=<n> idr=<n> keyParam=<n>`。本轮真机只读验证：`MacHostMedia` 60Hz/20000kbps/5000ms 输出 `media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3`，说明当前 Mac host 会话能发带参数集的 IDR；无密码上板，不发 input/inject，不改 WebSocket 协议。
 
+## 2026-06-21 W2 Windows H.264 真连复测摘要补强
+- Windows 控制端“现场视频”导出现在会在 H.264 等待关键帧/队列重同步场景直接显示 `跳过 delta <n>` 和 `需要关键帧`；`test-windows-client-browser --boardSummary` 的 `W2W3Retest=` 新增短 `h264=` 字段，包含 `status`、`decoded`、`skippedDelta`、`needsKeyframe`、`queue`、`queueMs`、`staleDrops`、`reason`、`recovery` 和 `pause` 等关键证据。下一次真实 Mac 60Hz/H.264 复测时，即使长 `video=` 被压缩，也可以先看 `h264=` 判断是已经画出 decoded surface、仍在等关键帧，还是 Windows 本机队列/恢复循环。页面自测红灯先失败于缺少 `跳过 delta` / `需要关键帧` 和缺少 `h264=`，绿灯 `test-windows-client-browser --diagnosticsOnly --boardSummary` 通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-21 W2 Windows H.264 首帧队列宽限
 - 针对现场 `W2-H264-KEYFRAME-BLOCKER`（连接、H.264、音频都通，但 Windows 页面长期显示“等待关键帧”且原因是 `queue-overflow-wait-keyframe`），Windows 控制端现在在 H.264 还没有任何 decoded surface 画出前，对 WebCodecs/meta 解码队列给一个首帧暖机宽限：按协商刷新率允许最多约 2 秒帧量，且最长 2200ms 内不因队列超过 8 或 450ms 就关 decoder。这样 1080p/60Hz 刚开始解码时不会还没画出第一帧就反复关 decoder/等关键帧；一旦已经画出过 H.264 帧，原有低延迟队列保护仍然生效。页面自测红灯先失败于 `firstSurfaceQueueGrace=false`，绿灯显示 `H.264 latency queue guard ... firstSurfaceGrace=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

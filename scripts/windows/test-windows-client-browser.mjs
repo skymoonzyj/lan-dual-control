@@ -284,10 +284,47 @@ function makeW2W3RetestSummary(summary) {
   const parts = [];
   const video = stripLiveExportPrefix(summary.liveVideo || "");
   const audio = stripLiveExportPrefix(summary.liveAudio || "");
+  const h264 = String(summary.h264 || "").trim();
   if (video) parts.push(`video=${compactBoardSummaryText(video, 180)}`);
   if (audio) parts.push(`audio=${compactBoardSummaryText(audio, 180)}`);
+  if (h264) parts.push(`h264=${compactBoardSummaryText(h264, 180)}`);
   if (summary.h264Errors !== "") parts.push(`h264Errors=${summary.h264Errors}`);
   return parts.length ? `W2W3Retest=${parts.join(", ")}` : "";
+}
+
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function positiveInteger(value) {
+  return Math.max(0, Math.round(finiteNumber(value, 0)));
+}
+
+function makeH264RetestSummary(value = {}) {
+  const parts = [];
+  const status = String(value.h264DecoderStatus ?? value.status ?? "").trim();
+  const decoded = positiveInteger(value.h264DecodedFrames ?? value.decoded);
+  const skippedDelta = positiveInteger(value.h264SkippedDeltaFrames ?? value.skippedDelta);
+  const needsKeyFrame = value.h264DecoderNeedsKeyFrame ?? value.needsKeyFrame;
+  const queue = positiveInteger(value.h264DecoderQueue ?? value.queueLength ?? value.queue);
+  const queueMs = positiveInteger(value.h264DecoderQueueMs ?? value.queueMs);
+  const staleDrops = positiveInteger(value.h264DroppedStaleFrames ?? value.droppedStale ?? value.staleDrops);
+  const reason = String(value.h264LastDropReason ?? value.lastDropReason ?? value.reason ?? "").trim();
+  const recovery = positiveInteger(value.h264FallbackRecoveryCount ?? value.fallbackRecoveryCount);
+  const pause = positiveInteger(value.h264FallbackRecoveryPauseCount ?? value.fallbackRecoveryPauseCount);
+
+  if (status) parts.push(`status=${status}`);
+  if (status || decoded > 0) parts.push(`decoded=${decoded}`);
+  if (skippedDelta > 0) parts.push(`skippedDelta=${skippedDelta}`);
+  if (needsKeyFrame === true) parts.push("needsKeyframe=yes");
+  if (queue > 0) parts.push(`queue=${queue}`);
+  if (queueMs > 0) parts.push(`queueMs=${queueMs}`);
+  if (staleDrops > 0) parts.push(`staleDrops=${staleDrops}`);
+  if (reason) parts.push(`reason=${reason}`);
+  if (recovery > 0) parts.push(`recovery=${recovery}`);
+  if (pause > 0) parts.push(`pause=${pause}`);
+  return parts.join(" ");
 }
 
 function makeBoardSummary(summary) {
@@ -318,6 +355,28 @@ function makeBoardSummary(summary) {
     detailText.trim(),
     "No password was printed or sent to Agent Link Board; no input/inject was performed.",
   ].filter(Boolean).join(" ");
+}
+
+function verifyW2W3RetestH264Summary() {
+  const h264 = "status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe";
+  const text = makeBoardSummary({
+    status: "passed",
+    mode: "connect",
+    target: "192.168.31.122:43770",
+    discoveryTarget: "192.168.31.122:43770",
+    checks: ["connection"],
+    liveVideo: "- 现场视频：实收 -- FPS · 请求 60 Hz · 协商 60 Hz · 间隔样本不足 · 帧 68 · 解码队列 9 · 本机队列 900 ms · 本地过期丢帧 68 · 原因 queue-overflow-wait-keyframe · 解码 等待关键帧",
+    liveAudio: "- 现场声音：开启 · 队列 120 ms · 接收 3400 · 播放 3400 · 丢 0",
+    h264,
+    h264Errors: "0",
+  });
+  const ok =
+    text.includes("W2W3Retest=") &&
+    text.includes("h264=status=waiting-keyframe") &&
+    text.includes("skippedDelta=68") &&
+    text.includes("needsKeyframe=yes") &&
+    text.includes("reason=queue-overflow-wait-keyframe");
+  return { ok, text, h264 };
 }
 
 function emitBoardSummary(summary) {
@@ -378,6 +437,9 @@ function windowsClientSnapshotExpression() {
     const logs = [...document.querySelectorAll("#eventLog li")]
       .slice(0, 10)
       .map((item) => item.innerText.replace(/\\s+/g, " "));
+    const h264MetaQueue = Array.isArray(window.state?.h264DecoderQueue) ? window.state.h264DecoderQueue.length : 0;
+    const h264WebCodecsQueue = Number(window.state?.h264Decoder?.decodeQueueSize) || 0;
+    const h264DecoderQueue = Math.max(h264MetaQueue, h264WebCodecsQueue);
     return {
       status,
       remote,
@@ -387,6 +449,16 @@ function windowsClientSnapshotExpression() {
       webCodecs: typeof VideoDecoder,
       encodedVideoChunk: typeof EncodedVideoChunk,
       h264DecoderErrors: window.state?.h264DecoderErrorCount ?? 0,
+      h264DecoderStatus: window.state?.h264DecoderStatus ?? "",
+      h264DecodedFrames: window.state?.h264DecodedFrames ?? 0,
+      h264SkippedDeltaFrames: window.state?.h264SkippedDeltaFrames ?? 0,
+      h264DecoderNeedsKeyFrame: Boolean(window.state?.h264DecoderNeedsKeyFrame),
+      h264DecoderQueue,
+      h264DecoderQueueMs: window.state?.videoDecoderQueueMs ?? 0,
+      h264DroppedStaleFrames: window.state?.videoDroppedStaleFrames ?? 0,
+      h264LastDropReason: window.state?.videoLastDropReason ?? "",
+      h264FallbackRecoveryCount: window.state?.h264FallbackRecoveryCount ?? 0,
+      h264FallbackRecoveryPauseCount: window.state?.h264FallbackRecoveryPauseCount ?? 0,
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
       liveVideo: exportLine("- 现场视频：") || exportLine("- 现场视频统计："),
@@ -5307,7 +5379,9 @@ async function verifyH264LatencyQueueGuard(session) {
           exportText.includes("本机队列 900 ms") &&
           exportText.includes("解码延迟 488 ms") &&
           exportText.includes("本地过期丢帧 10") &&
-          exportText.includes("原因 queue-overflow-wait-keyframe");
+          exportText.includes("原因 queue-overflow-wait-keyframe") &&
+          exportText.includes("跳过 delta 1") &&
+          exportText.includes("需要关键帧");
 
         class FakeVideoDecoder {
           static async isConfigSupported() {
@@ -5497,6 +5571,8 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264DecoderStatus === "waiting-keyframe" &&
           state.h264SkippedDeltaFrames === 90 &&
           fallbackSettings.length === 0 &&
+          keyFrameWaitGraceExportText.includes("跳过 delta 90") &&
+          keyFrameWaitGraceExportText.includes("需要关键帧") &&
           !keyFrameWaitGraceExportText.includes("解码 JPEG 回退");
 
         state.h264SkippedDeltaFrames = 179;
@@ -7143,6 +7219,7 @@ async function run() {
     surface: "",
     liveVideo: "",
     liveAudio: "",
+    h264: "",
     h264Errors: "",
     error: "",
   };
@@ -7253,11 +7330,28 @@ async function run() {
       `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
     );
     const latencyQueueCheck = await verifyH264LatencyQueueGuard(session);
+    summary.h264 = makeH264RetestSummary({
+      h264DecoderStatus: latencyQueueCheck.status,
+      h264SkippedDeltaFrames: latencyQueueCheck.skippedDelta,
+      h264DecoderNeedsKeyFrame: latencyQueueCheck.needsKeyFrame,
+      h264DecoderQueue: latencyQueueCheck.queueLength,
+      h264DecoderQueueMs: latencyQueueCheck.queueMs,
+      h264DroppedStaleFrames: latencyQueueCheck.droppedStale,
+      h264LastDropReason: latencyQueueCheck.lastDropReason,
+      h264FallbackRecoveryCount: latencyQueueCheck.fallbackRecoveryCount,
+      h264FallbackRecoveryPauseCount: latencyQueueCheck.fallbackRecoveryPauseCount,
+    });
     summary.checks.push("h264-latency-queue");
     print(
       "OK",
       `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
     );
+    const h264SummaryCheck = verifyW2W3RetestH264Summary();
+    if (!h264SummaryCheck.ok) {
+      throw new Error(`W2W3Retest H.264 summary check failed: ${JSON.stringify(h264SummaryCheck)}`);
+    }
+    summary.checks.push("w2w3-h264-summary");
+    print("OK", `W2W3Retest H.264 summary: ${h264SummaryCheck.h264}`);
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");
     print(
@@ -7392,6 +7486,7 @@ async function run() {
     summary.audio = snapshot.audio || summary.audio;
     summary.liveVideo = snapshot.liveVideo || summary.liveVideo;
     summary.liveAudio = snapshot.liveAudio || summary.liveAudio;
+    summary.h264 = makeH264RetestSummary(snapshot) || summary.h264;
     summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
     summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
     summary.checks.push("connection");

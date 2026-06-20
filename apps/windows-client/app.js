@@ -5071,6 +5071,8 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   );
   const decoderLatencyMs = Number(state.h264DecoderLatencyMs || state.hostDiagnostics?.h264DecoderLatencyMs) || 0;
   const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
+  const skippedDeltaFrames = Number(state.h264SkippedDeltaFrames || state.hostDiagnostics?.h264SkippedDeltaFrames) || 0;
+  const needsKeyFrame = Boolean(state.h264DecoderNeedsKeyFrame || state.hostDiagnostics?.h264DecoderNeedsKeyFrame);
   const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const fallbackRecoveryCount = Number(state.h264FallbackRecoveryCount || state.hostDiagnostics?.h264FallbackRecoveryCount) || 0;
   const fallbackLastReason = String(state.h264FallbackLastReason || state.hostDiagnostics?.h264FallbackLastReason || "").trim();
@@ -5107,6 +5109,8 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (decoderQueueMs > 0) parts.push(`本机队列 ${Math.round(decoderQueueMs)} ms`);
   if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
   if (staleDrops > 0) parts.push(`本地过期丢帧 ${staleDrops}`);
+  if (skippedDeltaFrames > 0) parts.push(`跳过 delta ${skippedDeltaFrames}`);
+  if (needsKeyFrame && decoderStatus && decoderStatus !== "idle") parts.push("需要关键帧");
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (fallbackRecoveryCount > 0) parts.push(`回退恢复 ${fallbackRecoveryCount} 次`);
   if (fallbackLastReason) parts.push(`最近回退：${fallbackLastReason}`);

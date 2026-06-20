@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 Windows H.264 真连复测摘要补强
+开发端：Windows Codex
+本轮目标：让用户下一次真实 60Hz/H.264 复测后，只看 `W2W3Retest=` 一行就能判断 Windows 黑屏是否仍卡在关键帧、首屏 decoded surface 或本机队列。
+完成内容：Windows 控制端“现场视频”导出新增 `跳过 delta <n>` 和 `需要关键帧`；`test-windows-client-browser --boardSummary` 的 `W2W3Retest=` 新增短 `h264=` 字段，汇总 `status/decoded/skippedDelta/needsKeyframe/queue/queueMs/staleDrops/reason/recovery/pause`。真实连接快照会采集这些字段，诊断路径也会用本地 H.264 队列检查结果生成同样口径。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-windows-client-browser --diagnosticsOnly --timeoutMs 45000` 先失败于缺少 `跳过 delta` / `需要关键帧`，再失败于缺少 `h264=`；绿灯 `test-windows-client-browser --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过并输出 `W2W3Retest=... h264=status=recovering ... reason=keyframe-wait-timeout-fallback ...`。
+遗留问题：仍需用户用 `WinClientRetest=` 对真实 Mac host 复测，确认 canvas/surface 是否出现；这轮只是让复测证据更短、更明确。
+下一步建议：用户真连后把 `W2W3Retest=` 发通讯板；若 `decoded=0` 且 `needsKeyframe=yes` 继续增长，就按 Mac 周期 IDR/SPS/PPS 与 Windows WebCodecs 队列两侧对照排查。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 保持 60Hz/H.264 在线；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 首帧队列宽限
 开发端：Windows Codex
 本轮目标：处理现场 `W2-H264-KEYFRAME-BLOCKER`，避免 Windows 控制端还没画出首个 H.264 帧就因本机队列保护反复关 decoder，造成用户黑屏/等待关键帧。
