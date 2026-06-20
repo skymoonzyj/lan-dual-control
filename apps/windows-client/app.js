@@ -162,6 +162,7 @@ const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const audioStutterGapThresholdMs = 120;
+const audioFirstFrameWaitThresholdMs = 3000;
 const audioStreamStallThresholdMs = 2500;
 const audioStreamStallPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
@@ -572,6 +573,7 @@ const state = {
   audioFrames: 0,
   audioFrameTimes: [],
   audioLastFrameAt: 0,
+  audioWaitingSince: 0,
   audioLevel: 0,
   audioContext: null,
   audioGain: null,
@@ -2091,9 +2093,13 @@ function setUiConnected(answer) {
     elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`;
   }
   if (answer.audioEnabled) {
+    state.audioWaitingSince = elements.audioToggle.checked ? performance.now() : 0;
     elements.audioText.textContent = `声音：已协商 · ${answer.audioCodec ?? "opus"}`;
   } else if (elements.audioToggle.checked) {
+    state.audioWaitingSince = 0;
     elements.audioText.textContent = "声音：对端暂未开启音频流";
+  } else {
+    state.audioWaitingSince = 0;
   }
 
   const permissionWarnings = getHostPermissionWarnings(answer.permissions);
@@ -2518,9 +2524,14 @@ function formatFloatingAudioStatus() {
   if (state.audioDroppedFrames > 0) {
     parts.push(`丢 ${state.audioDroppedFrames}`);
   }
-  const stallStatus = getAudioStreamStallStatus();
-  if (stallStatus.stalled) {
-    parts.unshift(`音频断流 ${stallStatus.ageSeconds}s`);
+  const firstFrameWaitStatus = getAudioFirstFrameWaitStatus();
+  if (firstFrameWaitStatus.waiting) {
+    parts.unshift(`等待音频首帧 ${firstFrameWaitStatus.ageSeconds}s`);
+  } else {
+    const stallStatus = getAudioStreamStallStatus();
+    if (stallStatus.stalled) {
+      parts.unshift(`音频断流 ${stallStatus.ageSeconds}s`);
+    }
   }
   return `声音：${parts.join(" · ")}`;
 }
@@ -2993,6 +3004,7 @@ function recordVideoFrameTime() {
 function recordAudioFrameTime() {
   const now = performance.now();
   state.audioLastFrameAt = now;
+  state.audioWaitingSince = 0;
   if (!Array.isArray(state.audioFrameTimes)) state.audioFrameTimes = [];
   state.audioFrameTimes.push(now);
   const cutoff = now - 2000;
@@ -3049,6 +3061,7 @@ function resetAudioPlayback() {
   state.audioLastBufferReason = "";
   state.audioLastError = "";
   state.audioLastFrameAt = 0;
+  state.audioWaitingSince = 0;
   state.audioLastStatusUpdateAt = 0;
   state.audioLastRenderedDroppedFrames = 0;
   syncFloatingControlStatus();
@@ -3290,6 +3303,23 @@ function formatAudioBufferHealthStatusText() {
   return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 
+function getAudioFirstFrameWaitStatus(now = performance.now()) {
+  const frameCount = Number(state.audioFrames) || 0;
+  const waitingSince = Number(state.audioWaitingSince) || 0;
+  if (!elements.audioToggle.checked || !state.connected || frameCount > 0 || waitingSince <= 0) {
+    return { waiting: false, ageMs: 0, ageSeconds: 0 };
+  }
+  const ageMs = Math.max(0, now - waitingSince);
+  if (ageMs < audioFirstFrameWaitThresholdMs) {
+    return { waiting: false, ageMs, ageSeconds: 0 };
+  }
+  return {
+    waiting: true,
+    ageMs,
+    ageSeconds: Math.max(1, Math.round(ageMs / 1000)),
+  };
+}
+
 function getAudioStreamStallStatus(now = performance.now()) {
   const frameCount = Number(state.audioFrames) || 0;
   const lastFrameAt = Number(state.audioLastFrameAt) || 0;
@@ -3308,8 +3338,15 @@ function getAudioStreamStallStatus(now = performance.now()) {
   };
 }
 
-
 function renderAudioStreamStallStatus(now = performance.now()) {
+  const firstFrameWaitStatus = getAudioFirstFrameWaitStatus(now);
+  if (firstFrameWaitStatus.waiting) {
+    const volume = Number(elements.audioVolumeRange.value) || 0;
+    elements.audioText.textContent = `声音：等待音频首帧 · 已等待 ${firstFrameWaitStatus.ageSeconds}s · 音量 ${volume}%`;
+    state.audioLastStatusUpdateAt = now;
+    syncFloatingControlStatus();
+    return true;
+  }
   const stallStatus = getAudioStreamStallStatus(now);
   if (!stallStatus.stalled) return false;
   const volume = Number(elements.audioVolumeRange.value) || 0;
@@ -4779,10 +4816,16 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getAudioFrameGapStats();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
-  const stallStatus = getAudioStreamStallStatus(now);
-  if (stallStatus.stalled) {
-    parts.push("音频断流");
-    parts.push(`最后收到 ${stallStatus.ageSeconds}s 前`);
+  const firstFrameWaitStatus = getAudioFirstFrameWaitStatus(now);
+  if (firstFrameWaitStatus.waiting) {
+    parts.push("等待音频首帧");
+    parts.push(`已等待 ${firstFrameWaitStatus.ageSeconds}s`);
+  } else {
+    const stallStatus = getAudioStreamStallStatus(now);
+    if (stallStatus.stalled) {
+      parts.push("音频断流");
+      parts.push(`最后收到 ${stallStatus.ageSeconds}s 前`);
+    }
   }
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
@@ -8244,6 +8287,11 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "audio_settings_ack") {
+    if (message.enabled && state.connected && Number(state.audioFrames || 0) <= 0) {
+      state.audioWaitingSince = state.audioWaitingSince || performance.now();
+    } else if (!message.enabled) {
+      state.audioWaitingSince = 0;
+    }
     elements.audioText.textContent = message.enabled
       ? `声音：设置已接收 · ${message.volume ?? elements.audioVolumeRange.value}%`
       : "声音：已关闭";
@@ -9161,6 +9209,9 @@ elements.audioToggle.addEventListener("change", () => {
   addLog("声音", elements.audioToggle.checked ? "已请求接收被控端声音" : "已关闭声音接收");
   if (elements.audioToggle.checked) {
     primeAudioPlayback();
+    if (state.connected && Number(state.audioFrames || 0) <= 0) {
+      state.audioWaitingSince = performance.now();
+    }
   } else {
     resetAudioPlayback();
   }

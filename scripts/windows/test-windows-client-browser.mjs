@@ -6483,6 +6483,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         lastUnderrunAt: state.audioLastUnderrunAt,
         frames: state.audioFrames,
         lastFrameAt: state.audioLastFrameAt,
+        waitingSince: state.audioWaitingSince,
+        connected: state.connected,
         frameTimes: Array.isArray(state.audioFrameTimes) ? state.audioFrameTimes.slice() : undefined,
       };
       const starts = [];
@@ -6593,6 +6595,22 @@ async function verifyAudioPlaybackBufferGuards(session) {
           stallStatusText.includes("最后收到 4s 前") &&
           stallExportText.includes("音频断流") &&
           stallExportText.includes("最后收到 4s 前");
+        const firstFrameWaitNow = 12000;
+        state.connected = true;
+        state.audioFrames = 0;
+        state.audioLastFrameAt = 0;
+        state.audioWaitingSince = firstFrameWaitNow - 4300;
+        const firstFrameWaitRendered =
+          typeof renderAudioStreamStallStatus === "function" &&
+          renderAudioStreamStallStatus(firstFrameWaitNow);
+        const firstFrameWaitStatusText = document.querySelector("#audioText")?.textContent || "";
+        const firstFrameWaitExportText = getAudioPerformanceExportStatus(firstFrameWaitNow);
+        const audioFirstFrameWaitVisible =
+          firstFrameWaitRendered &&
+          firstFrameWaitStatusText.includes("等待音频首帧") &&
+          firstFrameWaitStatusText.includes("已等待 4s") &&
+          firstFrameWaitExportText.includes("等待音频首帧") &&
+          firstFrameWaitExportText.includes("已等待 4s");
         const adaptivePrebuffered =
           adaptiveUnderrunPlayed &&
           adaptiveUnderrunStart >= 10.315 &&
@@ -6631,7 +6649,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && flushedOldQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -6648,6 +6666,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
           stallRendered,
           stallStatusText,
           stallExportText,
+          audioFirstFrameWaitVisible,
+          firstFrameWaitRendered,
+          firstFrameWaitStatusText,
+          firstFrameWaitExportText,
           adaptiveUnderrunStart,
           adaptiveUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,
@@ -6681,6 +6703,12 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioStablePrebufferCount = original.stablePrebufferCount;
         state.audioLastUnderrunAt = original.lastUnderrunAt;
         state.audioFrames = original.frames;
+        state.connected = original.connected;
+        if (original.waitingSince === undefined) {
+          delete state.audioWaitingSince;
+        } else {
+          state.audioWaitingSince = original.waitingSince;
+        }
         if (original.lastFrameAt === undefined) {
           delete state.audioLastFrameAt;
         } else {

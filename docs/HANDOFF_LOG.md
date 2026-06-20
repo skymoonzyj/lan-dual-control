@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W3 Windows 音频首帧等待可见性
+开发端：Windows Codex
+本轮目标：让 Windows 控制端在连接后一直没有收到第一个音频帧时，直接提示首帧等待，而不是只显示已协商或上一次状态。
+完成内容：新增 `audioWaitingSince`；音频协商后开始等待首帧，首帧到达后清除等待；超过 3 秒未收到首帧时，页面声音状态行和复制/导出诊断显示 `等待音频首帧` / `已等待 <秒>s`；收到过音频后仍沿用上一轮 `音频断流`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `audioFirstFrameWaitVisible=false` / `firstFrameWaitRendered=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 端可见性，不改变 Mac 采集、网络传输、WebAudio 播放策略或 remote-only 声音路径。
+下一步建议：真实听感复测时，若显示 `等待音频首帧`，先查 Mac 是否开始发送 audio_frame；若显示 `音频断流`，再查中途供流/网络中断。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实听感仍需要用户现场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W3 Windows 音频断流可见性
 开发端：Windows Codex
 本轮目标：让 Windows 控制端在音频帧停止到达时直接提示断流，而不是只显示最后一次“接收中”。

@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W3 Windows 音频首帧等待可见性：连接已建立、声音开启且对端已协商音频后，超过 3 秒仍未收到首个音频帧时，页面声音状态行和复制/导出诊断显示 `等待音频首帧` / `已等待 <秒>s`，用于区分首帧未到和中途断流。页面自测先红于 `audioFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W3 Windows 音频断流可见性：Windows 控制端记录最后音频帧时间；声音开启且已收过音频后，超过 2.5 秒没有新帧时，页面声音状态行和复制/导出诊断显示 `音频断流` / `最后收到 <秒>s 前`，用于区分远端/网络停止供流和本地 WebAudio 队列补缓冲。页面自测先红于 `audioStallVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W3 Windows 音频缓冲状态实时可见化：页面声音状态行追加 `补缓冲`、`稳缓冲` 和 `重同步` 计数，帮助不复制诊断也能看到 WebAudio 队列自救状态；页面自测先红于 `bufferHealthStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W3 Windows 音频状态实时可见化：Windows 控制端页面声音状态行追加最近最大音频到达间隔和音频卡顿次数，复制/导出诊断继续保留完整平均/最大/卡顿明细；页面自测先红于 `arrivalGapStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
