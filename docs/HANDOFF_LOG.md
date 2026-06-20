@@ -17,6 +17,18 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2/W3 真实复测入口无密预检
+开发端：Windows Codex
+本轮目标：降低真实复测前的现场不确定性，让用户在输入 Mac 临时密码前先确认目标和本地诊断准备好。
+完成内容：`run-winclient-retest-and-post` 新增 `--preflightOnly` / `-PreflightOnly`，根目录 `Run-WinClientRetest-And-Post.cmd -PreflightOnly` 可直接使用。预检只运行无密 discovery/local diagnostics，成功后输出 `WinClientRetestPreflight=ready`、正式入口和“当前终端隐藏输入”的密码位置；失败时保留子命令退出码并提示不要进入密码步骤。正式复测、脱敏上板和 `W2H264BoardDiagnosis` 流程不变。
+修改文件：scripts/windows/run-winclient-retest-and-post.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-run-winclient-retest-and-post` 先失败于 help 缺 `--preflightOnly`；绿灯后同一专项回归覆盖 help、预检无密码无发板、预检失败不发板、正式复测成功发两条消息、复测失败不上板、缺 `W2W3Retest=` 不上板；`node --check` 通过。
+遗留问题：仍需要用户在场后正式运行 `Run-WinClientRetest-And-Post.cmd` 并在当前终端隐藏输入 Mac 临时密码，才能拿到真实 W2/W3 复测结果。
+下一步建议：先跑 `Run-WinClientRetest-And-Post.cmd -PreflightOnly`；如果 ready，再跑正式入口并看新的 `decoded/canvas/image/needsKeyframe` 摘要。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac host 保持在线即可。不要把密码发通讯板，不发 input/inject。
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 M20 Mac readiness foreign currentCall 降噪

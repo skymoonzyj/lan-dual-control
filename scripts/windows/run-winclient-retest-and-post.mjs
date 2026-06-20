@@ -12,6 +12,7 @@ const defaults = {
   server: "http://192.168.31.68:17888",
   dryRunPost: false,
   diagnose: true,
+  preflightOnly: false,
 };
 
 function printHelp() {
@@ -21,6 +22,8 @@ function printHelp() {
 Options:
   --server, -Server <url>  Agent Link Board URL. Default: ${defaults.server}
   --dryRunPost            Run the retest, then check the post step without sending.
+  --preflightOnly, -PreflightOnly
+                           Run no-password discovery/local diagnostics only; do not retest or post.
   --noDiagnose, -NoDiagnose
                            Post only W2W3Retest=; skip read-only diagnosis.
   --help, -Help, -h       Show this help without starting a retest.
@@ -58,6 +61,10 @@ function parseArgs(argv) {
     }
     if (token === "--dryRunPost" || token === "-DryRunPost") {
       args.dryRunPost = true;
+      continue;
+    }
+    if (token === "--preflightOnly" || token === "-PreflightOnly" || token === "--preflight" || token === "-Preflight") {
+      args.preflightOnly = true;
       continue;
     }
     if (token === "--noDiagnose" || token === "-NoDiagnose") {
@@ -108,6 +115,34 @@ function buildRetestCommand(args) {
     ],
   };
 }
+function buildPreflightCommand(args) {
+  const override = commandFromEnv();
+  if (override) return override;
+  return {
+    command: findPowerShellExe(),
+    args: [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", "scripts/windows/test-windows-client-browser.ps1",
+      "-Discover",
+      "-DiagnosticsOnly",
+      "-BoardSummary",
+      "-TimeoutMs", "45000",
+      ...args.retestArgs,
+    ],
+  };
+}
+
+function printPreflightIntro() {
+  console.log("[INFO] WinClientRetestPreflight: 不请求密码、不认证、不发通讯板、不发送 input/inject。");
+  console.log("[INFO] 这一步只检查 Windows 控制端本地诊断和 Mac /discovery 目标；正式复测再运行 Run-WinClientRetest-And-Post.cmd。");
+}
+
+function printPreflightReady() {
+  console.log("WinClientRetestPreflight=ready Next=Run-WinClientRetest-And-Post.cmd PasswordLocation=当前终端隐藏输入 Safety=no-password,no-auth,no-board-post,no-input-inject");
+  console.log("下一步：运行 Run-WinClientRetest-And-Post.cmd；看到“当前终端输入 Mac 临时密码（输入不显示，回车继续）:”时，只在这个黑色终端输入。");
+}
+
 
 function runStreaming(command, commandArgs) {
   return new Promise((resolveRun) => {
@@ -177,6 +212,19 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.preflightOnly) {
+    printPreflightIntro();
+    const preflightCommand = buildPreflightCommand(args);
+    const preflight = await runStreaming(preflightCommand.command, preflightCommand.args);
+    if (preflight.exitCode !== 0) {
+      console.error(`[FAIL] WinClient retest preflight failed; do not enter password yet. exit=${preflight.exitCode ?? "null"}`);
+      process.exitCode = preflight.exitCode ?? 1;
+      return;
+    }
+    printPreflightReady();
     return;
   }
 

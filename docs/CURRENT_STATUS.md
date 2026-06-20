@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W3 真实复测入口无密预检
+- `Run-WinClientRetest-And-Post.cmd -PreflightOnly` / `node scripts/windows/run-winclient-retest-and-post.mjs --preflightOnly` 现在会先跑无密 discovery/local diagnostics，只输出 `WinClientRetestPreflight=ready ... PasswordLocation=当前终端隐藏输入` 和下一步正式复测提示；它不请求密码、不认证、不发布通讯板、不发送 input/inject。预检失败时会保留子命令退出码，并提示不要进入密码步骤；正式复测和自动发布 `W2W3Retest=` / `W2H264BoardDiagnosis=` 的原流程不变。
+
 ## 2026-06-21 W2/W3 H.264 surface 摘要上板
 - `test-windows-client-browser --boardSummary` 的短 `W2W3Retest h264=` 现在会直接携带 `canvas=true|false` 和 `image=true|false`，并把 `h264=` 压缩上限放宽到 260 字符，避免新增 surface 字段后挤掉 `sps/pps/idr/lastNal`。`diagnose-w2-h264-board` 同步解析这两个 token，并在 `W2H264BoardDiagnosis=` 输出 `surface=canvas:<true|false|na> image:<true|false|na>`。下一次真实复测若仍黑屏，可以一行看到“已收到 SPS/PPS/IDR、decoded 数、needsKeyframe、canvas/image surface”是否一致；脚本仍只读诊断，不请求密码、不认证、不发 input/inject。
 

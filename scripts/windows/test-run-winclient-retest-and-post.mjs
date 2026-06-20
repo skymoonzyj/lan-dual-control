@@ -196,6 +196,7 @@ async function checkHelp(args) {
     assert(result.exitCode === 0, `node help ${flag} failed\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, "Usage:", `node help ${flag}`);
     assertIncludes(result.stdout, "Run-WinClientRetest.cmd", `node help ${flag}`);
+    assertIncludes(result.stdout, "--preflightOnly", `node help ${flag}`);
     assertIncludes(result.stdout, "post-w2w3-retest-board.mjs", `node help ${flag}`);
     assertSecretSafe(result.stdout + result.stderr, `node help ${flag}`);
   }
@@ -203,11 +204,41 @@ async function checkHelp(args) {
   const cmdHelp = await runRootCmd(["-Help"], args);
   assert(cmdHelp.exitCode === 0, `root cmd -Help failed\n${cmdHelp.stdout}\n${cmdHelp.stderr}`);
   assertIncludes(cmdHelp.stdout, "Run-WinClientRetest.cmd", "root cmd help");
+  assertIncludes(cmdHelp.stdout, "--preflightOnly", "root cmd help");
   assertIncludes(cmdHelp.stdout, "post-w2w3-retest-board.mjs", "root cmd help");
   assertSecretSafe(cmdHelp.stdout + cmdHelp.stderr, "root cmd help");
   console.log("[OK] WinClient retest-and-post entry help is safe");
 }
 
+async function checkPreflightOnlyDoesNotPostOrPrompt(args) {
+  await withFakeBoard(async (board) => {
+    const result = await runNode(["--preflightOnly", "--server", board.url], args, {
+      LAN_DUAL_PASSWORD: "super-secret",
+      LAN_DUAL_WINCLIENT_RETEST_COMMAND_JSON: fakeRetestCommand(`if (process.env.LAN_DUAL_PASSWORD) console.log("child saw LAN_DUAL_PASSWORD=" + process.env.LAN_DUAL_PASSWORD); console.log("Windows client diagnostics: passed; mode=diagnostics; target=192.168.31.122:43770; discovery=192.168.31.122:43770; checks=discovery,control-center. No password was printed or sent to Agent Link Board; no input/inject was performed.");`),
+    });
+    assert(result.exitCode === 0, `preflight should pass\n${result.stdout}\n${result.stderr}`);
+    assert(board.messages.length === 0, `preflight should not post messages, got ${board.messages.length}`);
+    assertIncludes(result.stdout, "WinClientRetestPreflight=ready", "preflight stdout");
+    assertIncludes(result.stdout, "Run-WinClientRetest-And-Post.cmd", "preflight stdout");
+    assertIncludes(result.stdout, "当前终端", "preflight stdout");
+    assertIncludes(result.stdout, "不请求密码", "preflight stdout");
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "preflight");
+    console.log("[OK] WinClient retest-and-post preflight is no-password and no-post");
+  });
+}
+
+async function checkPreflightFailureSkipsPost(args) {
+  await withFakeBoard(async (board) => {
+    const result = await runNode(["--preflightOnly", "--server", board.url], args, {
+      LAN_DUAL_WINCLIENT_RETEST_COMMAND_JSON: fakeRetestCommand(`console.error("offline target"); process.exit(9);`),
+    });
+    assert(result.exitCode === 9, `failed preflight should preserve child exit code\n${result.stdout}\n${result.stderr}`);
+    assert(board.messages.length === 0, `failed preflight should not post messages, got ${board.messages.length}`);
+    assertIncludes(result.stderr || result.stdout, "preflight failed", "failed preflight output");
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "failed preflight");
+    console.log("[OK] WinClient retest-and-post preflight failure does not post");
+  });
+}
 async function checkSuccessfulRetestPostsRetestAndDiagnosis(args) {
   await withFakeBoard(async (board) => {
     const result = await runNode(["--server", board.url], args, {
@@ -259,6 +290,8 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   await checkHelp(args);
+  await checkPreflightOnlyDoesNotPostOrPrompt(args);
+  await checkPreflightFailureSkipsPost(args);
   await checkSuccessfulRetestPostsRetestAndDiagnosis(args);
   await checkRetestFailureDoesNotPost(args);
   await checkMissingRetestLineDoesNotPost(args);
