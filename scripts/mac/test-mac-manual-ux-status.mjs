@@ -239,6 +239,22 @@ function readyWhileWindowsPushingBoardState() {
   };
 }
 
+function readyAfterWindowsPushedBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "online",
+        role: "Windows 端",
+        note: "已推送 b76f818：C2 Windows 完成，check-windows-resume-status 优先消费 /api/state.userPresence；Node/PowerShell 回归、help、live board、diff/check、冲突扫描通过。无密码/auth/input/inject。",
+        updatedAt: "2026-06-20T10:13:08.535Z",
+      },
+    },
+  };
+}
+
 function readyWhileUserSleepingBoardState() {
   const state = readyBoardState();
   return {
@@ -909,6 +925,25 @@ async function checkReadyWhileWindowsPushingAddsManualUxGate(args) {
   console.log("[OK] Mac manual UX status gates ready state while Windows is pushing");
 }
 
+async function checkCompletedWindowsPushDoesNotGateManualUx(args) {
+  await withFakeBoard(readyAfterWindowsPushedBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `ready after Windows pushed JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "ready after Windows pushed JSON");
+    assert(payload.status === "ready", `completed Windows push should stay ready, got ${payload.status}`);
+    assert(payload.coordination?.windowsCodex?.status === "online", `completed Windows push status mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.coordination?.manualUxGate === "clear", `completed Windows push gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(!payload.warnings?.includes("windows-codex-pushing"), `completed Windows push should not warn as pushing: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxAction=start-manual-ux-test", "completed Windows push boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "completed Windows push boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxAfterGate=", "completed Windows push boardSummary");
+    assertOperatorAction(payload, "start-manual-ux-test", "completed Windows push JSON");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only completed Windows push status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "completed Windows push JSON");
+  });
+  console.log("[OK] Mac manual UX status does not gate on completed Windows push notes");
+}
+
 async function checkReadyWhileUserSleepingWaitsForUserAwake(args) {
   await withFakeBoard(readyWhileUserSleepingBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -1533,6 +1568,7 @@ async function main() {
   await checkHelp(args);
   await checkReadyJson(args);
   await checkReadyWhileWindowsPushingAddsManualUxGate(args);
+  await checkCompletedWindowsPushDoesNotGateManualUx(args);
   await checkReadyWhileUserSleepingWaitsForUserAwake(args);
   await checkStructuredUserPresentOverridesOldSleepHistory(args);
   await checkStructuredUserAwayOverridesOldAwakeHistory(args);
