@@ -6462,11 +6462,41 @@ async function verifyReconnectControls(session) {
           !floatingReconnectButton.title &&
           !actions.classList.contains("has-reconnect");
 
+        state.reconnectAttempts = 3;
+        state.reconnectReason = "";
+        state.audioContext = null;
+        state.audioNextPlayTime = 0;
+        scheduleReconnect("持续断线");
+        const exhaustedExportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
+        const exhausted =
+          state.connectionState === "failed" &&
+          state.reconnectTimer === null &&
+          state.reconnectCountdownTimer === null &&
+          reconnectButton.hidden &&
+          floatingReconnectButton.hidden &&
+          !actions.classList.contains("has-reconnect") &&
+          !connectButton.disabled &&
+          disconnectButton.disabled &&
+          status.textContent.includes("自动重连 3 次仍未恢复") &&
+          status.textContent.includes("点“连接”重新尝试") &&
+          status.textContent.includes("复制诊断") &&
+          remote.textContent.includes("自动重连 3 次仍未恢复") &&
+          hostDiagnosticsElement?.textContent.includes("自动重连已停止") &&
+          exhaustedExportText.includes("- 重连状态：自动重连已停止（3/3") &&
+          exhaustedExportText.includes("- 重连原因：持续断线") &&
+          exhaustedExportText.includes("- 重连建议：点“连接”重新尝试") &&
+          exhaustedExportText.includes("复制诊断给两端");
+
         return {
-          ok: scheduled && immediate && copied,
+          ok: scheduled && immediate && copied && exhausted,
           scheduled,
           immediate,
+          exhausted,
           copied,
+          exhaustedStatus: status.textContent,
+          exhaustedRemote: remote.textContent,
+          exhaustedHostDiagnostics: hostDiagnosticsElement?.textContent || "",
+          exhaustedExportHasSuggestion: exhaustedExportText.includes("- 重连建议："),
           reconnectButtonText: reconnectButton.textContent,
           reconnectButtonTitle: reconnectButton.title,
           floatingReconnectButtonText: floatingReconnectButton.textContent,

@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 重连上限失败提示
+开发端：Windows Codex
+本轮目标：让自动重连耗尽后的失败状态直接告诉用户下一步怎么处理。
+完成内容：`scheduleReconnect()` 在达到 3/3 上限后保留失败原因，状态行/远程状态显示自动重连已耗尽；host 诊断显示“自动重连已停止”；`getReconnectExportStatus()` 新增 `suggestion`，快速摘要和连接状态导出会显示 `重连建议`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于状态仍是 `连接失败` 且导出没有 `重连建议`；绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强失败提示和诊断导出，不改变自动重连次数、间隔、Mac host、音视频、剪贴板或输入控制。
+下一步建议：后续真实断线手工体验时，确认自动重连耗尽后用户能直接按提示点连接重试或复制诊断。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 重连按钮倒计时可见化
 开发端：Windows Codex
 本轮目标：让断线自动重连等待时间直接出现在“立即重连”按钮上，减少用户只盯状态栏才能判断的情况。

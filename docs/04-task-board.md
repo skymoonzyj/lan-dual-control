@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] Windows 重连上限失败提示：自动重连达到 3/3 后，状态行、远程状态、host 诊断和导出诊断明确提示已停止自动重连、点“连接”重试、复制诊断给两端；页面自测先红于只有 `连接失败` / 无 `重连建议`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改重连策略、不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 重连按钮倒计时可见化：自动重连等待期间，普通“立即重连”和全屏浮层“立即重连”按钮显示剩余秒数，悬停 title 显示第几次、原因和目标；点击立即重连后恢复普通按钮。页面自测先红于按钮无倒计时/title，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 长状态悬停完整可读：FPS 指标和底部连接/输入/声音/剪贴板等长状态同步完整 `title`，保持单行省略同时可悬停查看全文。页面自测先红于 `videoLocalQueueTitleVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

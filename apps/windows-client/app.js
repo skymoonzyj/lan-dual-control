@@ -2215,6 +2215,15 @@ function formatReconnectCountdown(remainingMs) {
   return `连接中断，${seconds} 秒后自动重连（${attemptText}）`;
 }
 
+function getReconnectExhaustedSuggestion() {
+  return "点“连接”重新尝试；复制诊断给两端；如仍失败，检查 Mac host 和局域网。";
+}
+
+function formatReconnectExhaustedStatus(reason = "") {
+  const reasonText = reason ? `：${reason}` : "";
+  return `连接失败：自动重连 ${maxReconnectAttempts} 次仍未恢复${reasonText}。点“连接”重新尝试，或复制诊断给两端。`;
+}
+
 function refreshReconnectCountdown() {
   if (!state.reconnectTimer || !state.reconnectDueAt) {
     updateReconnectControls(false);
@@ -2298,7 +2307,14 @@ function scheduleReconnect(reason) {
   state.reverseStateDetail = getDefaultReverseStateDetail("windows_to_mac");
 
   if (state.reconnectAttempts >= maxReconnectAttempts) {
+    state.reconnectReason = reason;
+    state.reconnectDueAt = 0;
+    const exhaustedStatus = formatReconnectExhaustedStatus(reason);
     setUiDisconnected("连接失败", `自动重连 ${maxReconnectAttempts} 次仍未恢复：${reason}`);
+    setConnectionState("failed", exhaustedStatus);
+    resetHostDiagnostics(`诊断：自动重连已停止（${maxReconnectAttempts}/${maxReconnectAttempts}）。${getReconnectExhaustedSuggestion()}`);
+    addLog("自动重连停止", `已尝试 ${maxReconnectAttempts}/${maxReconnectAttempts} 次 · ${reason}`);
+    syncFloatingControlCenter();
     return;
   }
 
@@ -3633,12 +3649,21 @@ function makeLogFileName() {
 function getReconnectExportStatus(now = Date.now()) {
   const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
   const reason = state.reconnectReason || "-";
+  if (state.connectionState === "failed" && state.reconnectAttempts >= maxReconnectAttempts) {
+    return {
+      status: `自动重连已停止（${attemptText}，需手动重试）`,
+      reason,
+      next: "-",
+      suggestion: getReconnectExhaustedSuggestion(),
+    };
+  }
   if (state.reconnectTimer && state.reconnectDueAt) {
     const remainingSeconds = Math.max(0, Math.ceil((state.reconnectDueAt - now) / 1000));
     return {
       status: `等待自动重连（${attemptText}，${remainingSeconds} 秒后）`,
       reason,
       next: `${new Date(state.reconnectDueAt).toISOString()}（约 ${remainingSeconds} 秒后）`,
+      suggestion: "-",
     };
   }
   if (state.connectionState === "reconnecting" && state.connecting) {
@@ -3646,6 +3671,7 @@ function getReconnectExportStatus(now = Date.now()) {
       status: `正在自动重连（${attemptText}）`,
       reason,
       next: "-",
+      suggestion: "-",
     };
   }
   if (state.reconnectAttempts > 0) {
@@ -3653,12 +3679,14 @@ function getReconnectExportStatus(now = Date.now()) {
       status: `未等待（已尝试 ${attemptText}）`,
       reason,
       next: "-",
+      suggestion: "-",
     };
   }
   return {
     status: "未等待",
     reason: "-",
     next: "-",
+    suggestion: "-",
   };
 }
 
@@ -5070,6 +5098,9 @@ function buildDiagnosticsQuickSummary({
   if (reconnectExport.next && reconnectExport.next !== "-") {
     reconnectParts.push(`下次 ${reconnectExport.next}`);
   }
+  if (reconnectExport.suggestion && reconnectExport.suggestion !== "-") {
+    reconnectParts.push(`建议 ${reconnectExport.suggestion}`);
+  }
   const heartbeatFreshness = macAlertWatcherExport.heartbeatFreshness;
   const heartbeatLine = heartbeatFreshness?.summary || heartbeatFreshness?.detail
     ? [`- Mac 心跳：${heartbeatFreshness.summary || heartbeatFreshness.detail}`]
@@ -5183,6 +5214,7 @@ function buildLogExportText() {
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
+    `- 重连建议：${reconnectExport.suggestion}`,
     `- 协议版本：${protocolVersion}`,
     `- 主机诊断：${hostDiagnosticsExport}`,
     "",

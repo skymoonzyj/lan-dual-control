@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 重连上限失败提示：自动重连 3/3 耗尽后，状态行/host 诊断/导出诊断提示点连接重试和复制诊断；页面自测红绿灯通过。不改重连策略、不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 重连按钮倒计时可见化：自动重连等待期间，普通和浮层“立即重连”按钮显示剩余秒数，悬停 title 显示第几次/原因/目标；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 长状态悬停完整可读：FPS/声音/连接/输入/剪贴板等长状态同步完整 title，状态栏保持单行稳定；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W2 Windows 视频本地队列状态实时可见化：页面 FPS 状态追加本机队列、过期丢帧、回退恢复和恢复暂停；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject。 |
