@@ -311,8 +311,9 @@ function isExplicitUserSleepingDirectiveText(text) {
 function isUserAwakeText(text) {
   const source = compactText(text);
   if (!source) return false;
-  if (isUserPresenceReferenceText(source)) return false;
   if (/Wait for USER_AWAKE|等待\s*USER_AWAKE|醒后再|等用户醒/i.test(source)) return false;
+  if (/(?:^|[;；]\s*|text=)\s*USER_AWAKE\s*[:=]/i.test(source)) return true;
+  if (isUserPresenceReferenceText(source)) return false;
   return /\bUSER_AWAKE\s*[:=]|user is awake|用户已醒|用户醒了|可以授权|可授权任务|resume authorized tasks/i.test(source);
 }
 

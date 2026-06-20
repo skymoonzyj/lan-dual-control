@@ -682,6 +682,35 @@ function otherActiveCallWithUserAwakeSignalBoardState() {
   };
 }
 
+function userAwakeManualUxSafetyExplanationAfterSleepBoardState() {
+  return {
+    updatedAt: "2026-06-20T10:20:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Manual UX": {
+        status: "manual-ux-waiting",
+        role: "Mac 端",
+        note: `MacManualUx=status=waiting ManualUxChecklist=${defaultChecklist} Safety=no-password,no-input-inject blockers=manual-ux-standby-not-detected`,
+        updatedAt: "2026-06-20T10:19:58.000Z",
+      },
+    },
+    events: [
+      {
+        at: "2026-06-20T10:19:00.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "USER_SLEEPING: 用户仍是 USER_SLEEPING，不能发起或推进 5-10 分钟用户在场 manual UX。",
+      },
+      {
+        at: "2026-06-20T10:20:00.000Z",
+        type: "message",
+        from: "Mac Codex",
+        text: "USER_AWAKE: 用户已在 Mac Codex 线程确认可以正式工作并可参与必要授权；后续如果进入真实手工体验/manual UX，仍需另发明确 call 说明目标、安全边界和预计 5-10 分钟。不要在通讯板发送密码、密钥或系统账号；本消息不请求密码、不发 input/inject。",
+      },
+    ],
+  };
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(stdout);
@@ -1214,6 +1243,26 @@ async function checkSendCallRefusesOtherActiveCall(args) {
   console.log("[OK] Mac manual UX status refuses to replace non-matching active board calls");
 }
 
+async function checkUserAwakeSafetyExplanationClearsSleepGate(args) {
+  await withFakeBoard(userAwakeManualUxSafetyExplanationAfterSleepBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `USER_AWAKE safety explanation JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "USER_AWAKE safety explanation JSON");
+    assert(payload.status === "call-ready", `USER_AWAKE safety explanation should become call-ready, got ${payload.status}`);
+    assert(payload.coordination?.userPresence?.state === "awake", `USER_AWAKE safety explanation should clear sleep gate: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.coordination?.manualUxGate === "clear", `USER_AWAKE safety explanation gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.signals?.userAwakeManualUxCall === true, `USER_AWAKE safety explanation signal missing: ${JSON.stringify(payload.signals)}`);
+    assert(!payload.warnings?.includes("user-sleeping"), `USER_AWAKE safety explanation should not keep user-sleeping warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxAction=send-manual-ux-call", "USER_AWAKE safety explanation boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCallCommand=", "USER_AWAKE safety explanation boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "USER_AWAKE safety explanation boardSummary");
+    assertOperatorAction(payload, "send-manual-ux-call", "USER_AWAKE safety explanation JSON");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only USER_AWAKE safety explanation should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "USER_AWAKE safety explanation JSON");
+  });
+  console.log("[OK] Mac manual UX status accepts USER_AWAKE coordination that explains the safety boundary");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -1253,6 +1302,7 @@ async function main() {
   await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);
+  await checkUserAwakeSafetyExplanationClearsSleepGate(args);
   console.log("[OK] Mac manual UX status checks passed");
 }
 
