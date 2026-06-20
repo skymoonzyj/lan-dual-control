@@ -17,6 +17,32 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 C2 userPresence Windows 接入
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏以 Agent Link Board `/api/state.userPresence` 为准，不再被历史“休息/睡觉/USER_SLEEPING”消息误导。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增 JSON `board.userPresence`，从结构化 `/api/state.userPresence` 读取 `present` / `away`、label、reason、instruction、updatedAt、updatedBy。
+- `--boardSummary` 新增 `UserPresence=` 和 `UserPresenceAction=`；`present` 输出 `explain-before-auth`，`away` 输出 `no-auth-only blocker=BLOCKED_BY_USER_AWAY`。
+- 普通输出同步显示 `UserPresence=` / `UserPresenceAction=`，历史睡眠关键词不覆盖结构化状态。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于 `userPresence present should be found from /api/state`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：Mac 端仍需自行完成 C2 Mac 部分，把旧 `USER_SLEEPING`/`USER_AWAKE` 兼容逻辑改为被 `/api/state.userPresence` 覆盖。
+下一步建议：Mac 拉取后先 rebase 到本提交，再处理 Mac 侧 C2；双方后续安排用户现场任务前先看 `UserPresence=`。
+是否改了协议：否；只消费 Agent Link Board 既有 `/api/state.userPresence` 字段。
+是否需要另一端配合：需要 Mac 端后续完成 C2 Mac 半边，不需要密码或真实远控配合。
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 MacInputSafetyStatus 只读门禁

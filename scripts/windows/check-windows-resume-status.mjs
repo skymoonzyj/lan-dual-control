@@ -576,7 +576,8 @@ function countBoardStateItems(state) {
   const eventCount = Array.isArray(state.events) ? state.events.length : 0;
   const messageCount = Array.isArray(state.messages) ? state.messages.length : 0;
   const callCount = state.currentCall ? 1 : 0;
-  return statusCount + eventCount + messageCount + callCount;
+  const userPresenceCount = state.userPresence ? 1 : 0;
+  return statusCount + eventCount + messageCount + callCount + userPresenceCount;
 }
 
 function emptyMacSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
@@ -647,6 +648,78 @@ function emptyMacInputSafetyStatus(source = "none", textCount = 0, rejectedCount
     checkedAt: "",
     summary: "not-seen",
   };
+}
+function emptyUserPresence(source = "none") {
+  return {
+    found: false,
+    source,
+    status: "unknown",
+    label: "",
+    reason: "",
+    instruction: "",
+    updatedAt: "",
+    updatedBy: "",
+    action: "unknown",
+    blocker: "",
+    summary: "status=unknown source=none action=unknown",
+  };
+}
+
+const userPresenceSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码\s*[:=]|密钥|口令|令牌/i;
+
+function safeIsoTimestamp(value) {
+  const text = normalizedText(value);
+  if (!text) return false;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text) && Number.isFinite(Date.parse(text));
+}
+function safeUserPresenceText(value, maxLength = 120) {
+  const text = normalizedText(value).replace(/[.]+$/g, "");
+  if (!text || userPresenceSecretPattern.test(text)) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function normalizeUserPresenceStatus(value) {
+  const text = normalizedText(value).toLowerCase();
+  if (["present", "awake", "user-present", "user_awake", "用户在场", "在场"].includes(text)) return "present";
+  if (["away", "sleeping", "asleep", "user-away", "user_sleeping", "用户不在", "不在", "休息", "睡觉"].includes(text)) return "away";
+  if (["unknown", "none", ""].includes(text)) return "unknown";
+  return "unknown";
+}
+
+function userPresenceAction(status) {
+  if (status === "present") return "explain-before-auth";
+  if (status === "away") return "no-auth-only";
+  return "unknown";
+}
+
+function normalizeBoardUserPresence(state, source = "api-state") {
+  const presence = state?.userPresence;
+  if (!presence || typeof presence !== "object") return emptyUserPresence(source);
+  const status = normalizeUserPresenceStatus(presence.status || presence.state);
+  const action = userPresenceAction(status);
+  const updatedAt = safeIsoTimestamp(presence.updatedAt) ? presence.updatedAt : "";
+  const result = {
+    found: status !== "unknown" || Boolean(presence.status || presence.state),
+    source,
+    status,
+    label: safeUserPresenceText(presence.label, 80),
+    reason: safeUserPresenceText(presence.reason, 120),
+    instruction: safeUserPresenceText(presence.instruction, 180),
+    updatedAt,
+    updatedBy: safeUserPresenceText(presence.updatedBy, 80),
+    action,
+    blocker: status === "away" ? "BLOCKED_BY_USER_AWAY" : "",
+  };
+  const parts = [
+    `status=${result.status}`,
+    `source=${result.source}`,
+    ...(result.updatedAt ? [`updatedAt=${result.updatedAt}`] : []),
+    ...(result.label ? [`label=${result.label}`] : []),
+    `action=${result.action}`,
+    ...(result.blocker ? [`blocker=${result.blocker}`] : []),
+  ];
+  result.summary = parts.join(" ");
+  return result;
 }
 
 function emptyMacManualUx(source = "none", textCount = 0, rejectedCount = 0) {
@@ -3667,6 +3740,7 @@ async function getBoardSnapshot(args) {
         active: false,
         summary: "not checked",
       },
+      userPresence: emptyUserPresence("skipped"),
       macHostSafeStart: emptyMacSafeStart("skipped"),
       macMaxFpsSafeStart: emptyMacSafeStart("skipped"),
       macFormalLocalSmoke: emptyMacSafeStart("skipped"),
@@ -3713,6 +3787,7 @@ async function getBoardSnapshot(args) {
       lineCount: countBoardStateItems(stateResult.state),
       tail: [],
       currentCall: normalizeBoardCurrentCall(stateResult.state?.currentCall),
+      userPresence: normalizeBoardUserPresence(stateResult.state, "api-state"),
       macHostSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacHostSafeStart"),
       macMaxFpsSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacMaxFpsSafeStart", { requireMaxScreenFps: true }),
       macFormalLocalSmoke: extractMacFormalLocalSmokeFromBoardState(stateResult.state),
@@ -3765,6 +3840,7 @@ async function getBoardSnapshot(args) {
     lineCount: splitLines(output).length,
     tail: tailLines(output, 8),
     currentCall: parseBoardCurrentCall(output),
+    userPresence: emptyUserPresence(result.ok ? "codex-link-client" : "unavailable"),
     macHostSafeStart: extractMacSafeStartFromText(output, "MacHostSafeStart", result.ok ? "codex-link-client" : "unavailable"),
     macMaxFpsSafeStart: extractMacSafeStartFromText(output, "MacMaxFpsSafeStart", result.ok ? "codex-link-client" : "unavailable", { requireMaxScreenFps: true }),
     macFormalLocalSmoke: extractMacFormalLocalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
@@ -4811,6 +4887,7 @@ function makeBoardSummary(report) {
   const boardCallAck = report.board.currentCall?.active && report.board.currentCall.agentCallAckCommand
     ? `; AgentCallAck=${report.board.currentCall.agentCallAckCommand}`
     : "";
+  const presence = report.board.userPresence || emptyUserPresence("none");
   const git = report.git.ok
     ? report.git.clean
       ? "clean"
@@ -4852,6 +4929,9 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}${boardCallAck}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.${clientPortOwners}`,
+    ...(presence.found
+      ? [`UserPresence=${presence.status} source=${presence.source}${presence.updatedAt ? ` updatedAt=${presence.updatedAt}` : ""}.`, `UserPresenceAction=${presence.action}${presence.blocker ? ` blocker=${presence.blocker}` : ""}.`]
+      : []),
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
       : []),
@@ -5263,6 +5343,14 @@ function printHuman(report) {
       }
     } else {
       console.log("  currentCall=none");
+    }
+    if (report.board.userPresence?.found) {
+      console.log(`  UserPresence=${report.board.userPresence.summary}`);
+      if (report.board.userPresence.blocker) {
+        console.log(`  UserPresenceAction=${report.board.userPresence.action} blocker=${report.board.userPresence.blocker}`);
+      } else {
+        console.log(`  UserPresenceAction=${report.board.userPresence.action}`);
+      }
     }
     if (report.board.macHostSafeStart?.command) {
       console.log(`  MacHostSafeStart=${report.board.macHostSafeStart.command}`);

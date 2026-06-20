@@ -5,6 +5,8 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 ## 2026-06-20 现场校正
 
+- Windows 开工第一屏现在优先读取 Agent Link Board `/api/state.userPresence`：`present` 会在 `check-windows-resume-status --checkBoard --boardSummary` 中显示 `UserPresence=present` 和 `UserPresenceAction=explain-before-auth`，表示可安排授权/输入密码/现场审核任务但必须先说明目标、用户要做什么、安全边界和预计耗时；`away` 会显示 `UserPresenceAction=no-auth-only blocker=BLOCKED_BY_USER_AWAY`，只做无授权任务。不要再从历史“休息/睡觉/USER_SLEEPING”消息推断当前用户状态；结构化 `userPresence` 优先。
+
 - Mac 真实输入安全路径当前新增只读门禁：开工或准备 M2 前先跑 `node scripts/mac/check-mac-input-safety-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`，或直接看 `MacHeartbeat=` / `MacResumeStatus=` / `MacUnattendedStatus=` 同屏的 `MacInputSafetyStatus=`。当前真机摘要可到 `ready reason=log-mode-permissions-ok inputMode=log permissions=ok`，但同一行仍写明 `realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe`；这不是已开启真实输入。只有用户明确确认正在看 Mac 屏幕后，才安排带 `--confirmUserWatching` 的安全启动和 safe 事件集验收。
 - Mac 侧心跳/恢复摘要现在会生产稳定 `MacCodexHealth=`：Windows 若要判断 Mac Codex 是否 stale，优先看 `MacCodexHealth=blocked reason=mac-codex-stale`；若只看到 `MacHeartbeatHealth=`，仍按旧兼容逻辑处理。`MacCodexHealth=` 只是无密协作状态，不代表 Mac host/client 离线，也不会自动发送 call、密码、认证或 input/inject。
 - 如果 Windows 开工第一屏看到 `MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex`，先让 Mac 端刷新/继续 Mac Codex 或重新上报 `MacHeartbeat` / `MacManualUx`；需要对方配合时再手动复制同屏 `MacCodexStaleCall=` 发起无密 call。这个字段只来自稳定 `MacHeartbeatHealth` 短字段，不代表 Mac host 或 Mac client 离线，也不会自动发送密码、认证或 input/inject。

@@ -724,6 +724,86 @@ async function checkBoardSummary(args) {
   });
 }
 
+async function checkBoardUserPresenceJson(args) {
+  const presentAt = "2026-06-20T09:38:09.199Z";
+  const awayAt = "2026-06-20T10:00:00.000Z";
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell mock userPresence present JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.userPresence?.found === true, "PowerShell userPresence present should be found from /api/state");
+      assert(payload.board.userPresence.status === "present", "PowerShell userPresence present status mismatch");
+      assert(payload.board.userPresence.source === "api-state", "PowerShell userPresence present should prefer /api/state");
+      assert(payload.board.userPresence.updatedAt === presentAt, "PowerShell userPresence present updatedAt mismatch");
+      assertIncludes(payload.boardSummary, "UserPresence=present", "PowerShell userPresence present board summary");
+      assertIncludes(payload.boardSummary, "UserPresenceAction=explain-before-auth", "PowerShell userPresence present board summary");
+      assertNotIncludes(payload.boardSummary, "USER_SLEEPING", "PowerShell userPresence present should override old sleep history");
+      assertNotIncludes(payload.boardSummary, "BLOCKED_BY_USER_AWAY", "PowerShell userPresence present board summary");
+    }, {
+      userPresence: {
+        status: "present",
+        label: "用户在场",
+        instruction: "可以安排需要用户授权/输入密码/现场审核的任务，但发起方必须先写清目标、需要用户做什么、安全边界和预计耗时。",
+        reason: "用户当前在场，可以授权",
+        updatedAt: presentAt,
+        updatedBy: "Supervisor",
+      },
+      events: [
+        {
+          type: "message",
+          from: "Supervisor",
+          text: "旧历史 USER_SLEEPING / 睡觉 / 休息：这条只能作兼容 fallback，不能覆盖 /api/state.userPresence。",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell mock userPresence away board summary failed\n${output}`);
+      assertIncludes(result.stdout, "UserPresence=away", "PowerShell userPresence away board summary");
+      assertIncludes(result.stdout, "UserPresenceAction=no-auth-only", "PowerShell userPresence away board summary");
+      assertIncludes(result.stdout, "BLOCKED_BY_USER_AWAY", "PowerShell userPresence away board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell userPresence away board summary");
+    }, {
+      userPresence: {
+        status: "away",
+        label: "用户不在",
+        instruction: "只做无授权任务，需用户操作时标记 BLOCKED_BY_USER_AWAY。",
+        reason: "用户当前不在场",
+        updatedAt: awayAt,
+        updatedBy: "Supervisor",
+      },
+    });
+  });
+  console.log("[OK] PowerShell resume-status wrapper reads Agent Link userPresence from /api/state");
+}
 async function checkBoardCurrentCallSummary(args) {
   await withMockHost(async (port) => {
     await withMockLinkBoard(async (board) => {
@@ -1976,6 +2056,7 @@ async function main() {
   await checkMockJson(args);
   await checkCustomClientDiagnosticsPorts(args);
   await checkBoardSummary(args);
+  await checkBoardUserPresenceJson(args);
   await checkBoardCurrentCallSummary(args);
   await checkBoardCurrentCallJson(args);
   await checkSecureAuthCallNextSummary(args);
