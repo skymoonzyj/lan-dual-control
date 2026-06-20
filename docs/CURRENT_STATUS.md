@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W3 Windows 真连复测根目录入口
+- 新增根目录 `Run-WinClientRetest.cmd`：用户在 Windows 仓库根目录双击或运行它即可启动真实 Windows 控 Mac 复测。入口默认调用 `scripts/windows/test-windows-client-browser.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000`，密码只在本机黑色终端隐藏输入，输出仍是一行脱敏 `W2W3Retest=...` 供通讯板使用；`Run-WinClientRetest.cmd -Help` 只显示帮助，不启动浏览器、不请求密码。`check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 同步新增 `windowsClientRetestUserEntryCommand` / `WinClientRetestEntry=Run-WinClientRetest.cmd`，方便两端第一屏直接看到最短复测入口。不改协议、不认证、不把密码写入参数或通讯板、不发 input/inject。
+
 ## 2026-06-21 W2 Windows H.264 通讯板诊断补 Mac 发送侧字段
 - `diagnose-w2-h264-board` 现在会把 Mac 侧 `MacHostMedia` / readiness / media 摘要里的 `h264Frames/h264Delta/keyGapFramesMax/keyGapMsMax/keyGapFramesLast/keyGapMsLast/keyTailFrames/keyTailMs/firstKeyParam/lastKeyParam` 一并解析进 JSON、普通输出和 `W2H264BoardDiagnosis=`。下一次真实 `WinClientRetest=` 上板后，可以在同一行对照 Mac 发送总帧/差分帧/关键帧间隔/尾部 gap 与 Windows `recv/skippedDelta/lastNal/decoded`，更快判断卡顿或黑屏发生在发送、接收还是 WebCodecs 解码路径。同时，说明文字里的 `firstKeyParam=yes|no` / `lastKeyParam=yes|no` 不会再被当成真实 Mac 媒体证据。本轮只读通讯板，不改协议、不认证、不请求密码、不发 input/inject。
 

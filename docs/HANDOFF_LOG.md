@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 Windows 真连复测根目录入口
+开发端：Windows Codex
+本轮目标：把真实 Windows 控 Mac 复测从长 Node/PowerShell 命令收敛成用户可直接运行的根目录入口，减少现场输密码和复测上板的摩擦。
+完成内容：新增 `Run-WinClientRetest.cmd`，默认调用 `test-windows-client-browser.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000`；`check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `windowsClientRetestUserEntryCommand` / `WinClientRetestEntry=Run-WinClientRetest.cmd`，同时保留原 `WinClientRetest=` / `WinClientRetestPs=` 长命令。
+修改文件：Run-WinClientRetest.cmd；scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-windows-resume-status` 和 PowerShell wrapper 回归先失败于缺少 `windowsClientRetestUserEntryCommand` / `WinClientRetestEntry`；绿灯后 `node --check` 三项、`Run-WinClientRetest.cmd -Help`、`test-windows-resume-status --timeoutMs 45000`、`test-windows-resume-status-powershell --timeoutMs 45000` 通过。
+遗留问题：仍需要用户真实运行 `Run-WinClientRetest.cmd`，在本机终端输入 Mac 临时密码，并把输出的 `W2W3Retest=` 上板；本轮只降低复测入口门槛，不代替真实画面体验。
+下一步建议：真实复测上板后立即跑 `diagnose-w2-h264-board --boardSummary`。若 `W2H264BoardDiagnosis` 指向 `windows-decode-path`，继续查 Windows WebCodecs configure/decode/队列；若仍缺 recv/key/NAL，再回查传输或 Mac host 发流窗口。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 端保持 host 在线并提供当前临时密码给用户本机输入即可。不要把密码发通讯板，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 通讯板诊断补 Mac 发送侧字段
 开发端：Windows Codex
 本轮目标：让 `W2H264BoardDiagnosis=` 能同时带出 Mac 发送总帧、差分帧、关键帧间隔和关键帧参数集标记，用来和 Windows 真连收到侧字段对照。
