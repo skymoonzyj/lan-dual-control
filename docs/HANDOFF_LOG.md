@@ -16,6 +16,37 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 M1 Mac Remote Audio first-screen sendStatus command
+开发端：Mac Codex
+本轮目标：让 Mac 端任一开工第一屏都能直接刷新 `Mac Remote Audio` 通讯板状态，而不是只给只读检查命令。
+完成内容：
+- `check-mac-heartbeat`、`check-mac-resume-status` 和 `check-mac-unattended-status` 的 commands / 普通输出 / `--boardSummary` 新增 `MacRemoteAudioSendStatus=`。
+- 新命令调用 `check-mac-remote-audio-status --server http://192.168.31.68:17888 --sendStatus --boardSummary`，只发布无密 `MacRemoteAudioStatus=` 摘要。
+- 输出继续保留 `MacRemoteAudioStatus=` 只读检查入口，便于先看本机是否仍出声；`MacRemoteAudioSendStatus=` 只负责刷新通讯板。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000` 先失败于 help 缺少 `macRemoteAudioSendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macRemoteAudioSendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macRemoteAudioSendStatus`。
+- 绿灯：上述三项测试均通过。
+遗留问题：这不是 remote-only 实现；当前真机若仍是 `blocked-local-output`，表示 Mac 本机仍可能出声，后续静音/切输出/product toggle 仍需用户明确同意和恢复路径。
+下一步建议：Windows 或 Mac 第一屏发现 `Mac Remote Audio` 摘要旧时，复制 `MacRemoteAudioSendStatus=` 刷新；不要把上板成功当作已静音或已远端独占。
+是否改了协议：否；只新增 Mac 侧脚本摘要/命令字段。
+是否需要另一端配合：暂不需要；Windows 已能消费 `MacRemoteAudioStatus=`，后续若要展示新 `MacRemoteAudioSendStatus=` 可由 Windows 端自行选择。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W3 Windows 音频缓冲状态实时可见化

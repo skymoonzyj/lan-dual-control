@@ -230,6 +230,10 @@ Machine-readable JSON fields:
                              Secret-free read-only Mac remote audio status
                              command; it checks system-pcm capture and current
                              output volume/mute without changing volume/output.
+  commands.macRemoteAudioSendStatusCommand
+                             Secret-free read-only Mac remote audio status
+                             refresh command; it posts "Mac Remote Audio" to
+                             Agent Link Board without changing volume/output.
   commands.macInputSafetyPlanCommand
                              Secret-free Mac input safety dry-run planner; it
                              keeps real input blocked until the user is
@@ -1678,6 +1682,20 @@ function makeMacRemoteAudioStatusCommand(args) {
   ].join(" ");
 }
 
+function makeMacRemoteAudioSendStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-remote-audio-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--server",
+    defaults.server,
+    "--sendStatus",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacInputSafetyPlanCommand() {
   return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
 }
@@ -2320,6 +2338,7 @@ function formatBoardSummary(report) {
       `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
       `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
       `MacRemoteAudioStatus=${report.commands.macRemoteAudioStatusCommand}.`,
+      `MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatusCommand}.`,
       `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
       `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
       `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
@@ -2384,6 +2403,7 @@ function formatBoardSummary(report) {
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacRemoteAudioStatus=${report.commands.macRemoteAudioStatusCommand}.`,
+    `MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatusCommand}.`,
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
     `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
     `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
@@ -2517,6 +2537,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
   console.log(`[NEXT] Mac remote-only audio dry-run plan: ${report.commands.macRemoteAudioPlanCommand}`);
   console.log(`[NEXT] Mac remote audio read-only status: ${report.commands.macRemoteAudioStatusCommand}`);
+  console.log(`[NEXT] Mac remote audio board-status refresh: ${report.commands.macRemoteAudioSendStatusCommand}`);
   console.log(`[NEXT] Mac input safety plan: ${report.commands.macInputSafetyPlanCommand}`);
   console.log(`[NEXT] Mac input safety status: ${report.commands.macInputSafetyStatusCommand}`);
   console.log(`[NEXT] Mac safe inject rehearsal plan: ${report.commands.macSafeInjectRehearsalCommand}`);
@@ -2608,6 +2629,7 @@ async function main() {
       macPowerPlanCommand: makeMacPowerPlanCommand(),
       macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macRemoteAudioStatusCommand: makeMacRemoteAudioStatusCommand(args),
+      macRemoteAudioSendStatusCommand: makeMacRemoteAudioSendStatusCommand(args),
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macInputSafetyStatusCommand: makeMacInputSafetyStatusCommand(args),
       macSafeInjectRehearsalCommand: makeMacSafeInjectRehearsalCommand(args),

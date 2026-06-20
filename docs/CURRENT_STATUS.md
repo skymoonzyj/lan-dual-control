@@ -13,6 +13,9 @@
 ## 2026-06-20 W3 Windows 音频到达间隔诊断
 - Windows 控制端现在记录最近 2 秒 `audioFrameTimes`，复制/导出诊断“现场声音”在至少 2 个音频帧样本时显示 `平均间隔 <ms> ms`、`最大间隔 <ms> ms`，并对 >=120ms 的音频到达长间隔输出 `音频卡顿 <n>` / `最大音频卡顿 <ms> ms`。这用于区分 Mac/网络供流抖动与 Windows 本地 WebAudio 队列补缓冲/重同步；页面自测先红于缺少 `平均间隔 118 ms` / `音频卡顿 2`，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 
+## 2026-06-20 M1 Mac Remote Audio first-screen sendStatus command
+- Mac `heartbeat`、`resume` 和 `unattended` 三个第一屏现在都会在原有 `MacRemoteAudioStatus=` 只读检查入口旁边输出 `MacRemoteAudioSendStatus=`：`node scripts/mac/check-mac-remote-audio-status.mjs --host <host> --port <port> --server http://192.168.31.68:17888 --sendStatus --boardSummary`。这让任一开工入口都能直接刷新 Agent Link Board 的 `Mac Remote Audio` 状态；该命令仍只读 `/discovery` 和当前 output volume/mute，只发布无密摘要，不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject，也不代表 remote-only 已启用。
+
 ## 2026-06-20 W2 Windows H.264 恢复暂停追溯诊断
 - Windows 控制端现在会在短时间多次 H.264/JPEG fallback-recovery 后保留 `h264FallbackRecoveryPauseCount`，现场诊断、复制/导出诊断会显示 `恢复暂停 <n> 次`，当前暂停期间另显示 `暂停剩余 <秒>s`。这样用户晚几秒复制诊断时，仍能知道控制端曾因反复恢复循环主动暂停 H.264 自动恢复、保持 JPEG 保画面。页面自测先红于缺少 `恢复暂停 1 次`，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
 
