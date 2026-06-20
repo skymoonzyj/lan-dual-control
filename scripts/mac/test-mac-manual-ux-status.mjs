@@ -483,6 +483,16 @@ function descriptiveMacManualUxTagMentionBoardState() {
     ],
   };
 }
+
+function descriptiveMacManualUxTagMentionEventsOnlyBoardState() {
+  const state = descriptiveMacManualUxTagMentionBoardState();
+  const { recentEvents, ...withoutRecentEvents } = state;
+  return {
+    ...withoutRecentEvents,
+    events: recentEvents,
+  };
+}
+
 async function checkReferencedConfirmationTagDoesNotReadyCall(args) {
   await withFakeBoard(referencedConfirmationTagBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -512,6 +522,23 @@ async function checkDescriptiveManualUxTagMentionDoesNotConfirm(args) {
   });
   console.log("[OK] Mac manual UX status ignores descriptive confirmation tag mentions");
 }
+
+async function checkEventsArrayDescriptiveManualUxTagMentionDoesNotConfirm(args) {
+  await withFakeBoard(descriptiveMacManualUxTagMentionEventsOnlyBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `events-only descriptive tag mention JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "events-only descriptive tag mention JSON");
+    assert(payload.status === "calling", `events-only descriptive tag mention should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `events-only descriptive tag mention should not be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "events-only descriptive tag mention boardSummary");
+    assertIncludes(payload.boardSummary, "BoardEventSources=events", "events-only descriptive tag mention boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "events-only descriptive tag mention boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `events-only descriptive tag mention should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "events-only descriptive tag mention JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores descriptive confirmation tag mentions from real Agent Link events");
+}
+
 function staleConfirmedMacManualUxCallBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -619,6 +646,8 @@ async function checkHelp(args) {
   assertIncludes(result.stdout, "--sendMessage", "help");
   assertIncludes(result.stdout, "--sendCall", "help");
   assertIncludes(result.stdout, "--reconfirmCall", "help");
+  assertIncludes(result.stdout, "events", "help");
+  assertIncludes(result.stdout, "recentEvents", "help");
   assertNotIncludes(result.stdout, "Mac host password:", "help");
   assertSecretSafe(result.stdout, "help");
   console.log("[OK] Mac manual UX status help is pure");
@@ -691,6 +720,7 @@ async function checkBoardSummary(args) {
     assert(result.exitCode === 0, `board summary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
     assertIncludes(result.stdout, "MacManualUx=status=ready", "board summary");
     assertIncludes(result.stdout, "Next=ManualUxTest", "board summary");
+    assertIncludes(result.stdout, "BoardEventSources=recentEvents", "board summary");
     assertIncludes(result.stdout, "Safety=no-password,no-input-inject", "board summary");
     assertSecretSafe(result.stdout, "board summary");
   });
@@ -1062,6 +1092,7 @@ async function main() {
   await checkEventsArrayConfirmationIsAccepted(args);
   await checkReferencedConfirmationTagDoesNotReadyCall(args);
   await checkDescriptiveManualUxTagMentionDoesNotConfirm(args);
+  await checkEventsArrayDescriptiveManualUxTagMentionDoesNotConfirm(args);
   await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
   await checkLateManualUxConfirmationDoesNotReadyExpiredCall(args);
   await checkExpiredCallRequiresReconfirmEvenWhenPreviouslyConfirmed(args);

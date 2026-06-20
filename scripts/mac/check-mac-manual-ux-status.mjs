@@ -72,9 +72,10 @@ Description:
   --sendCall/--reconfirmCall is explicitly provided.
   It consumes PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby,
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
-  Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
-  as ready so Mac status updates do not accidentally send the team back to the
-  formal E2E path. A USER_AWAKE/manual-UX currentCall is treated as
+  Board state, including real Agent Link Board events and legacy recentEvents.
+  A Supervisor usable-entry/manual-UX currentCall is also treated as ready so
+  Mac status updates do not accidentally send the team back to the formal E2E
+  path. A USER_AWAKE/manual-UX currentCall is treated as
   call-ready and prints ManualUxCallCommand=... so the next user-present step
   can be coordinated before asking for any action. An active Mac manual UX call
   is treated as calling so the script does not offer a duplicate call. An expired
@@ -225,6 +226,13 @@ function boardEvents(state) {
   if (Array.isArray(state?.events)) events.push(...state.events);
   if (Array.isArray(state?.recentEvents)) events.push(...state.recentEvents);
   return events;
+}
+
+function boardEventSources(state) {
+  const sources = [];
+  if (Array.isArray(state?.events)) sources.push("events");
+  if (Array.isArray(state?.recentEvents)) sources.push("recentEvents");
+  return sources;
 }
 
 function parseManualChecklist(texts) {
@@ -524,6 +532,7 @@ function makeManualUxReconfirmCommand(server) {
 
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
+  const eventSources = boardEventSources(state);
   const combined = texts.join("\n");
   const boardCallBeforeCheck = normalizeCurrentBoardCall(state.currentCall);
   const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
@@ -559,6 +568,7 @@ function makeReport(state, server) {
     server,
     checkedAt: new Date().toISOString(),
     target: firstLanMacHostEndpoint(texts, server),
+    boardEventSources: eventSources,
     boardCallBeforeCheck,
     signals,
     manualChecklist: {
@@ -649,6 +659,7 @@ function makeBoardSummary(report) {
     `ManualUxChecklist=${report.manualChecklist.summary}`,
     `ManualUxLabels=${report.manualChecklist.labels.join("/")}`,
     `Signals=${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(",") || "none"}`,
+    `BoardEventSources=${report.boardEventSources?.join(",") || "none"}`,
     `Target=${report.target}`,
     `Next=${next}`,
     "Safety=no-password,no-input-inject",
@@ -699,6 +710,7 @@ function makeOfflineReport(server, error) {
     server,
     checkedAt: new Date().toISOString(),
     target: "unknown",
+    boardEventSources: [],
     signals: {
       realTestPass: false,
       postPassNext: false,
