@@ -18,6 +18,17 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 H.264 恢复关键帧进展保护
+开发端：Windows Codex
+本轮目标：继续收口 W2 后台/最小化恢复循环，避免已收到的恢复关键帧在绘制前又被 queue-overflow reset 清掉。
+完成内容：Windows 控制端新增 `h264RecoveryInFlight`、`h264RecoveryKeyFrameReceivedAt` 和 `h264RecoveryFrameDrawnAt` 状态；恢复请求发出后进入 in-flight，收到关键帧后记录“已收到但未绘制”，在短 decode/draw 宽限内保留 decoder/queue，不让 `queue-overflow-wait-keyframe` 再次打断；关键帧画到 canvas 后清理 in-flight。现场视频诊断新增“恢复关键帧已收到”，方便下一轮真实复测判断卡在收到前还是绘制前。同时补强 W4：snap-live/可见性恢复后若再次音频 underrun，使用约 180ms 恢复缓冲并记录 `queue-underrun-recovery-prebuffer`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `receivedKeyFramePreserved=false` 且 `receivedKeyFrameExportText` 缺“恢复关键帧已收到”；绿灯后同命令通过。音频专项 `node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000` 通过。
+遗留问题：仍需用户真实最小化/切 app/切回复测，观察是否不再每约 0.9-1.1s 重复 H.264 恢复，以及“恢复关键帧已收到”是否能很快进入绘制。
+下一步建议：双方拉最新；Mac 保持 host 在线；Windows/用户运行 `Run-WinClientRetest-And-Post.cmd`，只上板脱敏 `W2W3Retest=` / `W2H264BoardDiagnosis=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 H.264 恢复后队列宽限防循环
 开发端：Windows Codex
 本轮目标：收口 `a51cc607` 后仍出现的 W2 视频关键帧等待循环，避免后台/切 app 回来后刚请求恢复又立刻被本机队列超时打断。

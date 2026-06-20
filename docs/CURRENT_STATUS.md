@@ -4,6 +4,10 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W4 音频恢复后 underrun 稳定缓冲
+- Windows 控制端在可见性恢复 / snap-live 后的短跟随窗口内，如果 WebAudio 又出现 underrun，不再立刻回到普通 `80ms` 低水位缓冲，而是使用约 `180ms` 的恢复缓冲并记录 `queue-underrun-recovery-prebuffer`，让刚从后台切回来的音频先稳住再追实时。专项测试覆盖 `recoveryUnderrunRebuildBuffer`，`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000` 通过。不改系统声音输出、不请求密码、不认证、不发 input/inject。
+## 2026-06-21 W2 H.264 恢复关键帧进展保护
+- Windows 控制端继续收口 W5 只读审计指出的恢复循环根因：H.264 恢复请求后现在显式区分“已请求关键帧 / 已收到关键帧但未绘制 / 已绘制完成”。当 `keyframe-wait-h264-recovery` 后收到 SPS/PPS/IDR 关键帧时，会记录 `h264RecoveryKeyFrameReceivedAt`，解除 `needsKeyframe`，并在短 decode/draw 宽限内禁止 `queue-overflow-wait-keyframe` 再次 reset decoder，把已经到达的关键帧进展清掉；关键帧真正绘制后清除 `h264RecoveryInFlight`。现场/复制诊断会显示“恢复关键帧已收到”，用来判断复测时是否卡在收到后未绘制阶段。TDD 红灯先失败于 `receivedKeyFramePreserved=false` / 缺少“恢复关键帧已收到”，绿灯后 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject；仍需用户真实最小化/切 app/切回复测。
 ## 2026-06-21 W2 H.264 恢复后队列宽限防循环
 - 针对最新真实复测中 `queue≈533ms`、`decode≈256ms`、`needsKeyframe=yes`、原因反复回到 `queue-overflow-wait-keyframe` 的 W2 视频恢复循环，Windows 控制端新增 H.264 恢复后短队列宽限：刚通过 `keyframe-wait-h264-recovery` / `visibility-return-h264-recovery` 重新请求关键帧后的约 `1600ms` 内，只要本机队列不是极端堆积（最旧帧不超过约 `1200ms`、帧数受刷新率上限约束），不会立刻再次关 decoder 触发 `queue-overflow-wait-keyframe`，而是让关键帧恢复窗口完成；宽限过期或队列过大仍保留原低延迟丢旧保护。页面回归先红于 `postRecoveryQueueGrace=false`，绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 显示 `postRecoveryGrace=yes`。不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject；仍需用户真实最小化/切 app/切回复测确认 W2 是否不再关键帧等待循环。
 ## 2026-06-21 W4 音频恢复后 snap-live 防积压

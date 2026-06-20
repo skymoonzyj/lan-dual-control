@@ -160,6 +160,7 @@ const audioMinimumBufferSeconds = 0.07;
 const audioMaximumQueuedSeconds = 0.45;
 const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
+const audioRecoveryUnderrunBufferSeconds = 0.18;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const audioVisibilityRecoveryMinimumHiddenMs = 250;
 const audioVisibilityRecoveryQueuedSeconds = 0.18;
@@ -180,6 +181,8 @@ const h264KeyFrameWaitRecoveryTimeoutMs = 900;
 const h264KeyFrameWaitRecoveryRetryMs = 900;
 const h264RecoveryQueueGraceMs = 1600;
 const h264RecoveryQueueGraceAgeMs = 1200;
+const h264RecoveryKeyFrameDecodeGraceMs = 1800;
+const h264RecoveryKeyFrameQueueAgeMs = 2200;
 const h264FallbackRecoveryCooldownMs = 2500;
 const h264FallbackRecoveryStableJpegFrames = 3;
 const h264FallbackRecoveryLoopWindowMs = 15000;
@@ -586,6 +589,9 @@ const state = {
   h264KeyFrameWaitStartedAt: 0,
   h264KeyFrameRecoveryLastRequestedAt: 0,
   h264RecoveryQueueGraceUntil: 0,
+  h264RecoveryInFlight: false,
+  h264RecoveryKeyFrameReceivedAt: 0,
+  h264RecoveryFrameDrawnAt: 0,
   h264DecodedFrames: 0,
   h264ReceivedFrames: 0,
   h264ReceivedKeyFrames: 0,
@@ -3149,6 +3155,9 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264KeyFrameWaitStartedAt = 0;
   state.h264KeyFrameRecoveryLastRequestedAt = 0;
   state.h264RecoveryQueueGraceUntil = 0;
+  state.h264RecoveryInFlight = false;
+  state.h264RecoveryKeyFrameReceivedAt = 0;
+  state.h264RecoveryFrameDrawnAt = 0;
   state.h264DecodedFrames = 0;
   if (resetFallback) {
     resetH264ReceiveEvidence();
@@ -3441,6 +3450,15 @@ function shouldSnapAudioQueueToLive(now, currentNow = performance.now()) {
     currentNow - lastVisibilityRecoveryAt <= audioVisibilityRecoveryFollowupWindowMs;
 }
 
+function shouldUseAudioRecoveryUnderrunBuffer(currentNow = performance.now()) {
+  const lastVisibilityRecoveryAt = Number(state.audioVisibilityRecoveryLastAt) || 0;
+  if (lastVisibilityRecoveryAt <= 0 || currentNow - lastVisibilityRecoveryAt > audioVisibilityRecoveryFollowupWindowMs) {
+    return false;
+  }
+  const lastReason = String(state.audioLastDropReason || state.audioLastBufferReason || "");
+  return lastReason === "queue-overflow-snap-live" || lastReason.includes("visibility-return-audio");
+}
+
 function primeAudioPlayback() {
   if (!elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
     return;
@@ -3572,7 +3590,11 @@ async function playPcmAudioFrame(frame) {
       now - lastUnderrunAt <= audioAdaptiveUnderrunWindowSeconds;
     state.audioUnderrunCount = (Number(state.audioUnderrunCount) || 0) + 1;
     state.audioLastUnderrunAt = now;
-    if (isRepeatedUnderrun) {
+    if (shouldUseAudioRecoveryUnderrunBuffer(currentNow)) {
+      state.audioStablePrebufferCount = (Number(state.audioStablePrebufferCount) || 0) + 1;
+      state.audioLastBufferReason = "queue-underrun-recovery-prebuffer";
+      state.audioNextPlayTime = now + audioRecoveryUnderrunBufferSeconds;
+    } else if (isRepeatedUnderrun) {
       state.audioStablePrebufferCount = (Number(state.audioStablePrebufferCount) || 0) + 1;
       state.audioLastBufferReason = "queue-underrun-stable-prebuffer";
       state.audioNextPlayTime = now + audioStableUnderrunBufferSeconds;
@@ -5242,6 +5264,9 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const fallbackRecoveryPauseCount = Number(state.h264FallbackRecoveryPauseCount || state.hostDiagnostics?.h264FallbackRecoveryPauseCount) || 0;
   const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
+  const recoveryInFlight = Boolean(state.h264RecoveryInFlight || state.hostDiagnostics?.h264RecoveryInFlight);
+  const recoveryKeyFrameReceivedAt = Number(state.h264RecoveryKeyFrameReceivedAt || state.hostDiagnostics?.h264RecoveryKeyFrameReceivedAt) || 0;
+  const recoveryFrameDrawnAt = Number(state.h264RecoveryFrameDrawnAt || state.hostDiagnostics?.h264RecoveryFrameDrawnAt) || 0;
   const receivedFrames = Number(state.h264ReceivedFrames || state.hostDiagnostics?.h264ReceivedFrames) || 0;
   const receivedKeyFrames = Number(state.h264ReceivedKeyFrames || state.hostDiagnostics?.h264ReceivedKeyFrames) || 0;
   const receivedSps = Number(state.h264ReceivedSps || state.hostDiagnostics?.h264ReceivedSps) || 0;
@@ -5286,6 +5311,11 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (staleDrops > 0) parts.push(`本地过期丢帧 ${staleDrops}`);
   if (skippedDeltaFrames > 0) parts.push(`跳过 delta ${skippedDeltaFrames}`);
   if (visibilityRecoveryCount > 0) parts.push(`可见恢复 ${visibilityRecoveryCount} 次`);
+  if (recoveryInFlight && recoveryKeyFrameReceivedAt > 0 && recoveryFrameDrawnAt <= 0) {
+    parts.push("恢复关键帧已收到");
+  } else if (recoveryInFlight) {
+    parts.push("恢复关键帧请求中");
+  }
   if (needsKeyFrame && decoderStatus && decoderStatus !== "idle") parts.push("需要关键帧");
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (fallbackRecoveryCount > 0) parts.push(`回退恢复 ${fallbackRecoveryCount} 次`);
@@ -9099,11 +9129,57 @@ function shouldKeepH264DecoderForRecoveryQueueGrace(metrics, now = performance.n
   );
 }
 
+function shouldKeepH264DecoderForReceivedRecoveryKeyFrame(metrics, now = performance.now()) {
+  if (state.h264RecoveryInFlight !== true) {
+    return false;
+  }
+  const receivedAt = Number(state.h264RecoveryKeyFrameReceivedAt) || 0;
+  const drawnAt = Number(state.h264RecoveryFrameDrawnAt) || 0;
+  const timestamp = Number(now);
+  if (receivedAt <= 0 || drawnAt > 0 || !Number.isFinite(timestamp)) {
+    return false;
+  }
+  if (timestamp - receivedAt > h264RecoveryKeyFrameDecodeGraceMs) {
+    return false;
+  }
+  return (
+    metrics.queueLength <= getH264RecoveryQueueGraceFrames() &&
+    metrics.oldestAgeMs <= h264RecoveryKeyFrameQueueAgeMs
+  );
+}
+
+function recordH264RecoveryKeyFrameReceived(now = performance.now()) {
+  if (state.h264RecoveryInFlight !== true) {
+    return;
+  }
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) {
+    return;
+  }
+  if ((Number(state.h264RecoveryKeyFrameReceivedAt) || 0) <= 0) {
+    state.h264RecoveryKeyFrameReceivedAt = timestamp;
+  }
+}
+
+function markH264RecoveryFrameDrawn(now = performance.now()) {
+  if (state.h264RecoveryInFlight !== true) {
+    return;
+  }
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) {
+    return;
+  }
+  state.h264RecoveryFrameDrawnAt = timestamp;
+  state.h264RecoveryInFlight = false;
+  state.h264RecoveryQueueGraceUntil = 0;
+}
+
 function shouldResyncH264DecoderQueue(now = performance.now()) {
   const metrics = getH264DecoderQueueMetrics(now);
   if (
     shouldKeepH264DecoderForFirstSurface(metrics) ||
-    shouldKeepH264DecoderForRecoveryQueueGrace(metrics, now)
+    shouldKeepH264DecoderForRecoveryQueueGrace(metrics, now) ||
+    shouldKeepH264DecoderForReceivedRecoveryKeyFrame(metrics, now)
   ) {
     return false;
   }
@@ -9147,6 +9223,11 @@ function resyncH264DecoderQueueForLatency({
   state.videoLastDropReason = reason;
   state.h264DecoderNeedsKeyFrame = true;
   state.h264DecoderStatus = isKeyFrame ? "resyncing" : "waiting-keyframe";
+  if (!isKeyFrame) {
+    state.h264RecoveryInFlight = false;
+    state.h264RecoveryKeyFrameReceivedAt = 0;
+    state.h264RecoveryFrameDrawnAt = 0;
+  }
   if (isKeyFrame) {
     clearH264KeyFrameWaitTimers();
   } else {
@@ -9206,6 +9287,9 @@ function startH264KeyFrameWait(now = performance.now(), { requestedNow = false }
   if (requestedNow) {
     state.h264KeyFrameRecoveryLastRequestedAt = timestamp;
     state.h264RecoveryQueueGraceUntil = timestamp + h264RecoveryQueueGraceMs;
+    state.h264RecoveryInFlight = true;
+    state.h264RecoveryKeyFrameReceivedAt = 0;
+    state.h264RecoveryFrameDrawnAt = 0;
   }
 }
 
@@ -9624,6 +9708,7 @@ async function renderH264VideoFrame(frame) {
     }
     if (isKeyFrame) {
       state.h264DecoderNeedsKeyFrame = false;
+      recordH264RecoveryKeyFrameReceived();
       clearH264KeyFrameWaitTimers();
     }
     const decoder = await ensureH264Decoder(frame, { currentFrameIsKeyFrame: isKeyFrame });
@@ -9636,6 +9721,7 @@ async function renderH264VideoFrame(frame) {
       frameId: frame.frameId ?? state.videoFrames,
       queuedAt: performance.now(),
       timestampUs,
+      keyFrame: isKeyFrame,
     });
     if (state.h264DecoderQueue.length > 120) {
       state.h264DecoderQueue.shift();
@@ -9682,6 +9768,10 @@ async function ensureH264Decoder(frame, { currentFrameIsKeyFrame = false } = {})
   const previousQueueMs = state.videoDecoderQueueMs;
   const previousDroppedStaleFrames = state.videoDroppedStaleFrames;
   const previousLastDropReason = state.videoLastDropReason;
+  const previousRecoveryInFlight = state.h264RecoveryInFlight;
+  const previousRecoveryKeyFrameReceivedAt = state.h264RecoveryKeyFrameReceivedAt;
+  const previousRecoveryFrameDrawnAt = state.h264RecoveryFrameDrawnAt;
+  const previousRecoveryQueueGraceUntil = state.h264RecoveryQueueGraceUntil;
   resetVideoDecoder();
   state.h264DecoderErrorCount = previousErrorCount;
   state.h264DecoderWarned = previousWarned;
@@ -9689,6 +9779,10 @@ async function ensureH264Decoder(frame, { currentFrameIsKeyFrame = false } = {})
   state.videoDecoderQueueMs = previousQueueMs;
   state.videoDroppedStaleFrames = previousDroppedStaleFrames;
   state.videoLastDropReason = previousLastDropReason;
+  state.h264RecoveryInFlight = previousRecoveryInFlight;
+  state.h264RecoveryKeyFrameReceivedAt = previousRecoveryKeyFrameReceivedAt;
+  state.h264RecoveryFrameDrawnAt = previousRecoveryFrameDrawnAt;
+  state.h264RecoveryQueueGraceUntil = previousRecoveryQueueGraceUntil;
   state.h264DecoderStatus = "configuring";
   state.h264DecoderKey = decoderKey;
   state.h264DecoderCodec = `${decoderKey}:checking`;
@@ -9747,6 +9841,9 @@ function drawDecodedVideoFrame(videoFrame) {
   videoFrame.close();
   state.h264DecodedFrames += 1;
   state.h264DecoderStatus = "rendering";
+  if (decodedMeta?.keyFrame) {
+    markH264RecoveryFrameDrawn();
+  }
   state.h264DecoderLatencyMs = decodedMeta?.queuedAt
     ? performance.now() - decodedMeta.queuedAt
     : state.h264DecoderLatencyMs;
