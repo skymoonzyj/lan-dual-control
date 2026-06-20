@@ -8,6 +8,8 @@ const repoRoot = resolve(scriptDir, "../..");
 const script = "scripts/windows/check-windows-manual-ux-status.mjs";
 const defaultTimeoutMs = 20000;
 const defaultChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const macManualUxReconfirmCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json";
 
 function printHelp() {
   console.log(`Usage:
@@ -185,6 +187,31 @@ function waitingBoardState() {
     recentEvents: [],
   };
 }
+function timeoutReconfirmBoardState() {
+  return {
+    updatedAt: "2026-06-20T09:10:00.000Z",
+    currentCall: {
+      status: "CALLING",
+      from: "Mac Codex",
+      need: "Windows Codex, User",
+      goal: "Mac manual UX validation: user-present real experience test",
+      expected: "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+    },
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: `MacHeartbeat=status=ok; host=192.168.31.122:43770; MacManualUx=status=calling ManualUxChecklist=${defaultChecklist} ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout; MacClientManualChecklist=${macClientManualChecklistAction}`,
+        updatedAt: "2026-06-20T09:09:57.000Z",
+      },
+      "Mac Unattended": {
+        status: "online",
+        note: `MacClientManualChecklist=${macClientManualChecklistAction}; MacClientManualChecklist=${macClientManualChecklistAction} password=secret-value; MacClientManualChecklist=${macClientManualChecklistAction}；自动发送 input_event`,
+        updatedAt: "2026-06-20T09:09:58.000Z",
+      },
+    },
+    recentEvents: [],
+  };
+}
 
 function usableEntryCurrentCallBoardState() {
   return {
@@ -308,6 +335,32 @@ async function checkRequireReadyFailure(args) {
   });
   console.log("[OK] Windows manual UX status requireReady fails closed before standby signal");
 }
+async function checkTimeoutReconfirmAndMacClientChecklist(args) {
+  await withFakeBoard(timeoutReconfirmBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--requireReady", "--json"], args);
+    assert(result.exitCode === 1, `timeout/reconfirm requireReady should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "timeout/reconfirm JSON");
+    assert(payload.status === "reconfirm", `timeout/reconfirm status mismatch: ${payload.status}`);
+    assert(payload.ok === false, "timeout/reconfirm should not be treated as ready for manual testing");
+    assert(payload.signals?.macManualUx === true, "timeout/reconfirm should detect MacManualUx summary");
+    assert(payload.signals?.macClientManualChecklist === true, "timeout/reconfirm should detect MacClientManualChecklist");
+    assert(payload.macManualUx?.status === "calling", "MacManualUx status should be preserved");
+    assert(payload.macManualUx?.next === "ReconfirmManualUxCall", "MacManualUx next should request reconfirm");
+    assert(payload.macManualUx?.manualUxCall === "timeout", "MacManualUx timeout should be preserved");
+    assert(payload.macManualUx?.manualUxReconfirmCommand === macManualUxReconfirmCommand, "MacManualUx safe reconfirm command mismatch");
+    assert(payload.macClientManualChecklist?.found === true, "MacClientManualChecklist should be found");
+    assert(payload.macClientManualChecklist.action === macClientManualChecklistAction, "MacClientManualChecklist action mismatch");
+    assert(payload.macClientManualChecklist.rejectedCount >= 2, "unsafe MacClientManualChecklist candidates should be rejected");
+    assertIncludes(payload.boardSummary, "WindowsManualUx=status=reconfirm", "timeout/reconfirm boardSummary");
+    assertIncludes(payload.boardSummary, "Next=AskMacReconfirmManualUxCall", "timeout/reconfirm boardSummary");
+    assertIncludes(payload.boardSummary, `MacManualUxReconfirm=${macManualUxReconfirmCommand}`, "timeout/reconfirm boardSummary");
+    assertIncludes(payload.boardSummary, `MacClientManualChecklist=${macClientManualChecklistAction}`, "timeout/reconfirm boardSummary");
+    const combined = JSON.stringify(payload);
+    assertNotIncludes(combined, "secret-value", "timeout/reconfirm JSON");
+    assertNotIncludes(combined, "自动发送 input_event", "timeout/reconfirm JSON");
+  });
+  console.log("[OK] Windows manual UX status blocks timed-out Mac manual UX and surfaces safe checklist");
+}
 
 async function checkUsableEntryCurrentCallIsReady(args) {
   await withFakeBoard(usableEntryCurrentCallBoardState(), async (serverUrl) => {
@@ -338,6 +391,7 @@ async function main() {
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
   await checkRequireReadyFailure(args);
+  await checkTimeoutReconfirmAndMacClientChecklist(args);
   await checkUsableEntryCurrentCallIsReady(args);
   console.log("[OK] Windows manual UX status checks passed");
 }

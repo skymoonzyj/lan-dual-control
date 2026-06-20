@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 手工体验第一屏消费 timeout/reconfirm
+开发端：Windows Codex
+本轮目标：让 `check-windows-manual-ux-status` 不再把已经超时的 Mac manual UX call 当作普通等待/可测状态，并把 Mac client 页面手工清单带到 Windows 手工体验第一屏。
+完成内容：
+- `check-windows-manual-ux-status --boardSummary` 现在安全解析 `MacManualUx=`。
+- 当 `ManualUxCall=timeout`、`Next=ReconfirmManualUxCall` 或 `warnings=manual-ux-call-timeout` 出现时，输出 `WindowsManualUx=status=reconfirm` 和 `Next=AskMacReconfirmManualUxCall`。
+- JSON / 普通输出 / `--boardSummary` 会显示安全的 `MacManualUxReconfirm=`，供 Mac 端显式重新发起新的 5-10 分钟手工体验 call。
+- 同一脚本现在也会安全解析 `MacClientManualChecklist=`，只接受固定清单文案或页面离线前缀，拒绝 password/token/secret、`input_event`、`inject` 或自动发送伪造候选。
+- `--requireReady` 在 reconfirm 状态下非零退出，避免自动化误判“可开始测试”。
+修改文件：
+- `scripts/windows/check-windows-manual-ux-status.mjs`
+- `scripts/windows/test-windows-manual-ux-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000` 先失败于 `timeout/reconfirm status mismatch: waiting`。
+- 绿灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 45000`
+- 真实通讯板：`node scripts/windows/check-windows-manual-ux-status.mjs --boardSummary --requireReady --timeoutMs 10000` 输出 `WindowsManualUx=status=reconfirm`，并按预期非零退出。
+遗留问题：
+- 真实手工体验仍需用户在场；该脚本只负责第一屏判断，不会自动确认 call 或打开连接。
+下一步建议：
+- 白天用户准备测试时先跑该脚本；若显示 `status=reconfirm`，让 Mac 端重新发起/确认 manual UX call，再进入连接、视频、音频、剪贴板和复制诊断验收。
+是否改了协议：否，只是安全消费通讯板已有只读摘要。
+是否需要另一端配合：Mac 端无需改代码；真实体验前按 `MacManualUxReconfirm=` 重新确认 call。
 日期：2026-06-20 Windows 消费 MacClientManualChecklist
 开发端：Windows Codex
 本轮目标：让 Windows resume/status 看懂 Mac 端新加的 Mac client 页面手工清单提示，开工第一屏即可知道现场要测连接、视频、音频、剪贴板、input_ack 和复制诊断。
