@@ -3,8 +3,12 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
 ## 2026-06-20 C2 Agent Link Board presence API
 - `scripts/codex-link-server.mjs` 现在保留 state 文件里的 `userPresence` 和 `pinnedTasks`，避免联络板服务重启后把“用户在场/不在场”和置顶任务清掉；新增 `POST /api/presence`，只接受 `present/away` 及常见中英文同义词，写入结构化 `state.userPresence` 并追加 `presence` 事件。`scripts/codex-link-client.mjs` 新增 `presence --status present|away --updatedBy <agent> --reason <text>`，可从命令行同步用户是否在场。该入口只同步协作状态，不代表可以跳过提示音、目标说明、安全边界或预计耗时；不认证、不请求或发送密码、不发 input/inject。
+
+## 2026-06-20 W2 Windows H.264 fallback/recovery 循环诊断
+- Windows 控制端现在会记录 H.264 `keyframe-wait-timeout-fallback` 进入 MJPEG/JPEG 兜底并成功恢复 H.264 的完整循环次数：`h264FallbackRecoveryCount` 每次恢复请求递增，并保留 `h264FallbackLastReason`。现场诊断、复制/导出诊断和页面自测会显示 `回退恢复 <n> 次` 与 `最近回退：<原因>`，用于判断用户反馈“不像 60Hz / 卡顿”时是一次性兜底，还是反复在 H.264 与 JPEG 之间循环。页面自测先红于缺少 `回退恢复 1 次` / 最近回退原因，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 ## 2026-06-20 M2 Mac Input Safety sendStatus
 - `check-mac-input-safety-status` 新增 `--sendStatus`：会在完成只读 `/discovery` 和可选 `--checkBoard` 后，把当前 `MacInputSafetyStatus=` 摘要发布到 Agent Link Board 的 `Mac Input Safety` 状态。`userPresence=away` 时仍发布 `status=blocked reason=user-away MacInputSafetyAction=no-auth-only blocker=BLOCKED_BY_USER_AWAY`，但进程保持非零退出，避免把 blocked 误当通过；`present`/ready 时才会带 `UserNotice*` 和 rehearsal 命令提示。该入口只发无密状态，不启动 host、不请求密码、不认证、不发送 input_event、不执行 inject。

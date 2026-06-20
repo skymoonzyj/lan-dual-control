@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W2 Windows H.264 fallback/recovery 循环诊断：Windows 控制端在 JPEG 兜底稳定并恢复 H.264 后记录 `h264FallbackRecoveryCount` 和 `h264FallbackLastReason`，现场诊断/复制诊断显示 `回退恢复 <n> 次` 与最近回退原因；页面自测先红于缺少循环诊断，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] M2 Mac Input Safety sendStatus：`check-mac-input-safety-status --sendStatus --checkBoard --boardSummary` 可把当前 `MacInputSafetyStatus=` 发布到 Agent Link Board 的 `Mac Input Safety` 状态；`userPresence=away` 时发布 blocked/no-auth-only 且保持非零退出，避免旧 present/ready 摘要误导后续真实输入流程。只读、不启动 host、不请求密码、不认证、不发 input/inject。
 - [x] M2 Windows 恢复总览消费 MacInputSafety UserNotice：只读识别 `UserNoticeGoal/Action/Boundary/Duration`，JSON、普通输出和 `--boardSummary` 新增 `MacInputSafetyUserNotice=`，让真实 Mac 输入测试前的目标、用户动作、安全边界和预计耗时在 Windows 第一屏可见；测试先红于缺少 UserNotice，再绿于 `test-windows-resume-status`。不认证、不请求或发送密码、不发 input/inject。
 - [x] W3/M1 Windows 控制端消费 Mac remote audio consent/restore guard：识别 `Consent=explicit-before-change` / `RestorePath=required-before-apply`，Mac 提醒区、值守证据和复制/导出诊断新增“恢复路径需先确认”；页面自测红绿灯通过；同时清理上一轮 stale `ACTIVE_LOCKS` 当前占用。不改协议、不认证、不请求或发送密码、不发 input/inject。

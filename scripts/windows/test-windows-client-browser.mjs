@@ -5051,6 +5051,8 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalFallbackRecoveryDueAt = state.h264FallbackRecoveryDueAt;
       const originalFallbackRecoveryJpegFrames = state.h264FallbackRecoveryJpegFrames;
       const originalFallbackRecoveryRequested = state.h264FallbackRecoveryRequested;
+      const originalFallbackRecoveryCount = state.h264FallbackRecoveryCount;
+      const originalFallbackLastReason = state.h264FallbackLastReason;
       const originalConnected = state.connected;
       const originalClient = state.client;
       const originalVideoFrames = state.videoFrames;
@@ -5233,6 +5235,8 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264SkippedDeltaFrames = 89;
         state.h264FallbackActive = false;
         state.h264FallbackReason = "";
+        state.h264FallbackRecoveryCount = 0;
+        state.h264FallbackLastReason = "";
         state.videoLastDropReason = "";
         state.videoDroppedStaleFrames = 0;
         state.videoFrames = 0;
@@ -5283,12 +5287,17 @@ async function verifyH264LatencyQueueGuard(session) {
           height: 1080,
           frameId: 393,
         });
+        const fallbackRecoveryExportText = getVideoPerformanceExportStatus();
         const fallbackRecovery =
           fallbackSettings.length === 2 &&
           fallbackSettings[1]?.preferredVideoCodec === "h264" &&
           fallbackSettings[1]?.preferredVideoEncoding === "annexb" &&
           state.h264FallbackActive === false &&
-          state.h264DecoderStatus === "recovering";
+          state.h264DecoderStatus === "recovering" &&
+          state.h264FallbackRecoveryCount === 1 &&
+          String(state.h264FallbackLastReason || "").includes("关键帧") &&
+          fallbackRecoveryExportText.includes("回退恢复 1 次") &&
+          fallbackRecoveryExportText.includes("最近回退：");
 
         return {
           ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitFallback && fallbackRecovery,
@@ -5297,6 +5306,9 @@ async function verifyH264LatencyQueueGuard(session) {
           webCodecsQueueBackpressure,
           keyFrameWaitFallback,
           fallbackRecovery,
+          fallbackRecoveryCount: state.h264FallbackRecoveryCount,
+          fallbackLastReason: state.h264FallbackLastReason,
+          fallbackRecoveryExportText,
           keyFrameWaitFallbackExportText,
           fallbackSettings,
           fallbackReason: state.h264FallbackReason,
@@ -5334,6 +5346,8 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264FallbackRecoveryDueAt = originalFallbackRecoveryDueAt;
         state.h264FallbackRecoveryJpegFrames = originalFallbackRecoveryJpegFrames;
         state.h264FallbackRecoveryRequested = originalFallbackRecoveryRequested;
+        state.h264FallbackRecoveryCount = originalFallbackRecoveryCount;
+        state.h264FallbackLastReason = originalFallbackLastReason;
         state.connected = originalConnected;
         state.client = originalClient;
         state.videoFrames = originalVideoFrames;

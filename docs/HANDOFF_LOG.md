@@ -16,6 +16,32 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W2 Windows H.264 fallback/recovery 循环诊断
+开发端：Windows Codex
+本轮目标：让 Windows 控制端能区分一次性 H.264 兜底恢复与反复 H.264/JPEG 循环，方便后续定位“不像 60Hz / 卡顿”。
+完成内容：
+- `requestJpegVideoFallback` 保留最近 H.264 fallback 原因。
+- `maybeRecoverH264VideoFallback` 在 JPEG 稳定后恢复 H.264 时递增 `h264FallbackRecoveryCount`。
+- 现场视频诊断、复制/导出诊断和页面自测新增 `回退恢复 <n> 次` / `最近回退：<原因>`。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `fallbackRecoveryCount=0`、`fallbackLastReason=""`、导出诊断缺少 `回退恢复 1 次`。
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：这只是 Windows 控制端可见诊断；如果现场反复增长，仍要继续查 Mac 端关键帧/GOP、采集编码稳定性、网络丢关键帧或 WebCodecs 背压。
+下一步建议：真机手工体验时让用户复制 Windows 控制端诊断，先看 `回退恢复` 次数是否持续增加，再决定查编码端还是网络/浏览器端。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真机观感测试需要用户在场。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 C2 Agent Link Board presence API
