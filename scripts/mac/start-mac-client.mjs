@@ -68,6 +68,7 @@ const allowedMacUnattendedFindings = new Set([
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
 const manualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const passwordLocationAction = "Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断";
 const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 const reverseRehearsalAction = "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 const reverseGrantCopyAction = "LAN008 后在 Mac client 页面点击“复制 PowerShell”和“复制 Node”，确认复制文本不含连接密码且不会发送 input_event";
@@ -160,6 +161,10 @@ Machine-readable JSON fields:
                          Safe in-page action for reviewing the manual checklist
                          row and copying diagnostics without including the
                          connection password.
+  commands.macClientPasswordLocationAction
+                         Safe in-page action for finding where to enter the
+                         Windows temporary password on the Mac client page
+                         without sending or saving it.
   commands.macClientCopyDiagnosticsAction
                          Safe in-page action for copying diagnostics after
                          confirming no connection password is included.
@@ -545,6 +550,7 @@ function makeBoardSummary(report) {
       `${macUsableEntrySummary}.`,
       `MacPowerPlan=${macPowerPlanCommand}.`,
       `MacClientManualChecklist=${manualChecklistAction}.`,
+      `MacClientPasswordLocation=${passwordLocationAction}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
     ].join(" ");
@@ -567,6 +573,7 @@ function makeBoardSummary(report) {
     `${macUsableEntrySummary}.`,
     `MacPowerPlan=${macPowerPlanCommand}.`,
     `MacClientManualChecklist=页面在线后在 ${manualChecklistAction}.`,
+    `MacClientPasswordLocation=页面在线后确认 ${passwordLocationAction}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
   ].join(" ");
@@ -589,6 +596,7 @@ function makeCommands(args) {
     macControlWindowsEntryCommand,
     macPowerPlanCommand,
     macClientManualChecklistAction: manualChecklistAction,
+    macClientPasswordLocationAction: passwordLocationAction,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };
 }
