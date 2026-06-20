@@ -6,7 +6,7 @@ const defaults = {
   intervalMs: 1000,
 };
 
-const defaultWatchOnceEventLimit = 10;
+const defaultRecentEventLimit = 10;
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
@@ -82,7 +82,7 @@ async function watch(options) {
     }
 
     const events = state.events || [];
-    const visibleEvents = once ? selectWatchOnceEvents(events, options) : events;
+    const visibleEvents = once ? selectRecentEvents(events, options) : events;
     if (once && visibleEvents.length < events.length) {
       console.log(`recentEvents: last ${visibleEvents.length} of ${events.length}`);
     }
@@ -105,14 +105,14 @@ function printWatchHeader(state) {
   console.log("");
 }
 
-function selectWatchOnceEvents(events, options) {
+function selectRecentEvents(events, options) {
   if (options.allEvents) return events;
-  return events.slice(-getWatchOnceEventLimit(options));
+  return events.slice(-getRecentEventLimit(options));
 }
 
-function getWatchOnceEventLimit(options) {
-  const value = Number(options.eventLimit || options.events || defaultWatchOnceEventLimit);
-  if (!Number.isSafeInteger(value) || value < 1) return defaultWatchOnceEventLimit;
+function getRecentEventLimit(options) {
+  const value = Number(options.eventLimit || options.events || defaultRecentEventLimit);
+  if (!Number.isSafeInteger(value) || value < 1) return defaultRecentEventLimit;
   return value;
 }
 
@@ -182,8 +182,14 @@ function printState(state, options = {}) {
     console.log(`  ${device}: ${item.status || ""}${item.note ? ` - ${item.note}` : ""}`);
   }
   console.log("");
-  console.log("recentEvents:");
-  for (const event of (state.events || []).slice(-10)) {
+  const events = state.events || [];
+  const visibleEvents = selectRecentEvents(events, options);
+  if (visibleEvents.length < events.length) {
+    console.log(`recentEvents: last ${visibleEvents.length} of ${events.length}`);
+  } else {
+    console.log("recentEvents:");
+  }
+  for (const event of visibleEvents) {
     console.log(`  ${formatEvent(event)}`);
   }
 }
@@ -250,7 +256,7 @@ function sleep(ms) {
 function printHelp() {
   console.log(`Usage:
   node scripts/codex-link-client.mjs --server http://host:17888 watch [--once] [--eventLimit 10] [--allEvents]
-  node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
+  node scripts/codex-link-client.mjs --server http://host:17888 state [--json] [--eventLimit 10] [--allEvents]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
   node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"
   node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"

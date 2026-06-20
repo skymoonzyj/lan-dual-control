@@ -209,6 +209,48 @@ async function checkStateTextStillHumanReadable(args) {
   console.log("[OK] codex-link-client state default output stays human-readable");
 }
 
+async function checkStateTextLimitsEventsByDefault(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "state"], args);
+    assert(result.status === 0, `state text should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "recentEvents: last 10 of 15", "state text recent event summary");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 1\n", "state text default events");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 5\n", "state text default events");
+    assertIncludes(result.stdout, "message Mac Codex: event 6\n", "state text default events");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "state text default events");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `state text should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client state defaults to the most recent events");
+}
+
+async function checkStateTextCanShowAllEvents(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "state", "--allEvents"], args);
+    assert(result.status === 0, `state --allEvents should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertNotIncludes(result.stdout, "recentEvents: last 10 of 15", "state --allEvents");
+    assertIncludes(result.stdout, "message Mac Codex: event 1\n", "state --allEvents");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "state --allEvents");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `state --allEvents should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client state can still show the full event history");
+}
+
+async function checkStateTextAcceptsCustomEventLimit(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "state", "--eventLimit", "3"], args);
+    assert(result.status === 0, `state --eventLimit 3 should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "recentEvents: last 3 of 15", "state --eventLimit");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 12\n", "state --eventLimit");
+    assertIncludes(result.stdout, "message Mac Codex: event 13\n", "state --eventLimit");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "state --eventLimit");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `state --eventLimit should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client state accepts a custom recent event limit");
+}
+
 async function checkWatchOnceShowsUserPresence(args) {
   await withFakeBoard(makeState(), async (serverUrl, requests) => {
     const result = await run(["--server", serverUrl, "watch", "--once"], args);
@@ -322,6 +364,9 @@ async function main() {
 
   await checkStateJson(args);
   await checkStateTextStillHumanReadable(args);
+  await checkStateTextLimitsEventsByDefault(args);
+  await checkStateTextCanShowAllEvents(args);
+  await checkStateTextAcceptsCustomEventLimit(args);
   await checkWatchOnceShowsUserPresence(args);
   await checkWatchOnceLimitsEventsByDefault(args);
   await checkWatchOnceCanShowAllEvents(args);
