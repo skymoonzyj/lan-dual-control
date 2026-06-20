@@ -52,6 +52,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows mac-codex-stale 动作提示
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏在 Mac Codex 心跳过期时给出无密、可执行的刷新/呼叫动作，避免只看到 blocked 文本却不知道下一步。
+完成内容：
+- `check-windows-resume-status` 在 `MacHeartbeatHealth` 的 reason/blockers/warnings 含 `mac-codex-stale` 时输出 `MacCodexStaleAction=...`。
+- 同一状态下输出可复制 `MacCodexStaleCall=node scripts/codex-link-client.mjs ... call ...`，用于需要 Mac Codex 配合时手动发起无密 call。
+- Node 与 PowerShell wrapper 回归覆盖 board summary 和普通输出；敏感候选仍不泄漏。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于缺少 `MacCodexStaleAction=`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- `MacCodexStaleCall=` 只是手动呼叫建议；Mac host/Mac client 是否在线仍看 `MacHeartbeatHealth`、`MacManualUx`、discovery 和真实体验诊断。
+下一步建议：
+- 下次若通讯板再次出现 `reason=mac-codex-stale`，Windows 侧先跑 resume/status，看同屏 `MacCodexStaleAction=`；需要对方时再复制 `MacCodexStaleCall=`，不要发送密码或系统账号。
+是否改了协议：否。只扩展 Windows 只读状态摘要和提示。
+是否需要另一端配合：不需要立即配合；只有将来 Mac Codex stale 时按提示刷新或响应 call。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 消费 MacManualUx TargetSource
 开发端：Windows Codex
 本轮目标：让 Windows 手工体验第一屏和恢复总览读懂 Mac 上板的 `MacManualUx TargetSource=`，避免目标来源显示为 unknown 或被误判。

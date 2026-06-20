@@ -3962,6 +3962,60 @@ function makeManualUxAckCommand(server, macManualUx) {
   ].map(quoteCommandArg).join(" ");
 }
 
+function healthHasToken(health, token) {
+  if (!health?.found) return false;
+  const needle = String(token || "").toLowerCase();
+  const values = [
+    health.status,
+    health.reason,
+    ...(Array.isArray(health.blockers) ? health.blockers : []),
+    ...(Array.isArray(health.warnings) ? health.warnings : []),
+  ];
+  return values.some((value) => String(value || "").toLowerCase() === needle);
+}
+
+function makeMacCodexStaleCallCommand(server) {
+  return [
+    "node",
+    "scripts/codex-link-client.mjs",
+    "--server",
+    server || defaults.server,
+    "call",
+    "--from",
+    "Windows Codex",
+    "--need",
+    "Mac Codex",
+    "--goal",
+    "Refresh Mac Codex heartbeat",
+    "--ask",
+    "请刷新或继续 Mac Codex，并重新上报 MacHeartbeat/ManualUx 状态；不要发送密码、密钥或系统账号。",
+    "--timeout",
+    "10m",
+  ].map(quoteCommandArg).join(" ");
+}
+
+function makeMacCodexStaleAction(args, macHeartbeatHealth) {
+  if (!healthHasToken(macHeartbeatHealth, "mac-codex-stale")) {
+    return {
+      found: false,
+      status: "clear",
+      reason: "not-stale",
+      next: "",
+      summary: "status=clear",
+      callCommand: "",
+    };
+  }
+
+  return {
+    found: true,
+    status: "blocked",
+    reason: "mac-codex-stale",
+    next: "RefreshAgentLinkBoardOrCallMacCodex",
+    summary: "status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex",
+    callCommand: makeMacCodexStaleCallCommand(args.server),
+  };
+}
+
 function makeMacManualUxAck(args, macManualUx) {
   if (!macManualUx?.found) {
     return {
@@ -4590,6 +4644,12 @@ function makeBoardSummary(report) {
     ...(report.board.macHeartbeatHealth?.found
       ? [`MacHeartbeatHealth=${report.board.macHeartbeatHealth.summary}.`]
       : []),
+    ...(report.board.macCodexStaleAction?.found
+      ? [
+        `MacCodexStaleAction=${report.board.macCodexStaleAction.summary}.`,
+        `MacCodexStaleCall=${report.board.macCodexStaleAction.callCommand}.`,
+      ]
+      : []),
     ...(report.board.macPowerHealth?.found
       ? [`MacPowerHealth=${report.board.macPowerHealth.summary}.`]
       : []),
@@ -4919,6 +4979,7 @@ async function makeReport(args) {
     failedChecks: [],
   };
   report.board.macManualUxAck = makeMacManualUxAck(effectiveArgs, report.board?.macManualUx);
+  report.board.macCodexStaleAction = makeMacCodexStaleAction(effectiveArgs, report.board?.macHeartbeatHealth);
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
   report.sentUserAuthRequest = sendUserAuthRequest(effectiveArgs, report);
@@ -5030,6 +5091,10 @@ function printHuman(report) {
     }
     if (report.board.macHeartbeatHealth?.found) {
       console.log(`  MacHeartbeatHealth=${report.board.macHeartbeatHealth.summary}`);
+    }
+    if (report.board.macCodexStaleAction?.found) {
+      console.log(`  MacCodexStaleAction=${report.board.macCodexStaleAction.summary}`);
+      console.log(`  MacCodexStaleCall=${report.board.macCodexStaleAction.callCommand}`);
     }
     if (report.board.macPowerHealth?.found) {
       console.log(`  MacPowerHealth=${report.board.macPowerHealth.summary}`);

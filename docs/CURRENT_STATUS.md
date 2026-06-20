@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows mac-codex-stale 动作提示
+- `check-windows-resume-status --checkBoard --boardSummary` 现在在只读通讯板时，如果最新 `MacHeartbeatHealth=` 的 `reason`、`blockers` 或 `warnings` 明确包含 `mac-codex-stale`，会额外输出 `MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex` 和无密 `MacCodexStaleCall=node scripts/codex-link-client.mjs ... call ...`。该命令只用于需要 Mac Codex 配合时手动复制发起呼叫；默认不自动发送 call、不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。Mac 心跳恢复 `ok` 时该字段不显示。
 ## 2026-06-20 Windows 消费 MacManualUx TargetSource
 - `check-windows-manual-ux-status --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 现在会安全消费 Mac 上板的 `MacManualUx TargetSource=`，支持 `board`、`mac-host-discovery`、`board-discovery`、`manual`、`agent-link-board`、`current-call` 等白名单来源；手工体验第一屏会输出顶层 `TargetSource=...`，恢复总览的 `MacManualUx=` 摘要会保留 `targetSource=...`。缺失时保持 `unknown`，不把来源当成已连接/已认证证据；仍只读通讯板，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 

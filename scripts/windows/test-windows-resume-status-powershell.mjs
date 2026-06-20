@@ -926,6 +926,8 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth blocked board summary failed\n${output}`);
       assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none.`, "PowerShell MacHeartbeatHealth blocked board summary");
+      assertIncludes(output, "MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex", "PowerShell MacCodexStaleAction board summary");
+      assertIncludes(output, "MacCodexStaleCall=node scripts/codex-link-client.mjs", "PowerShell MacCodexStaleAction call command");
       assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth blocked board summary should not leak rejected candidates");
     }, {
       statuses: {
@@ -960,6 +962,7 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth human output failed\n${output}`);
       assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`, "PowerShell MacHeartbeatHealth human output");
+      assertIncludes(output, "MacCodexStaleAction=status=blocked reason=mac-codex-stale", "PowerShell MacCodexStaleAction human output");
       assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth human output should not leak rejected candidates");
       console.log("[OK] PowerShell resume status extracts Mac heartbeat health from Agent Link Board safely");
     }, {
