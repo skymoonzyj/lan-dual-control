@@ -3672,6 +3672,132 @@ function extractWindowsSecureAuthPathFromBoardState(state) {
   };
 }
 
+function emptyWinClientRetestPreflight(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    status: "not-seen",
+    target: "",
+    host: "",
+    port: null,
+    build: "",
+    diagnostics: "unknown",
+    next: windowsClientRetestAndPostUserEntryCommand,
+    summary: "not-seen",
+    rejectedCount,
+  };
+}
+
+function splitWinClientRetestPreflightSegments(text) {
+  const source = String(text || "");
+  const matches = [...source.matchAll(/\bWinClientRetestPreflight\s*=\s*/gi)];
+  return matches.map((match, index) => {
+    const next = matches[index + 1];
+    return source.slice(match.index, next ? next.index : source.length);
+  });
+}
+
+function hasUnsafeWinClientRetestPreflightText(text) {
+  const value = String(text || "");
+  return (
+    /\b(?:LAN_DUAL_PASSWORD|CODEX_LINK_TOKEN)\s*=/i.test(value) ||
+    /\b(?:password|token|secret|passwd|pwd|credential|cookie)\s*[:=]\s*\S+/i.test(value) ||
+    /(?:^|\s)-{1,2}(?:password|token|secret|passwd|pwd)\b/i.test(value) ||
+    /(?:secret-value|密钥\s*[:=]|密码\s*[:=]|口令\s*[:=]|令牌\s*[:=])/i.test(value) ||
+    /\b(?:input_event|input_events)\b/i.test(value) ||
+    /(?:\$\(|`|\||>|<)/.test(value)
+  );
+}
+
+function parseWinClientRetestPreflightDiagnostics(text) {
+  const value = String(text || "");
+  const labeled = normalizeSafeMacReadyToken(extractLabeledValue(value, "diagnostics"));
+  if (/^(?:passed|pass|ok|ready)$/i.test(labeled)) return "passed";
+  if (/^(?:failed|fail|blocked|error)$/i.test(labeled)) return "failed";
+  if (/\b(?:Windows\s+client\s+)?diagnostics(?:[-\s]only)?\s*(?:=|:)?\s*(?:passed|pass|ok)\b/i.test(value)) return "passed";
+  if (/\b(?:Windows\s+client\s+)?diagnostics(?:[-\s]only)?\s*(?:=|:)?\s*(?:failed|fail|blocked|error)\b/i.test(value)) return "failed";
+  return "unknown";
+}
+
+function parseWinClientRetestPreflightSegment(segment, source) {
+  const text = String(segment || "");
+  const statusMatch = /\bWinClientRetestPreflight\s*=\s*([A-Za-z0-9_-]+)/i.exec(text);
+  const status = normalizeSafeMacReadyToken(statusMatch?.[1] || "").toLowerCase();
+  if (status !== "ready") return null;
+  if (hasUnsafeWinClientRetestPreflightText(text)) return null;
+
+  const targetMatch = /\b(?:Discovery\s+)?target\s*=\s*([A-Za-z0-9_.:\[\]-]+)(?:\/build=([A-Za-z0-9._-]+))?/i.exec(text);
+  const target = targetMatch ? parseMacReadyHostPort(targetMatch[1], "") : null;
+  if (!target) return null;
+
+  const build = normalizeSafeMacReadyToken(targetMatch?.[2] || extractLabeledValue(text, "runtimeBuild") || extractLabeledValue(text, "build"));
+  const diagnostics = parseWinClientRetestPreflightDiagnostics(text);
+  const targetText = target ? `${target.host}:${target.port}` : "unknown";
+  const summary = [
+    "ready",
+    `target=${targetText}`,
+    build ? `build=${build}` : "",
+    `diagnostics=${diagnostics}`,
+    `next=${windowsClientRetestAndPostUserEntryCommand}`,
+  ].filter(Boolean).join(" ");
+
+  return {
+    found: true,
+    source,
+    status: "ready",
+    target: target ? targetText : "",
+    host: target?.host || "",
+    port: target?.port || null,
+    build,
+    diagnostics,
+    next: windowsClientRetestAndPostUserEntryCommand,
+    summary,
+  };
+}
+
+function extractWinClientRetestPreflightFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitWinClientRetestPreflightSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseWinClientRetestPreflightSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyWinClientRetestPreflight(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractWinClientRetestPreflightFromBoardState(state) {
+  const allTexts = collectStringValues(state);
+  const allResult = extractWinClientRetestPreflightFromTexts(allTexts, "api-state");
+  const statusTexts = collectStringValues(state?.statuses);
+  const statusResult = extractWinClientRetestPreflightFromTexts(statusTexts, "api-state");
+  if (!statusResult.found) return allResult;
+  return {
+    ...statusResult,
+    textCount: allResult.textCount,
+    segmentCount: allResult.segmentCount,
+    rejectedCount: allResult.rejectedCount,
+  };
+}
+
+function extractWinClientRetestPreflightFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractWinClientRetestPreflightFromTexts(value ? [value] : [], source);
+}
 const windowsLanRiskLabels = new Set([
   "none",
   "not-checked",
@@ -3869,6 +3995,7 @@ async function getBoardSnapshot(args) {
       macUnattendedHealth: emptyMacUnattendedHealth("skipped"),
       macEvidence: emptyMacEvidence("skipped"),
       macReadyForRealTest: emptyMacReadyForRealTest("skipped"),
+      winClientRetestPreflight: emptyWinClientRetestPreflight("skipped"),
       windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
@@ -3918,6 +4045,7 @@ async function getBoardSnapshot(args) {
       macUnattendedHealth: extractMacUnattendedHealthFromBoardState(stateResult.state),
       macEvidence: extractMacEvidenceFromBoardState(stateResult.state),
       macReadyForRealTest: extractMacReadyForRealTestFromBoardState(stateResult.state),
+      winClientRetestPreflight: extractWinClientRetestPreflightFromBoardState(stateResult.state),
       windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
@@ -3972,6 +4100,7 @@ async function getBoardSnapshot(args) {
     macUnattendedHealth: extractMacUnattendedHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macEvidence: extractMacEvidenceFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macReadyForRealTest: extractMacReadyForRealTestFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    winClientRetestPreflight: extractWinClientRetestPreflightFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
@@ -5073,6 +5202,9 @@ function makeBoardSummary(report) {
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
       : []),
+    ...(report.board.winClientRetestPreflight?.found
+      ? [`WinClientRetestPreflight=${report.board.winClientRetestPreflight.summary}.`]
+      : []),
     ...makePrimaryNextSegments(report, mac),
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
@@ -5614,6 +5746,9 @@ function printHuman(report) {
     console.log(`  WindowsFirewallPreview=${report.commands.windowsFirewallPreviewBoardSummary}`);
     if (report.board.windowsLanRisk?.found) {
       console.log(`  WindowsLanRisk=${report.board.windowsLanRisk.summary}`);
+    }
+    if (report.board.winClientRetestPreflight?.found) {
+      console.log(`  WinClientRetestPreflight=${report.board.winClientRetestPreflight.summary}`);
     }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");

@@ -12,6 +12,9 @@
 
 - W2/W3 后续复测口径：如果体验收口中再次发现黑屏、卡顿或声音断续，再重新运行对应真实复测/诊断；只有 `W2W3Retest h264=` 显示 `decoded=0`、`canvas=false image=false`、`needsKeyframe=yes` 或 `h264Errors>0` 时，才回到 H.264/WebCodecs 诊断。当前已有 PASS 证据为 `canvas=true 1920x1080`、`decoded=已绘制 18`、`h264Errors=0`、实收约 `89.8 FPS`、音频 `14/14 drop=0`。
 
+- Windows 开工第一屏现在可直接看预检状态：运行 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary` 或 PowerShell 包装入口；如果同一行出现 `WinClientRetestPreflight=ready target=<Mac LAN>:43770 build=<build> diagnostics=passed next=Run-WinClientRetest-And-Post.cmd`，说明无密预检已通过，下一步就是用户在 Windows 当前终端运行正式 `Run-WinClientRetest-And-Post.cmd` 并隐藏输入 Mac 临时密码。该状态只读消费通讯板，不请求密码、不认证、不发 input/inject。
+
+
 - W2/W3 真实复测前先跑无密预检：如果不确定 Mac 目标、Windows client 本地诊断或“密码输到哪里”，先运行 `Run-WinClientRetest-And-Post.cmd -PreflightOnly`。看到 `WinClientRetestPreflight=ready` 后，再运行不带参数的 `Run-WinClientRetest-And-Post.cmd`；正式复测出现“当前终端输入 Mac 临时密码（输入不显示，回车继续）:”时，只在这个黑色终端输入 Mac 当前临时密码。预检不请求密码、不认证、不发板、不发 input/inject。
 
 - W2-H264 复测摘要 surface 最新口径：下一次真实 `Run-WinClientRetest-And-Post.cmd` 上板后，先看 `W2W3Retest h264=` 里的 `decoded=<n> canvas=<true|false> image=<true|false> needsKeyframe=<yes>`，再看 `W2H264BoardDiagnosis surface=canvas:<...> image:<...>`。`recv/key/sps/pps/idr` 正常但 `canvas=false image=false` 时继续查 Windows WebCodecs decoded surface / canvas 绘制；`canvas=true` 则进入人工画面/FPS/声音观感确认。不要再让 Mac 端重复补关键帧证据，除非 `recv/key/sps/pps/idr` 缺失。

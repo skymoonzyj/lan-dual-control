@@ -2557,6 +2557,116 @@ async function checkBoardWindowsLanRiskExtraction(args) {
   });
 }
 
+async function checkBoardWinClientRetestPreflightExtraction(args) {
+  await withMockHost(async (port) => {
+    const preflightText = [
+      "WinClientRetestPreflight=ready",
+      "target=192.168.31.122:43770/build=0180451",
+      "Windows client diagnostics passed",
+      "Next=Run-WinClientRetest-And-Post.cmd",
+      "PasswordLocation=当前终端隐藏输入",
+      "Safety=no-password,no-auth,no-board-post,no-input-inject",
+    ].join(" ");
+    const boardState = {
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "W2W3-retest-preflight-ready",
+          note: preflightText,
+        },
+        "Windows Later": {
+          role: "Windows 端",
+          status: "W2W3-retest-preflight-pushing-note-only",
+          note: "准备推送 WinClientRetestPreflight=ready：JSON/普通输出/boardSummary only；不请求密码、不认证、不发 input/inject。",
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=10.0.0.1:43770/build=secret-value Windows client diagnostics passed",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=127.0.0.1:43770 --password secret-value",
+        },
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=127.0.0.1:43770 input_event=click",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WinClientRetestPreflight JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.winClientRetestPreflight?.found === true, "WinClientRetestPreflight should be found");
+      assert(payload.board.winClientRetestPreflight.status === "ready", "WinClientRetestPreflight status mismatch");
+      assert(payload.board.winClientRetestPreflight.host === "192.168.31.122", "WinClientRetestPreflight host mismatch");
+      assert(payload.board.winClientRetestPreflight.port === 43770, "WinClientRetestPreflight port mismatch");
+      assert(payload.board.winClientRetestPreflight.build === "0180451", "WinClientRetestPreflight build mismatch");
+      assert(payload.board.winClientRetestPreflight.diagnostics === "passed", "WinClientRetestPreflight diagnostics mismatch");
+      assert(payload.board.winClientRetestPreflight.next === windowsClientRetestAndPostUserEntryCommand, "WinClientRetestPreflight next command mismatch");
+      assert(payload.board.winClientRetestPreflight.rejectedCount >= 3, "unsafe WinClientRetestPreflight candidates should be rejected");
+      assertIncludes(payload.boardSummary, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "WinClientRetestPreflight JSON board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WinClientRetestPreflight JSON should not leak rejected text");
+      assertNotIncludes(result.stdout + result.stderr, "input_event", "WinClientRetestPreflight JSON should not leak unsafe input text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WinClientRetestPreflight board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "WinClientRetestPreflight board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WinClientRetestPreflight board summary should not leak rejected text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WinClientRetestPreflight human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd", "WinClientRetestPreflight human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WinClientRetestPreflight human output should not leak rejected text");
+      console.log("[OK] Windows resume status extracts WinClientRetestPreflight from Agent Link Board safely");
+    }, boardState);
+  });
+}
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -3007,6 +3117,7 @@ async function main() {
   await checkBoardWindowsReverseGrantExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkBoardWindowsLanRiskExtraction(args);
+  await checkBoardWinClientRetestPreflightExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);

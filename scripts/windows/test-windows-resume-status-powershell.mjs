@@ -1831,6 +1831,100 @@ async function checkBoardWindowsLanRiskExtraction(args) {
   });
 }
 
+async function checkBoardWinClientRetestPreflightExtraction(args) {
+  await withMockHost(async (port) => {
+    const preflightText = [
+      "WinClientRetestPreflight=ready",
+      "target=192.168.31.122:43770/build=0180451",
+      "Windows client diagnostics passed",
+      "Next=Run-WinClientRetest-And-Post.cmd",
+      "PasswordLocation=当前终端隐藏输入",
+      "Safety=no-password,no-auth,no-board-post,no-input-inject",
+    ].join(" ");
+    const boardState = {
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "W2W3-retest-preflight-ready",
+          note: preflightText,
+        },
+        "Windows Later": {
+          role: "Windows 端",
+          status: "W2W3-retest-preflight-pushing-note-only",
+          note: "准备推送 WinClientRetestPreflight=ready：JSON/普通输出/boardSummary only；不请求密码、不认证、不发 input/inject。",
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=10.0.0.1:43770/build=secret-value Windows client diagnostics passed",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=127.0.0.1:43770 --password secret-value",
+        },
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WinClientRetestPreflight=ready target=127.0.0.1:43770 input_event=click",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell WinClientRetestPreflight JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.winClientRetestPreflight?.found === true, "PowerShell WinClientRetestPreflight should be found");
+      assert(payload.board.winClientRetestPreflight.status === "ready", "PowerShell WinClientRetestPreflight status mismatch");
+      assert(payload.board.winClientRetestPreflight.host === "192.168.31.122", "PowerShell WinClientRetestPreflight host mismatch");
+      assert(payload.board.winClientRetestPreflight.port === 43770, "PowerShell WinClientRetestPreflight port mismatch");
+      assert(payload.board.winClientRetestPreflight.build === "0180451", "PowerShell WinClientRetestPreflight build mismatch");
+      assert(payload.board.winClientRetestPreflight.diagnostics === "passed", "PowerShell WinClientRetestPreflight diagnostics mismatch");
+      assert(payload.board.winClientRetestPreflight.next === windowsClientRetestAndPostUserEntryCommand, "PowerShell WinClientRetestPreflight next command mismatch");
+      assert(payload.board.winClientRetestPreflight.rejectedCount >= 3, "PowerShell unsafe WinClientRetestPreflight candidates should be rejected");
+      assertIncludes(payload.boardSummary, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "PowerShell WinClientRetestPreflight JSON board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell WinClientRetestPreflight JSON should not leak rejected text");
+      assertNotIncludes(output, "input_event", "PowerShell WinClientRetestPreflight JSON should not leak unsafe input text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell WinClientRetestPreflight board summary failed\n${output}`);
+      assertIncludes(output, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "PowerShell WinClientRetestPreflight board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell WinClientRetestPreflight board summary should not leak rejected text");
+      console.log("[OK] PowerShell resume-status wrapper extracts WinClientRetestPreflight safely");
+    }, boardState);
+  });
+}
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await runPowerShell([
@@ -2077,6 +2171,7 @@ async function main() {
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkBoardWindowsLanRiskExtraction(args);
+  await checkBoardWinClientRetestPreflightExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendAgentCallAck(args);

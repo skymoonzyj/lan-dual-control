@@ -10,6 +10,10 @@
 ## 2026-06-21 W2/W3 真实复测 PASS，进入体验收口
 - 通讯板已收到用户提供的真实 Windows 控 Mac 复测结果：Windows 连接 `192.168.31.122:43770` 成功，remote=H.264 已解码，`canvas=true 1920x1080 image=false`，`decoded=已绘制 18`，`recv=22 key=1 sps/pps/idr=1/1/1`，`h264Errors=0`；实收约 `89.8 FPS`，最大视频间隔 `29ms`，本机队列约 `59ms`，解码延迟约 `59ms`；音频接收/播放 `14/14`，丢 `0`。结论：`W2-H264-DECODE-GATE-BLOCKER` 已修复，Windows 控 Mac 已进入真实可见画面阶段；旧 `Run real WinClientRetest for W2/W3` currentCall 已清理。下一阶段不要继续围绕 H.264 首屏 blocker 做重复诊断，转入真实体验收口：画面稳定性/延迟、音频连续性、窗口/全屏/原画、剪贴板/文件，以及真实输入安全日志到控制流程。全程仍不在通讯板发送密码，不自动发 input/inject。
 
+## 2026-06-21 Windows 恢复总览消费 W2/W3 预检 ready
+- `check-windows-resume-status --checkBoard` 现在会只读提取通讯板里的 `WinClientRetestPreflight=ready`，并在 JSON `board.winClientRetestPreflight`、普通输出和 `--boardSummary` 中显示 `target/build/diagnostics/next`。该解析只保留白名单字段，拒绝 `secret-value`、`--password`、token、`input_event` 等候选，方便开工第一屏直接看到“预检已 ready，下一步运行 `Run-WinClientRetest-And-Post.cmd`”，不用再手动翻通讯板。脚本不请求密码、不认证、不发板、不发送 input/inject。
+
+
 ## 2026-06-21 W2/W3 真实复测入口无密预检
 - `Run-WinClientRetest-And-Post.cmd -PreflightOnly` / `node scripts/windows/run-winclient-retest-and-post.mjs --preflightOnly` 现在会先跑无密 discovery/local diagnostics，只输出 `WinClientRetestPreflight=ready ... PasswordLocation=当前终端隐藏输入` 和下一步正式复测提示；它不请求密码、不认证、不发布通讯板、不发送 input/inject。预检失败时会保留子命令退出码，并提示不要进入密码步骤；正式复测和自动发布 `W2W3Retest=` / `W2H264BoardDiagnosis=` 的原流程不变。
 

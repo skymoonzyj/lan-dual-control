@@ -32,6 +32,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 预检 ready 接入 Windows 恢复总览
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏直接显示 W2/W3 无密预检是否 ready，以及下一步正式复测入口。
+完成内容：`check-windows-resume-status --checkBoard` 新增只读 `WinClientRetestPreflight=ready` 提取，输出 JSON `board.winClientRetestPreflight`、普通输出和 `--boardSummary` 的 `target/build/diagnostics/next`。解析只保留白名单字段，并拒绝 `secret-value`、`--password`、token、`input_event` 等危险候选，避免通讯板原文泄漏。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：TDD 红灯先失败于 `WinClientRetestPreflight should be found`；绿灯后 `test-windows-resume-status` 和 `test-windows-resume-status-powershell` 均通过，覆盖 JSON、boardSummary、普通输出和秘密/输入事件过滤。
+遗留问题：真实 W2/W3 复测仍需要用户在 Windows 当前终端运行正式 `Run-WinClientRetest-And-Post.cmd` 并隐藏输入 Mac 临时密码。
+下一步建议：开工先看 `check-windows-resume-status --checkBoard --boardSummary`；若已有 `WinClientRetestPreflight=ready`，不要重复查板，直接进入正式复测。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；需要 Mac host 保持在线。不要把密码发通讯板，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2/W3 真实复测入口无密预检
 开发端：Windows Codex
 本轮目标：降低真实复测前的现场不确定性，让用户在输入 Mac 临时密码前先确认目标和本地诊断准备好。
@@ -67,6 +80,7 @@
 下一步建议：真实复测后优先看 `h264=decoded=<n> canvas=<true|false> image=<true|false> needsKeyframe=<...> recv/key/sps/pps/idr=...` 和 `W2H264BoardDiagnosis surface=...`；若仍 `canvas=false image=false` 且关键帧完整，再查 Windows WebCodecs output/draw canvas。
 是否改了协议：否。
 是否需要另一端配合：不需要 Mac 改代码；Mac 端保持 host 在线即可。不要把密码发通讯板，不发 input/inject。
+
 ## 2026-06-21 Windows Codex
 
 日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
