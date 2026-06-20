@@ -181,7 +181,10 @@ Machine-readable JSON fields:
                               macInputSafetyPlanCommand,
                               macManualUxStatusCommand, and
                               macLaunchAgentPlanCommand for dry-run
-                              power/audio/input/manual UX/LaunchAgent plans.
+                              power/audio/input/manual UX/LaunchAgent plans,
+                              plus windowsHostStatusCommand and
+                              windowsHostReadinessCommand for Windows-side
+                              local host checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -886,6 +889,8 @@ function buildCommands(args) {
     macFormalE2eStatusCommand: `node scripts/mac/check-mac-formal-e2e-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
+    windowsHostStatusCommand: "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary",
+    windowsHostReadinessCommand: "node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
     macClientFormalSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary",
     macClientPromptPasswordSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary",
     macClientBrowserSelfTestCommand: "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
@@ -1122,6 +1127,8 @@ function makeBoardSummary(report) {
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
+    `WindowsHostStatus=${report.commands.windowsHostStatusCommand}.`,
+    `WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
     `MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,

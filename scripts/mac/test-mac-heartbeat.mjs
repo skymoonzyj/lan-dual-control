@@ -230,6 +230,45 @@ function assertMacManualUxStatusCommand(command, label) {
   assertNotIncludes(command || "", "--inputMode inject", label);
 }
 
+function assertWindowsHostStatusCommand(command, label) {
+  assertIncludes(command || "", "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command || "", "--status", label);
+  assertIncludes(command || "", "--host 127.0.0.1", label);
+  assertIncludes(command || "", "--port 43770", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--forceCall", label);
+  assertNotIncludes(command || "", "--server", label);
+  assertNotIncludes(command || "", "--json", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "inject", label);
+}
+
+function assertWindowsHostReadinessCommand(command, label) {
+  assertIncludes(command || "", "node scripts/windows/check-windows-host-readiness.mjs", label);
+  assertIncludes(command || "", "--host 127.0.0.1", label);
+  assertIncludes(command || "", "--port 43770", label);
+  assertIncludes(command || "", "--checkBoard", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--forceCall", label);
+  assertNotIncludes(command || "", "--server", label);
+  assertNotIncludes(command || "", "--json", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "inject", label);
+}
+
+function assertWindowsHostBoardSummary(text, label) {
+  assertIncludes(text || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", label);
+  assertIncludes(text || "", "WindowsHostReadiness=node scripts/windows/check-windows-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary", label);
+}
+
 function assertMacClientManualChecklistAction(text, label) {
   assertIncludes(text || "", "手工清单", label);
   assertIncludes(text || "", "连接/视频/音频/剪贴板/input_ack/诊断", label);
@@ -348,6 +387,8 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "--discover", label);
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "--port 43770", label);
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "--boardSummary", label);
+  assertWindowsHostStatusCommand(commands?.windowsHostStatusCommand || "", label);
+  assertWindowsHostReadinessCommand(commands?.windowsHostReadinessCommand || "", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "run-mac-client-formal-smoke.mjs", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--discover", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--ensureClient", label);
@@ -438,6 +479,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macManualUxStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsHostStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsHostReadinessCommand", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -509,6 +552,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "手工清单", "offline board summary");
   assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
+  assertWindowsHostBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
@@ -614,6 +658,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "手工清单", "online board summary");
       assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "online board summary");
+      assertWindowsHostBoardSummary(payload.boardSummary || "", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "online board summary");
