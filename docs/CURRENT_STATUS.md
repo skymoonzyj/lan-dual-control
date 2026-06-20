@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W3 复测结果脱敏上板助手
+- 新增 `scripts/windows/post-w2w3-retest-board.mjs`：真实运行 `Run-WinClientRetest.cmd` 后，把终端输出里的 `W2W3Retest=...` 一行传给该助手，它会先拒绝 `--password` / `password=` / token / secret / `input_event` / control execution 等危险标记，再在 `--send` 模式下把脱敏 `W2W3Retest=` 发到 Agent Link Board，随后只读运行 `diagnose-w2-h264-board --boardSummary` 并把 `W2H264BoardDiagnosis=` 也发上板。默认不加 `--send` 只做 dry-run；脚本不请求密码、不认证、不发真实输入事件。
+
 ## 2026-06-21 W2/W3 Windows 真连复测根目录入口
 - 新增根目录 `Run-WinClientRetest.cmd`：用户在 Windows 仓库根目录双击或运行它即可启动真实 Windows 控 Mac 复测。入口默认调用 `scripts/windows/test-windows-client-browser.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000`，密码只在本机黑色终端隐藏输入，输出仍是一行脱敏 `W2W3Retest=...` 供通讯板使用；`Run-WinClientRetest.cmd -Help` 只显示帮助，不启动浏览器、不请求密码。`check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 同步新增 `windowsClientRetestUserEntryCommand` / `WinClientRetestEntry=Run-WinClientRetest.cmd`，方便两端第一屏直接看到最短复测入口。不改协议、不认证、不把密码写入参数或通讯板、不发 input/inject。
 
