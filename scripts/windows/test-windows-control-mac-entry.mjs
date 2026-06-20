@@ -224,6 +224,16 @@ function checkIndexLoadsLaunchParams() {
   assert(helperIndex < appIndex, "launch-params.js should load before app.js");
   console.log("[OK] Windows client page loads launch params before app.js");
 }
+
+function checkPasswordDestinationHint() {
+  const indexHtml = require("node:fs").readFileSync(resolve(repoRoot, "apps/windows-client/index.html"), "utf8");
+  assertIncludes(indexHtml, 'id="connectionPasswordHint"', "connection password hint");
+  assertIncludes(indexHtml, "网页里手动连接时", "connection password hint");
+  assertIncludes(indexHtml, "当前密码框", "connection password hint");
+  assertIncludes(indexHtml, "终端隐藏输入", "connection password hint");
+  assertNotIncludes(indexHtml, "demo-password</p>", "connection password hint should not print demo password");
+  console.log("[OK] Windows client page explains where the Mac password goes");
+}
 function checkLaunchParamHelper() {
   const helper = require(resolve(repoRoot, "apps/windows-client/launch-params.js"));
   assert(typeof helper.parseLaunchParams === "function", "helper should export parseLaunchParams");
@@ -407,6 +417,7 @@ async function main() {
   }
 
   checkIndexLoadsLaunchParams();
+  checkPasswordDestinationHint();
   checkLaunchParamHelper();
   await checkCmdLauncher(args);
   await checkPowerShellWrapperHelp(args);

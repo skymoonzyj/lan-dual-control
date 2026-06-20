@@ -5,6 +5,7 @@
 ## 当前能力
 
 - 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务、连接历史和局域网里的 `/discovery` 接口；桌面版会调用本机扫描工具自动扫当前 IPv4 网段，浏览器预览版只轻量探测已知地址，避免网页预览时大量并发探测。刷新后若发现真实在线设备，会优先自动选中 macOS 被控端，填入地址和端口，并把 runtime/build 显示到诊断条。
+- 连接密码框现在带明确提示：网页里手动连接时把 Mac 当前临时密码填在当前密码框；如果是 formal/browser runner 的终端隐藏输入提示，则只在黑色终端窗口输入。
 - 支持本地模拟握手，也支持 WebSocket 协议连接。
 - 支持 hello、auth_request、session_offer、display_settings、video_frame、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
@@ -92,7 +93,7 @@ Start-Windows-Control-Mac.cmd
 node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs
 ```
 
-该入口会先只读探测 LAN `/discovery`，发现 Mac host 时打开 `http://127.0.0.1:5200/` 并把目标预填为最新 LAN Mac；发现失败才回退 `192.168.31.122:43770`、`WebSocket 局域网`。页面会清空演示密码；在页面里输入 Mac 端当前临时密码后点“连接”。入口不打印密码、不认证、不发送 input/inject。需要固定回退目标时加 `--noDiscover`；只想把无密摘要发到通讯板时可运行：
+该入口会先只读探测 LAN `/discovery`，发现 Mac host 时打开 `http://127.0.0.1:5200/` 并把目标预填为最新 LAN Mac；发现失败才回退 `192.168.31.122:43770`、`WebSocket 局域网`。页面会清空演示密码、聚焦连接密码框，并在密码框下提示“网页手动连接填当前密码框，终端隐藏输入只输黑色终端”；在页面里输入 Mac 端当前临时密码后点“连接”。入口不打印密码、不认证、不发送 input/inject。需要固定回退目标时加 `--noDiscover`；只想把无密摘要发到通讯板时可运行：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs --dryRun --boardSummary

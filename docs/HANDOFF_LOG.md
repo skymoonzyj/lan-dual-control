@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 控制页连接密码位置提示
+开发端：Windows Codex
+本轮目标：减少现场混淆，让用户能区分网页登录 Mac 密码框和终端隐藏密码输入。
+完成内容：
+- Windows 控制页左侧“连接密码”字段新增 `connectionPasswordHint`，明确网页手动连接时把 Mac 当前临时密码填在当前密码框。
+- 同一提示明确 formal/browser runner 的“终端隐藏输入”只在黑色终端窗口输入，不填网页、不发通讯板。
+- `passwordInput` 增加 `aria-describedby="connectionPasswordHint"`，一键入口仍清空 `demo-password` 并聚焦密码框。
+- `test-windows-control-mac-entry` 新增页面提示断言，防止后续删掉提示或回退到无说明状态。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000` 先失败于 `connection password hint did not include "id=\"connectionPasswordHint\""`。
+- 绿灯：`node scripts/windows/test-windows-control-mac-entry.mjs --timeoutMs 45000`
+- 绿灯：`node --check scripts/windows/test-windows-control-mac-entry.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾：`git diff --check`
+- 收尾：`rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs` 无命中。
+遗留问题：
+- 无；本轮只改善页面提示和入口自检，不改变认证协议或密码传递方式。
+下一步建议：
+- 真实手工体验时继续走 `Start-Windows-Control-Mac.cmd` / PowerShell 7 入口；网页手动连接填页面密码框，formal/browser runner 看到终端提示才填黑色终端。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac formal 反控授权演练步骤化

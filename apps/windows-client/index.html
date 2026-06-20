@@ -43,7 +43,16 @@
 
           <label class="field">
             <span>连接密码</span>
-            <input id="passwordInput" type="password" value="demo-password" autocomplete="off" />
+            <input
+              id="passwordInput"
+              type="password"
+              value="demo-password"
+              autocomplete="off"
+              aria-describedby="connectionPasswordHint"
+            />
+            <p id="connectionPasswordHint" class="field-hint">
+              网页里手动连接时，把 Mac 当前临时密码填在当前密码框；如果看到终端隐藏输入提示，就只在黑色终端窗口输入。
+            </p>
           </label>
 
           <label class="field">
