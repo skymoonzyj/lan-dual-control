@@ -6,6 +6,7 @@
 
 ## 2026-06-20 现场校正
 
+- W2 视频低延迟最新口径：Windows 控制端现在把 WebCodecs `VideoDecoder.decodeQueueSize` 也纳入本机 H.264 背压治理；如果浏览器内部解码队列超过 8，即使 meta 队列还不长，也会走 `queue-overflow-wait-keyframe` 重同步，清旧队列并等待关键帧。现场诊断若看到 `本地过期丢帧` 和该原因，优先理解为 Windows 本机为了追实时主动丢旧帧，而不是远端采集必然丢帧。
 - W2 视频最新口径：Windows 控制端“现场视频”诊断现在会统计相邻帧间隔 >=120ms 的明显卡顿事件，输出 `卡顿 <n>` 和 `最大卡顿 <ms> ms`。用户再说画面不像 60Hz 或偶发卡时，先看同一行的 `实收 FPS`、`平均间隔`、`最大间隔`、`卡顿`、`本机队列`、`解码延迟` 和 `本地过期丢帧`：卡顿次数高但队列不高，优先查采集/网络节奏；队列高或过期丢帧高，再继续查 WebCodecs/H.264 本地队列。
 - W3 音频最新口径：Windows 控制端在 WebAudio 队列超过 450ms 并 flush 旧 source 后，会把下一帧放到 120ms 重同步短预缓冲；正常 underrun 仍是 80ms 初始预缓冲。用户再反馈声音断续时，复制诊断“现场声音”应能看到 `缓冲 80/70/450/120 ms`、`重同步` 次数和 `queue-overflow-flush-old` 原因；先用这行判断是网络/采集端突发，还是本地播放队列持续溢出。
 - Windows 一次性反控授权现在优先用带 userPresence 门禁的入口：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -CheckBoard -BoardSummary`，Node 等价为 `node scripts/windows/allow-windows-reverse-control.mjs --checkBoard --boardSummary`。`UserPresence=away` 时会输出 `BLOCKED_BY_USER_AWAY` 并且不会打开临时授权；`UserPresence=present` 时才继续允许 30 秒一次性授权。Mac 端需要反控 Windows 时，仍先说明目标、安全边界和预计耗时，再让 Windows 本机执行这条命令。

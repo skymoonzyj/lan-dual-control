@@ -4997,6 +4997,7 @@ async function verifyH264LatencyQueueGuard(session) {
     `(async () => {
       if (
         typeof resyncH264DecoderQueueForLatency !== "function" ||
+        typeof maybeResyncH264DecoderQueueForLatency !== "function" ||
         typeof getVideoPerformanceExportStatus !== "function" ||
         typeof ensureH264Decoder !== "function" ||
         typeof state !== "object"
@@ -5125,10 +5126,53 @@ async function verifyH264LatencyQueueGuard(session) {
           keyExportText.includes("本地过期丢帧 9") &&
           keyExportText.includes("原因 queue-overflow-wait-keyframe");
 
+        const closeCallsBeforeWebCodecsBackpressure = closeCalls;
+        state.h264Decoder = {
+          state: "configured",
+          decodeQueueSize: 9,
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = [
+          { frameId: 201, queuedAt: 1050, timestampUs: 0 },
+          { frameId: 202, queuedAt: 1060, timestampUs: 33333 },
+        ];
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderLatencyMs = 0;
+        state.h264DecoderNeedsKeyFrame = false;
+        state.h264SkippedDeltaFrames = 0;
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+
+        const webCodecsQueueResync = maybeResyncH264DecoderQueueForLatency({
+          isKeyFrame: false,
+          frameId: 203,
+          now: 1100,
+        });
+        const webCodecsQueueExportText = getVideoPerformanceExportStatus();
+        const webCodecsQueueBackpressure =
+          webCodecsQueueResync?.dropFrame === true &&
+          webCodecsQueueResync?.droppedFrames === 10 &&
+          closeCalls === closeCallsBeforeWebCodecsBackpressure + 1 &&
+          state.h264Decoder === null &&
+          state.h264DecoderQueue.length === 0 &&
+          state.h264DecoderNeedsKeyFrame === true &&
+          state.h264DecoderStatus === "waiting-keyframe" &&
+          state.h264SkippedDeltaFrames === 1 &&
+          state.videoDroppedStaleFrames === 10 &&
+          state.videoLastDropReason === "queue-overflow-wait-keyframe" &&
+          webCodecsQueueExportText.includes("本地过期丢帧 10") &&
+          webCodecsQueueExportText.includes("原因 queue-overflow-wait-keyframe");
+
         return {
-          ok: deltaOk && keyPreserved,
+          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure,
           deltaOk,
           keyPreserved,
+          webCodecsQueueBackpressure,
+          webCodecsQueueResync,
+          webCodecsQueueExportText,
           resync,
           keyResync,
           closeCalls,

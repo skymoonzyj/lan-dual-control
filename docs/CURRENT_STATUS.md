@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 W2 Windows WebCodecs decodeQueueSize 背压重同步
+- Windows 控制端 H.264 低延迟重同步现在同时参考本地 meta 队列和 WebCodecs `VideoDecoder.decodeQueueSize`，取较大值判断是否超过 8 帧阈值；浏览器内部解码队列堆积时，即使 meta 队列还没长，也会关闭旧 decoder、清空旧队列、丢弃当前 delta 并等待下一关键帧，避免继续播放过期画面。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `webCodecsQueueBackpressure=false`，绿灯确认 `H.264 latency queue guard: dropped=10 reason=queue-overflow-wait-keyframe`。本轮只改 Windows 控制端本地 H.264 背压和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W2 Windows 控制端视频卡顿事件诊断
 - Windows 控制端复制/导出诊断“现场视频”现在会在相邻视频帧间隔达到 120ms 以上时输出 `卡顿 <n>` 和 `最大卡顿 <ms> ms`，与既有 `实收 FPS`、`平均间隔`、`最大间隔`、本机解码队列和本地过期丢帧并列。这样用户反馈“不像 60Hz / 卡”时，可以区分整体 FPS 偏低、偶发长间隔卡顿、本机解码队列堆积或 H.264 过期帧丢弃。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯导出缺少 `卡顿 2 / 最大卡顿 184 ms`，绿灯确认同一诊断输出。本轮只改 Windows 控制端本地统计和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 

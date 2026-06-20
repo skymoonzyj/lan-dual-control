@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W2 Windows WebCodecs decodeQueueSize 背压重同步
+开发端：Windows Codex
+本轮目标：减少 Windows 控 Mac 时 WebCodecs 内部解码队列堆积导致的画面越播越慢。
+完成内容：
+- `getH264DecoderQueueMetrics()` 现在读取 `VideoDecoder.decodeQueueSize`，并与本地 meta 队列取较大值。
+- H.264 低延迟重同步会在 WebCodecs 内部队列超过 8 时触发 `queue-overflow-wait-keyframe`，关闭旧 decoder、清旧队列、丢弃当前 delta 并等待关键帧。
+- 页面自测扩展 `verifyH264LatencyQueueGuard`，覆盖 meta 队列只有 2 帧但 `decodeQueueSize=9` 的浏览器内部背压场景。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `webCodecsQueueBackpressure=false`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 输出 `H.264 latency queue guard: dropped=10 reason=queue-overflow-wait-keyframe`。
+遗留问题：真实体验仍需用户粘贴“现场视频”行；若主动丢旧帧后仍卡，再看 Mac 采集节奏、网络抖动和关键帧恢复速度。
+下一步建议：继续 W2 可做真实样本驱动的关键帧恢复/自适应阈值；或回到 W3 做现场声音样本驱动的音频队列治理。
+是否改了协议：否；只改 Windows 控制端本地 H.264 背压和页面自测。
+是否需要另一端配合：暂不需要；真实体验复测时需要 Mac 端同步媒体基线或手工验收窗口。
+
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows 视频卡顿事件诊断
 开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 的现场视频诊断能直接显示明显卡顿事件，辅助定位“不像 60Hz / 偶发卡顿”。

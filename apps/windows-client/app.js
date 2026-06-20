@@ -4496,7 +4496,10 @@ function getVideoPerformanceExportStatus() {
   const frameCount = Number(state.videoFrames) || 0;
   const droppedFrames = Number(state.hostDiagnostics?.droppedFrames) || 0;
   const decoderQueueMetrics = getH264DecoderQueueMetrics();
-  const decoderQueue = Number(state.h264DecoderQueue?.length ?? state.hostDiagnostics?.videoDecoderQueue) || 0;
+  const decoderQueue = Math.max(
+    Number(decoderQueueMetrics.queueLength) || 0,
+    Number(state.hostDiagnostics?.videoDecoderQueue) || 0,
+  );
   const decoderQueueMs = Math.max(
     Number(decoderQueueMetrics.oldestAgeMs) || 0,
     Number(state.videoDecoderQueueMs || state.hostDiagnostics?.videoDecoderQueueMs) || 0,
@@ -8179,11 +8182,12 @@ function renderVideoFrame(frame) {
 }
 
 function updateH264DecoderDiagnostics(extra = {}) {
+  const decoderQueueMetrics = getH264DecoderQueueMetrics();
   updateHostDiagnostics({
     videoDecoderStatus: state.h264DecoderStatus,
     videoDecoderCodec: state.h264DecoderCodec,
     videoDecoderErrors: state.h264DecoderErrorCount,
-    videoDecoderQueue: state.h264DecoderQueue.length,
+    videoDecoderQueue: decoderQueueMetrics.queueLength,
     h264DecodedFrames: state.h264DecodedFrames,
     h264DecoderLatencyMs: state.h264DecoderLatencyMs,
     videoDecoderQueueMs: state.videoDecoderQueueMs,
@@ -8194,19 +8198,29 @@ function updateH264DecoderDiagnostics(extra = {}) {
   });
 }
 
+function getH264DecoderInternalQueueSize() {
+  if (!state.h264Decoder || state.h264Decoder.state === "closed") return 0;
+  const queueSize = Number(state.h264Decoder.decodeQueueSize);
+  return Number.isFinite(queueSize) && queueSize > 0 ? Math.round(queueSize) : 0;
+}
+
 function getH264DecoderQueueMetrics(now = performance.now()) {
   const queue = Array.isArray(state.h264DecoderQueue) ? state.h264DecoderQueue : [];
+  const webCodecsQueueSize = getH264DecoderInternalQueueSize();
+  const queueLength = Math.max(queue.length, webCodecsQueueSize);
   const queuedAtValues = queue
     .map((item) => Number(item?.queuedAt))
     .filter((value) => Number.isFinite(value));
   if (!queuedAtValues.length) {
-    return { queueLength: queue.length, oldestAgeMs: 0, newestAgeMs: 0 };
+    return { queueLength, metadataQueueLength: queue.length, webCodecsQueueSize, oldestAgeMs: 0, newestAgeMs: 0 };
   }
 
   const oldestQueuedAt = Math.min(...queuedAtValues);
   const newestQueuedAt = Math.max(...queuedAtValues);
   return {
-    queueLength: queue.length,
+    queueLength,
+    metadataQueueLength: queue.length,
+    webCodecsQueueSize,
     oldestAgeMs: Math.max(0, Math.round(Number(now) - oldestQueuedAt)),
     newestAgeMs: Math.max(0, Math.round(Number(now) - newestQueuedAt)),
   };
