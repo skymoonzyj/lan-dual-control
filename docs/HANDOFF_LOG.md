@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 MacCodexHealth 稳定短字段
+开发端：Mac Codex
+本轮目标：给 Windows C1/mac-codex-stale 入口提供更稳定的 Mac 侧生产字段，避免 Windows 只能解析心跳长句。
+完成内容：
+- `check-mac-heartbeat` JSON 新增 `macCodexHealth`，`--boardSummary` 新增 `MacCodexHealth=<ok|warning|blocked|unknown> reason=<...> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...>`。
+- `check-mac-resume-status` 从 heartbeat watcher 最近一次心跳派生同一 `macCodexHealth`，并在恢复第一屏 `--boardSummary` 中显示 `MacCodexHealth=`。
+- 该字段复用现有判断：`ok` 为正常，`codex-reconnect-signal` 为 warning，`codex-reconnect-stuck` / `mac-codex-stale` 为 blocked，watcher 缺失时 unknown。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败于缺少 `macCodexHealth.status=ok`；`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 8000` 先失败于缺少 `MacCodexHealth=`。
+- 绿灯：上述两条自测通过；收尾还会跑语法检查、help 安全自检、diff 空白/冲突扫描后再推送。
+遗留问题：
+- `MacCodexHealth=` 是诊断/协作摘要，不改变 Mac host/Mac client 在线判定，也不代表自动响应 Windows call。
+下一步建议：
+- Windows 端可优先消费 `MacCodexHealth=` 作为 C1 判断入口；保留 `MacHeartbeatHealth=` 兼容旧摘要和整体心跳健康。
+是否改了协议：否。只扩展 Agent Link Board/CLI 只读摘要字段，不改 WebSocket/HTTP 协议。
+是否需要另一端配合：不需要立即配合；Windows 后续可按需把 `MacCodexHealth=` 纳入更稳定解析。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 消费 WindowsFirewallHealth
 开发端：Mac Codex
 本轮目标：让 Mac discover/readiness/formal smoke 读懂 Windows 端新增的 `WindowsFirewallHealth=`，避免 Public profile 被误判成当前防火墙阻塞。

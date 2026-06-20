@@ -138,6 +138,20 @@ function assertHeartbeatHealth(payload, expectedStatus, expectedReason, label) {
   assertIncludes(payload.boardSummary || "", `reason=${expectedReason}`, `${label} board summary`);
 }
 
+function assertMacCodexHealth(payload, expectedStatus, expectedReason, label) {
+  const health = payload.macCodexHealth;
+  assert(health?.status === expectedStatus, `${label} should include macCodexHealth.status=${expectedStatus}`);
+  assert(health?.reason === expectedReason, `${label} should include macCodexHealth.reason=${expectedReason}`);
+  assert(typeof health.codexStatus === "string" && health.codexStatus.length > 0, `${label} should expose the Mac Codex board status`);
+  assert(typeof health.updatedAt === "string", `${label} should expose a safe Mac Codex updatedAt field`);
+  assert(Number.isFinite(health.ageMs) || health.ageMs === null, `${label} should expose numeric/null Mac Codex ageMs`);
+  assert(Number.isFinite(health.thresholdMs), `${label} should expose a Mac Codex health threshold`);
+  assertIncludes(payload.boardSummary || "", `MacCodexHealth=${expectedStatus}`, `${label} board summary`);
+  assertIncludes(payload.boardSummary || "", `reason=${expectedReason}`, `${label} board summary`);
+  assertIncludes(payload.boardSummary || "", "codexStatus=", `${label} board summary`);
+  assertIncludes(payload.boardSummary || "", "thresholdMs=", `${label} board summary`);
+}
+
 function assertMacEvidence(payload, expected, label) {
   const actual = payload.macEvidence || [];
   assert(Array.isArray(actual), `${label} should include macEvidence[]`);
@@ -1157,6 +1171,7 @@ async function checkBoardTimestamps(args) {
     assert(payload.codex.lastEventAt === macCodexUpdatedAt, "board timestamp payload should use Mac Codex updatedAt as last event");
     assert(payload.codex.status === "idle", "board timestamp payload should use Mac Codex status");
     assertHeartbeatHealth(payload, "warning", "mac-host-offline", "board timestamp payload");
+    assertMacCodexHealth(payload, "ok", "ok", "board timestamp payload");
     assertIncludes(payload.boardSummary || "", `checkedAt=${payload.checkedAt}`, "board timestamp summary");
     assertIncludes(payload.boardSummary || "", `boardUpdatedAt=${boardUpdatedAt}`, "board timestamp summary");
     assertIncludes(payload.boardSummary || "", `codex=ok status=idle updatedAt=${macCodexUpdatedAt}`, "board timestamp summary");
@@ -1201,6 +1216,7 @@ function checkReconnectStuck(args) {
     assert(payload.codex.signals.includes("stream-disconnected-before-completion"), "should detect stream disconnect");
     assert(payload.codex.signals.includes("codex-backend-api-request-error"), "should detect backend request error");
     assertHeartbeatHealth(payload, "blocked", "codex-reconnect-stuck", "reconnect payload");
+    assertMacCodexHealth(payload, "blocked", "codex-reconnect-stuck", "reconnect payload");
     assertIncludes(payload.boardSummary || "", "reason=codex-reconnect-stuck", "reconnect board summary");
     assertIncludes(payload.boardSummary || "", "checkedAt=", "reconnect board summary");
     assertIncludes(payload.boardSummary || "", `updatedAt=${old}`, "reconnect board summary");
@@ -1232,6 +1248,7 @@ function checkCodexStale(args) {
   assert(payload.codex.reason === "mac-codex-stale", "codex reason should be stale");
   assert(payload.codex.lastEventAgeMs >= 60000, "last event age should cross threshold");
   assertHeartbeatHealth(payload, "blocked", "mac-codex-stale", "stale payload");
+  assertMacCodexHealth(payload, "blocked", "mac-codex-stale", "stale payload");
   assertIncludes(payload.boardSummary || "", "reason=mac-codex-stale", "stale board summary");
   assertIncludes(payload.boardSummary || "", "evidenceAgeMs=", "stale board summary");
   assertNotIncludes(payload.boardSummary || "", "evidenceAgeMs=0", "stale board summary");

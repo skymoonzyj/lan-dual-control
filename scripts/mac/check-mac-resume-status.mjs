@@ -24,6 +24,7 @@ const defaults = {
 };
 const formalTargetMaxScreenFps = 60;
 const heartbeatFreshnessStaleMs = 120000;
+const macCodexStaleThresholdMs = 300000;
 const macUnattendedFreshnessStaleMs = 600000;
 const allowedMacEvidenceTokens = new Set([
   "MacClientPageOnline",
@@ -337,6 +338,10 @@ Machine-readable JSON fields:
                              heartbeat, exposed as MacHeartbeatHealth= in
                              board summaries. Freshness means "recent"; health
                              means "safe/blocked/warning".
+  macCodexHealth             Stable ok/blocked/warning/unknown Mac Codex
+                             health summary derived from the background
+                             watcher's last heartbeat, exposed as
+                             MacCodexHealth= in board summaries.
   board.macPowerHealth       Stable MacPowerHealth= status safely extracted
                              from the current Agent Link Board Mac Unattended
                              status. It keeps power warning details such as
@@ -2106,6 +2111,55 @@ function makeMacHeartbeatHealth(watcher) {
   };
 }
 
+function macCodexHealthStatus(reason, checked) {
+  if (!checked) return "unknown";
+  if (reason === "codex-reconnect-stuck" || reason === "mac-codex-stale") return "blocked";
+  if (reason === "codex-reconnect-signal") return "warning";
+  if (reason === "ok") return "ok";
+  return "unknown";
+}
+
+function makeMacCodexHealth(watcher) {
+  const base = {
+    checked: Boolean(watcher?.checked),
+    status: "unknown",
+    reason: "watcher-not-checked",
+    codexStatus: "unknown",
+    updatedAt: "",
+    ageMs: null,
+    thresholdMs: macCodexStaleThresholdMs,
+    checkedAt: "",
+  };
+  if (!watcher?.checked) return base;
+  if (!watcher.ok) {
+    return {
+      ...base,
+      checked: true,
+      reason: "watcher-unavailable",
+      error: watcher.error || "",
+    };
+  }
+  const heartbeat = watcher.lastHeartbeat?.heartbeat;
+  if (!heartbeat?.found) {
+    return {
+      ...base,
+      checked: true,
+      reason: "last-heartbeat-not-seen",
+    };
+  }
+  const reason = boardToken(heartbeat.reason, "unknown");
+  return {
+    checked: true,
+    status: macCodexHealthStatus(reason, true),
+    reason,
+    codexStatus: boardToken(heartbeat.codexStatus, "unknown"),
+    updatedAt: heartbeat.codexUpdatedAt || "",
+    ageMs: parseNonNegativeMs(heartbeat.codexAgeMs),
+    thresholdMs: macCodexStaleThresholdMs,
+    checkedAt: heartbeat.checkedAt || "",
+  };
+}
+
 function formatAgeForBoard(ageMs) {
   const seconds = ageSeconds(ageMs);
   return seconds === null ? "unknown" : `${seconds}s`;
@@ -2130,6 +2184,19 @@ function formatMacHeartbeatHealthSummary(health) {
     `heartbeat=${boardToken(health.heartbeatStatus)}`,
     `blockers=${boardToken(health.blockers)}`,
     `warnings=${boardToken(health.warnings)}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
+function formatMacCodexHealthSummary(health) {
+  if (!health) return "MacCodexHealth=unknown reason=unknown codexStatus=unknown updatedAt=unknown ageMs=unknown thresholdMs=unknown checkedAt=unknown";
+  return [
+    `MacCodexHealth=${health.status || "unknown"}`,
+    `reason=${boardToken(health.reason)}`,
+    `codexStatus=${boardToken(health.codexStatus)}`,
+    `updatedAt=${health.updatedAt || "unknown"}`,
+    `ageMs=${Number.isFinite(health.ageMs) ? health.ageMs : "unknown"}`,
+    `thresholdMs=${Number.isFinite(health.thresholdMs) ? health.thresholdMs : macCodexStaleThresholdMs}`,
     `checkedAt=${health.checkedAt || "unknown"}`,
   ].join(" ");
 }
@@ -2169,6 +2236,7 @@ function formatBoardSummary(report) {
   const heartbeatRefreshSummary = formatMacHeartbeatRefreshSummary(macHeartbeatWatcher);
   const heartbeatFreshnessSummary = formatMacHeartbeatFreshnessSummary(report.macHeartbeatFreshness);
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
+  const macCodexHealthSummary = formatMacCodexHealthSummary(report.macCodexHealth);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
   const macPowerHealthSummary = formatMacPowerHealthSummary(board);
   const macUnattendedHealthSummary = formatMacUnattendedHealthSummary(board);
@@ -2181,7 +2249,7 @@ function formatBoardSummary(report) {
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${macCodexHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
       macPowerHealthSummary,
       macUnattendedHealthSummary,
@@ -2241,7 +2309,7 @@ function formatBoardSummary(report) {
   const buildDiff = formatBoardBuildDiff(host.buildDiff);
 
   return [
-    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${macCodexHealthSummary}.`,
     macEvidenceSummary,
     macPowerHealthSummary,
     macUnattendedHealthSummary,
@@ -2355,6 +2423,10 @@ function printReport(report) {
     const health = report.macHeartbeatHealth;
     console.log(`[INFO] Mac heartbeat health: status=${health.status || "unknown"} reason=${health.reason || "unknown"} blockers=${health.blockers || "unknown"} warnings=${health.warnings || "unknown"}`);
   }
+  if (report.macCodexHealth) {
+    const health = report.macCodexHealth;
+    console.log(`[INFO] Mac Codex health: status=${health.status || "unknown"} reason=${health.reason || "unknown"} codexStatus=${health.codexStatus || "unknown"} ageMs=${Number.isFinite(health.ageMs) ? health.ageMs : "unknown"}`);
+  }
   if (!host.online) {
     console.log(`[WARN] Mac host: offline at ${host.probe.host}:${host.probe.port} (${host.error?.message || "unknown error"})`);
   } else {
@@ -2440,6 +2512,7 @@ async function main() {
   const checkedAt = new Date(nowMs).toISOString();
   const macHeartbeatFreshness = makeMacHeartbeatFreshness(macHeartbeatWatcher, nowMs);
   const macHeartbeatHealth = makeMacHeartbeatHealth(macHeartbeatWatcher);
+  const macCodexHealth = makeMacCodexHealth(macHeartbeatWatcher);
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
     checkedAt,
@@ -2459,6 +2532,7 @@ async function main() {
     macHeartbeatWatcher,
     macHeartbeatFreshness,
     macHeartbeatHealth,
+    macCodexHealth,
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),

@@ -151,6 +151,9 @@ Machine-readable JSON fields:
   status                      ok|warning|blocked.
   macHeartbeatHealth          Stable ok|warning|blocked health summary exposed
                               as MacHeartbeatHealth= in board summaries.
+  macCodexHealth              Stable ok|warning|blocked/unknown Mac Codex
+                              health summary exposed as MacCodexHealth= in
+                              board summaries for Windows C1 coordination.
   macEvidence[]               Stable positive Mac evidence tags also exposed
                               as Evidence= in clean board summaries.
   blockers[] / warnings[]     Stable reason ids for Windows alert routing.
@@ -317,6 +320,12 @@ function command(commandName, commandArgs, options = {}) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function boardToken(value, fallback = "unknown") {
+  const text = normalizedText(value || "");
+  if (!text) return fallback;
+  return text.replace(/[;\s.]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
 }
 
 function requestText(url, timeoutMs) {
@@ -986,6 +995,30 @@ function buildMacHeartbeatHealth(report) {
   };
 }
 
+function macCodexHealthStatus(reason, checked) {
+  if (!checked) return "unknown";
+  if (reason === "codex-reconnect-stuck" || reason === "mac-codex-stale") return "blocked";
+  if (reason === "codex-reconnect-signal") return "warning";
+  if (reason === "ok") return "ok";
+  return "unknown";
+}
+
+function buildMacCodexHealth(report, args) {
+  const codex = report.codex || {};
+  const reason = codex.checked ? (codex.reason || "unknown") : "not-checked";
+  return {
+    status: macCodexHealthStatus(reason, codex.checked),
+    reason,
+    codexStatus: boardToken(codex.status),
+    updatedAt: codex.lastEventAt || "",
+    ageMs: codex.lastEventAgeMs ?? null,
+    thresholdMs: reason === "codex-reconnect-signal" || reason === "codex-reconnect-stuck"
+      ? args.stuckThresholdMs
+      : args.staleThresholdMs,
+    checkedAt: report.checkedAt || "",
+  };
+}
+
 function formatMacHeartbeatHealthSummary(health) {
   if (!health) return "MacHeartbeatHealth=unknown reason=unknown heartbeat=unknown blockers=unknown warnings=unknown checkedAt=unknown";
   return [
@@ -994,6 +1027,19 @@ function formatMacHeartbeatHealthSummary(health) {
     `heartbeat=${health.heartbeatStatus || "unknown"}`,
     `blockers=${health.blockers || "unknown"}`,
     `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
+function formatMacCodexHealthSummary(health) {
+  if (!health) return "MacCodexHealth=unknown reason=unknown codexStatus=unknown updatedAt=unknown ageMs=unknown thresholdMs=unknown checkedAt=unknown";
+  return [
+    `MacCodexHealth=${health.status || "unknown"}`,
+    `reason=${boardToken(health.reason)}`,
+    `codexStatus=${boardToken(health.codexStatus)}`,
+    `updatedAt=${health.updatedAt || "unknown"}`,
+    `ageMs=${health.ageMs ?? "unknown"}`,
+    `thresholdMs=${health.thresholdMs ?? "unknown"}`,
     `checkedAt=${health.checkedAt || "unknown"}`,
   ].join(" ");
 }
@@ -1107,8 +1153,9 @@ function makeBoardSummary(report) {
   const macHostAuthPathSegment = macHostAuthPathSummary ? ` ${macHostAuthPathSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
+  const macCodexHealthSummary = formatMacCodexHealthSummary(report.macCodexHealth);
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${macUnattendedHealthSegment}${macUnattendedFreshnessSegment}${macHostAuthPathSegment}${evidence}${stableEvidenceSummary}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}. ${macCodexHealthSummary}.${macPowerHealthSegment}${macUnattendedHealthSegment}${macUnattendedFreshnessSegment}${macHostAuthPathSegment}${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,
@@ -1192,6 +1239,7 @@ async function buildReport(args) {
     boardSummary: "",
   };
   report.macHeartbeatHealth = buildMacHeartbeatHealth(report);
+  report.macCodexHealth = buildMacCodexHealth(report, args);
   report.macEvidence = buildMacEvidence(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);

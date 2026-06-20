@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 MacCodexHealth 稳定短字段
+- `check-mac-heartbeat --checkBoard --boardSummary` 现在会在原有 `codex=...` / `MacHeartbeatHealth=` 之外输出稳定 `MacCodexHealth=<ok|warning|blocked|unknown> reason=<ok|codex-reconnect-signal|codex-reconnect-stuck|mac-codex-stale|...> codexStatus=<...> updatedAt=<...> ageMs=<...> thresholdMs=<...>`；JSON 同步提供 `macCodexHealth`。`check-mac-resume-status --boardSummary` 会从 heartbeat watcher 最近一次心跳派生并显示同一短字段。该字段只包含短 token、时间戳和年龄阈值，不回显 Mac Codex note 原文；不认证、不请求或发送密码、不发 call/input/inject。
+
 ## 2026-06-20 Windows mac-codex-stale 动作提示
 - `check-windows-resume-status --checkBoard --boardSummary` 现在在只读通讯板时，如果最新 `MacHeartbeatHealth=` 的 `reason`、`blockers` 或 `warnings` 明确包含 `mac-codex-stale`，会额外输出 `MacCodexStaleAction=status=blocked reason=mac-codex-stale next=RefreshAgentLinkBoardOrCallMacCodex` 和无密 `MacCodexStaleCall=node scripts/codex-link-client.mjs ... call ...`。该命令只用于需要 Mac Codex 配合时手动复制发起呼叫；默认不自动发送 call、不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。Mac 心跳恢复 `ok` 时该字段不显示。
 ## 2026-06-20 Windows 消费 MacManualUx TargetSource

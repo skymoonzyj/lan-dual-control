@@ -176,6 +176,10 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHeartbeatHealth=/.test(text), `${label} should include stable Mac heartbeat health`);
   assert(/MacHeartbeatHealth=(ok|blocked|warning|unknown)\b/.test(text), `${label} should include a parseable Mac heartbeat health status`);
   assert(/MacHeartbeatHealth=[^;.]*(?: |^)reason=/.test(text), `${label} should include Mac heartbeat health reason`);
+  assert(/MacCodexHealth=/.test(text), `${label} should include stable Mac Codex health`);
+  assert(/MacCodexHealth=(ok|blocked|warning|unknown)\b/.test(text), `${label} should include a parseable Mac Codex health status`);
+  assert(/MacCodexHealth=[^;.]*(?: |^)reason=/.test(text), `${label} should include Mac Codex health reason`);
+  assert(/MacCodexHealth=[^;.]*(?: |^)codexStatus=/.test(text), `${label} should include the Mac Codex board status`);
   assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
   assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
   assert(/MacHostMedia=/.test(text), `${label} should include stable Mac host media baseline guidance`);
