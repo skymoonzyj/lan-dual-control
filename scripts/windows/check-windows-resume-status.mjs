@@ -209,7 +209,9 @@ Examples:
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
+  node scripts/windows/test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
@@ -4631,9 +4633,24 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "--boardSummary",
     "--timeoutMs", "45000",
   ];
+  const windowsClientRetestBoardSummaryCommand = [
+    "node scripts/windows/test-windows-client-browser.mjs",
+    "--discover",
+    "--discoverNoLocalSubnets",
+    "--host", host,
+    "--port", String(port),
+    "--clientPort", String(args.clientPort),
+    "--debugPort", String(args.debugPort),
+    "--promptPassword",
+    "--requirePassword",
+    "--requireH264",
+    "--boardSummary",
+    "--timeoutMs", "45000",
+  ];
   if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
     windowsClientDiagnosticsCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
     windowsClientDiagnosticsAlternateCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
+    windowsClientRetestBoardSummaryCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
   const windowsClientDiagnosticsPowerShellCommand = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1",
@@ -4659,9 +4676,24 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "-BoardSummary",
     "-TimeoutMs", "45000",
   ];
+  const windowsClientRetestBoardSummaryPowerShellCommand = [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1",
+    "-Discover",
+    "-DiscoverNoLocalSubnets",
+    "-HostName", host,
+    "-Port", String(port),
+    "-ClientPort", String(args.clientPort),
+    "-DebugPort", String(args.debugPort),
+    "-PromptPassword",
+    "-RequirePassword",
+    "-RequireH264",
+    "-BoardSummary",
+    "-TimeoutMs", "45000",
+  ];
   if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
     windowsClientDiagnosticsPowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
     windowsClientDiagnosticsAlternatePowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
+    windowsClientRetestBoardSummaryPowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
   return {
     server: args.server,
@@ -4842,6 +4874,8 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
       "-DurationMs", "30000",
       "-BoardSummary",
     ].join(" "),
+    windowsClientRetestBoardSummaryCommand: windowsClientRetestBoardSummaryCommand.join(" "),
+    windowsClientRetestBoardSummaryPowerShellCommand: windowsClientRetestBoardSummaryPowerShellCommand.join(" "),
     windowsClientDiagnosticsCommand: windowsClientDiagnosticsCommand.join(" "),
     windowsClientDiagnosticsPowerShellCommand: windowsClientDiagnosticsPowerShellCommand.join(" "),
     windowsClientDiagnosticsAlternateCommand: windowsClientDiagnosticsAlternateCommand.join(" "),
@@ -5107,6 +5141,7 @@ function makeBoardSummary(report) {
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
     ...(report.board.macMaxFpsSafeStart?.command ? [`MacMaxFpsSafeStart=${report.board.macMaxFpsSafeStart.command}.`] : []),
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
+    `WinClientRetest=${report.commands.windowsClientRetestBoardSummaryCommand}; WinClientRetestPs=${report.commands.windowsClientRetestBoardSummaryPowerShellCommand}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
@@ -5298,29 +5333,52 @@ function sendManualUxAck(args, report) {
 
 function applyBoardReadyTarget(args, board) {
   const ready = board?.macReadyForRealTest;
-  if (!ready?.found || !ready.host || !ready.port || args.hostProvided) {
-    return args;
-  }
-  return {
-    ...args,
-    originalHost: args.host,
-    originalPort: args.port,
-    host: ready.host,
-    port: ready.port,
-    discover: false,
-    hostProvided: true,
-    discoverNoLocalSubnets: true,
-    boardReadyTarget: {
-      applied: true,
-      source: "MAC_READY_FOR_REAL_TEST",
+  if (!args.hostProvided && ready?.found && ready.host && ready.port) {
+    return {
+      ...args,
+      originalHost: args.host,
+      originalPort: args.port,
       host: ready.host,
       port: ready.port,
-      build: ready.build || "",
-      inputMode: ready.inputMode || "",
-      maxScreenFps: ready.maxScreenFps ?? null,
-      media: ready.media || "",
-    },
-  };
+      discover: false,
+      hostProvided: true,
+      discoverNoLocalSubnets: true,
+      boardReadyTarget: {
+        applied: true,
+        source: "MAC_READY_FOR_REAL_TEST",
+        host: ready.host,
+        port: ready.port,
+        build: ready.build || "",
+        inputMode: ready.inputMode || "",
+        maxScreenFps: ready.maxScreenFps ?? null,
+        media: ready.media || "",
+      },
+    };
+  }
+
+  const manualTarget = parseMacReadyHostPort(board?.macManualUx?.target, "");
+  if (!args.hostProvided && board?.macManualUx?.found && manualTarget) {
+    return {
+      ...args,
+      originalHost: args.host,
+      originalPort: args.port,
+      host: manualTarget.host,
+      port: manualTarget.port,
+      discover: false,
+      hostProvided: true,
+      discoverNoLocalSubnets: true,
+      boardReadyTarget: {
+        applied: true,
+        source: "MacManualUx",
+        host: manualTarget.host,
+        port: manualTarget.port,
+        status: board.macManualUx.status || "",
+        targetSource: board.macManualUx.targetSource || "",
+      },
+    };
+  }
+
+  return args;
 }
 async function makeReport(args) {
   const git = getGitStatus();
@@ -5646,6 +5704,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
+  console.log(`  ${report.commands.windowsClientRetestBoardSummaryCommand}`);
+  console.log(`  ${report.commands.windowsClientRetestBoardSummaryPowerShellCommand}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsPowerShellCommand}`);
   if (!report.windowsClientDiagnosticsPorts?.available) {

@@ -125,6 +125,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 
 正式 Mac E2E 长测仍走 `check-mac-formal-e2e.mjs --promptPassword`，密码只经环境变量传给子探针；正式运行会先明确打印正在执行 Plan 1/2 还是 Plan 2/2。Plan 1 在 H.264 首帧确认后还会继续做长视频观察，再做音频观察；Plan 2 才是 Windows client 浏览器 H.264 canvas 检查。视频/音频观察会先打印目标时长，并默认每 10 秒输出一次进度心跳，包含已收帧数、剩余时间、当前 FPS 和最大帧间隔，避免现场把长观察误判为第二步卡住。需要调试心跳频率时可加 `--progressIntervalMs <ms>`，传 `0` 可关闭。正式验收前先跑 discovery 或 formal preflight 的 `--boardSummary` 时，摘要会同时给出 `MacFormalLocalSmoke=check-mac-formal-local-smoke --promptPassword --boardSummary` 和 `MacUnattendedFormal=check-mac-unattended-status --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`；前者用于先让 Mac 本机短验 H.264/PCM/input-log，后者用于把 LaunchAgent max FPS / loaded 当成正式门禁。如果预检发现远端上限只有 30Hz，还会把 `MacMaxFpsPlan=` 放在同一行，用于先规划 Mac LaunchAgent 的 60Hz 上限，再强校验 blocker 是否消失。
 
+真实 60Hz/H.264 复测优先先跑 `check-windows-resume-status --checkBoard --boardSummary`，复制其中 `WinClientRetest=` 或 `WinClientRetestPs=`。这条命令会优先使用通讯板里的 `MAC_READY_FOR_REAL_TEST` / `MacManualUx target=`，在本机终端隐藏提示输入 Mac 临时密码，并强制 `--requireH264 --boardSummary`，复测结束后直接输出可发通讯板的 `W2W3Retest=video=... audio=...`；不要把密码写进命令行、通讯板或 GitHub。
+
 如果第二步现场像是卡在 Windows client browser 检查，先跑 `check-windows-resume-status --checkBoard --boardSummary` 看 `WinClientPorts=`。当前现场曾出现 `WinClientPorts=occupied(9337;stale-diagnostics)`，推荐改用 `--clientPort 5200 --debugPort 9340`；本轮已用备用端口确认 `test-windows-client-browser --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340 --diagnosticsOnly --boardSummary --expectDiscoveryRuntimeBuildId ed937a2` 通过，且没有请求密码、认证或发送 input/inject。
 
 ```powershell

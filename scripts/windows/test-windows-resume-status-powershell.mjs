@@ -661,6 +661,10 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "--clientPort 5197 --debugPort 9337", "PowerShell board summary");
     assertIncludes(output, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell board summary");
+    assertIncludes(output, "WinClientRetest=", "PowerShell board summary");
+    assertIncludes(output, "--promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000", "PowerShell board summary");
+    assertIncludes(output, "WinClientRetestPs=", "PowerShell board summary");
+    assertIncludes(output, "-PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000", "PowerShell board summary");
     assertIncludes(output, "WinClientDiagnosticsPs=", "PowerShell board summary");
     assertIncludes(output, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "-ClientPort 5197 -DebugPort 9337", "PowerShell board summary");

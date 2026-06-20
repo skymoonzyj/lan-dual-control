@@ -599,6 +599,23 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--debugPort 9337"), "mock JSON client diagnostics should show the default browser debug port");
     assert(String(payload.commands?.windowsClientDiagnosticsAlternateCommand || "").includes("--clientPort 5200"), "mock JSON client diagnostics should include an alternate page port command");
     assert(String(payload.commands?.windowsClientDiagnosticsAlternateCommand || "").includes("--debugPort 9340"), "mock JSON client diagnostics should include an alternate browser debug port command");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("test-windows-client-browser.mjs"), "mock JSON should include Windows client real retest command");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--discoverNoLocalSubnets"), "mock JSON client real retest should target the known host without scanning the whole LAN");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes(`--port ${port}`), "mock JSON client real retest should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--clientPort 5197"), "mock JSON client real retest should show the default local page port");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--debugPort 9337"), "mock JSON client real retest should show the default browser debug port");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--promptPassword"), "mock JSON client real retest should prompt locally");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--requirePassword"), "mock JSON client real retest should require non-empty credentials");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--requireH264"), "mock JSON client real retest should require H.264");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--boardSummary"), "mock JSON client real retest should be board-safe");
+    assert(!String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--password"), "mock JSON client real retest should not include password argv");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client real retest PowerShell command");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client real retest PowerShell should target the known host without scanning the whole LAN");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client real retest PowerShell should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-PromptPassword"), "mock JSON client real retest PowerShell should prompt locally");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-RequirePassword"), "mock JSON client real retest PowerShell should require non-empty credentials");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-RequireH264"), "mock JSON client real retest PowerShell should require H.264");
+    assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-BoardSummary"), "mock JSON client real retest PowerShell should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client diagnostics PowerShell command");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client diagnostics PowerShell should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client diagnostics PowerShell should use the discovered Mac port");
@@ -663,6 +680,16 @@ async function checkRuntimeBuildClientDiagnosticsCommand(args) {
       payload.commands?.windowsClientDiagnosticsPowerShellCommand,
       `-ExpectDiscoveryRuntimeBuildId ${buildId}`,
       "runtime JSON client diagnostics PowerShell command",
+    );
+    assertIncludes(
+      payload.commands?.windowsClientRetestBoardSummaryCommand,
+      `--expectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime JSON client real retest command",
+    );
+    assertIncludes(
+      payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand,
+      `-ExpectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime JSON client real retest PowerShell command",
     );
     assertIncludes(
       payload.boardSummary,
@@ -814,6 +841,10 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "board summary");
     assertIncludes(result.stdout, "--clientPort 5197 --debugPort 9337", "board summary");
     assertIncludes(result.stdout, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "board summary");
+    assertIncludes(result.stdout, "WinClientRetest=", "board summary");
+    assertIncludes(result.stdout, "--promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000", "board summary");
+    assertIncludes(result.stdout, "WinClientRetestPs=", "board summary");
+    assertIncludes(result.stdout, "-PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "WinClientDiagnosticsPs=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
     assertIncludes(result.stdout, "-ClientPort 5197 -DebugPort 9337", "board summary");
@@ -2748,6 +2779,46 @@ async function checkBoardMacReadyTargetSelection(args) {
     });
   });
 }
+async function checkBoardMacManualUxTargetSelection(args) {
+  await withMockHostOnAnyAddress(async (port) => {
+    const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+    const macManualUxText = `MacManualUx=status=ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxStandby,userAwakeManualUxCall Target=localhost:${port} TargetSource=board Next=ManualUxTest Safety=no-password,no-input-inject NoFormalE2ERerun=true blockers=none warnings=none`;
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--noDiscover",
+        "--checkBoard",
+        "--server", board.url,
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args, freeWindowsClientPortsEnv);
+      assert(result.exitCode === 0, `MacManualUx target selection failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macManualUx?.found === true, "MacManualUx should be extracted from board");
+      assert(payload.board.macManualUx.target === `localhost:${port}`, "MacManualUx target should be extracted");
+      assert(payload.args?.host === "localhost", "resume status should promote MacManualUx host before preflight");
+      assert(payload.args?.port === port, "resume status should promote MacManualUx port before preflight");
+      assert(payload.macPreflight?.payload?.target?.host === "localhost", "preflight should use MacManualUx host");
+      assert(payload.macPreflight?.payload?.target?.port === port, "preflight should use MacManualUx port");
+      assertIncludes(payload.boardSummary, `MacManualUx=status=ready`, "MacManualUx board summary");
+      assertIncludes(payload.boardSummary, `target=localhost:${port}`, "MacManualUx board summary target");
+      assertIncludes(payload.boardSummary, `WinClientRetest=node scripts/windows/test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host localhost --port ${port}`, "MacManualUx retest target");
+      assertIncludes(payload.boardSummary, `WinClientRetestPs=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName localhost -Port ${port}`, "MacManualUx retest PowerShell target");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacManualUx target selection");
+      console.log("[OK] Windows resume status promotes MacManualUx target to WinClientRetest");
+    }, {
+      statuses: {
+        "Mac Manual UX": {
+          role: "Mac 端",
+          status: "ready",
+          note: macManualUxText,
+        },
+      },
+    });
+  });
+}
 async function checkOfflineJson(args) {
   const result = await run([
     "--noDiscover",
@@ -2815,6 +2886,7 @@ async function main() {
   await checkSendManualUxAckBlockedByGate(args);
   await checkSendManualUxAckTimeout(args);
   await checkBoardMacReadyTargetSelection(args);
+  await checkBoardMacManualUxTargetSelection(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);
   console.log("[OK] Windows resume status regression passed");

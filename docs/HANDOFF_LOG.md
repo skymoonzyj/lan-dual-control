@@ -32,6 +32,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 Windows 恢复总览真实复测入口
+开发端：Windows Codex
+本轮目标：让 Blocker B 的真实 60Hz/H.264 复测命令出现在 Windows 开工第一屏，不再靠人工翻 README 或旧终端记录。
+完成内容：`check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WinClientRetest=` / `WinClientRetestPs=`，指向本机隐藏输入密码、要求 H.264、输出 `W2W3Retest=` 的 `test-windows-client-browser` 真实复测命令；同一命令会继承 discovery runtime build pin，并在 `/discovery` 暂时离线时优先使用安全解析后的 `MacManualUx target=`，避免给用户 127.0.0.1 的无效复测目标。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `mock JSON should include Windows client real retest command`；绿灯 `test-windows-resume-status` 通过，后续完整验证见本轮提交记录。
+遗留问题：入口已准备，但真实 60Hz/H.264 复测仍需要用户在本机终端输入 Mac 当前临时密码；密码不要发通讯板或 GitHub。
+下一步建议：用户在场时复制 `WinClientRetest=` 运行，结束后把 `W2W3Retest=` 一行发通讯板；若仍卡，按 video/audio 字段继续拆 Windows WebCodecs/本地音频队列和 Mac/网络供流。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 保持 60Hz/H.264/PCM 在线基线；不在通讯板发送密码。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2/W3 Windows client boardSummary 复测矩阵
 开发端：Windows Codex
 本轮目标：让 Blocker B 的真实 60Hz/H.264 复测结果能一行脱敏上板，减少从长日志里人工拼视频/音频字段。
