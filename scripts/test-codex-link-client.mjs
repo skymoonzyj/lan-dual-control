@@ -196,6 +196,23 @@ async function checkStateTextStillHumanReadable(args) {
   console.log("[OK] codex-link-client state default output stays human-readable");
 }
 
+async function checkWatchOnceShowsUserPresence(args) {
+  await withFakeBoard(makeState(), async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "watch", "--once"], args);
+    assert(result.status === 0, `watch --once should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "updatedAt: 2026-06-20T00:01:00.000Z", "watch --once");
+    assertIncludes(result.stdout, "userPresence:", "watch --once");
+    assertIncludes(result.stdout, "away (用户不在)", "watch --once");
+    assertIncludes(result.stdout, "updatedBy=Supervisor", "watch --once");
+    assertIncludes(result.stdout, "[call] CALLING: coordination smoke", "watch --once");
+    assertIncludes(result.stdout, "message Mac Codex: hello", "watch --once");
+    assertNotIncludes(result.stdout, "do-not-echo-instruction", "watch --once");
+    assertNotIncludes(result.stdout, "do-not-echo-reason", "watch --once");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `watch --once should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client watch --once surfaces structured userPresence safely");
+}
+
 async function checkPresencePost(args) {
   await withFakeBoard(makeState(), async (serverUrl, requests) => {
     const result = await run([
@@ -250,6 +267,7 @@ async function main() {
 
   await checkStateJson(args);
   await checkStateTextStillHumanReadable(args);
+  await checkWatchOnceShowsUserPresence(args);
   await checkPresencePost(args);
   await checkPresenceUnsupportedHint(args);
   console.log("[OK] codex-link-client self-test passed");

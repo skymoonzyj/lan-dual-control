@@ -70,6 +70,9 @@ async function watch(options) {
 
   while (true) {
     const state = await get(options, "/api/state");
+    if (once) {
+      printWatchHeader(state);
+    }
     const callSignature = JSON.stringify(state.currentCall || null);
     if (callSignature !== lastCallSignature) {
       lastCallSignature = callSignature;
@@ -85,6 +88,13 @@ async function watch(options) {
     if (once) break;
     await sleep(options.intervalMs);
   }
+}
+
+function printWatchHeader(state) {
+  console.log(`updatedAt: ${state.updatedAt || ""}`);
+  console.log("userPresence:");
+  console.log(formatUserPresence(state.userPresence));
+  console.log("");
 }
 
 async function post(options, path, body) {
