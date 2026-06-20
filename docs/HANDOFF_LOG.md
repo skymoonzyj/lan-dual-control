@@ -17,6 +17,18 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2 Windows H.264 首帧队列宽限
+开发端：Windows Codex
+本轮目标：处理现场 `W2-H264-KEYFRAME-BLOCKER`，避免 Windows 控制端还没画出首个 H.264 帧就因本机队列保护反复关 decoder，造成用户黑屏/等待关键帧。
+完成内容：`shouldResyncH264DecoderQueue` 新增首帧暖机判断；`h264DecodedFrames=0` 且状态仍在 decoding/configured 时，按协商 FPS 允许最多约 2 秒帧量、最长 2200ms 的初始队列堆积。首帧成功渲染后原来的 8 帧/450ms 低延迟治理保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-windows-client-browser --diagnosticsOnly` 先失败于 H.264 latency queue guard；绿灯同命令通过并输出 `firstSurfaceGrace=yes`，语法检查通过。
+遗留问题：仍需用户用 `WinClientRetest=` 做真实 Mac 60Hz/H.264 页面复测，确认 surface/decoded frame 是否出现；若仍无画面，再继续对照 Mac 周期 IDR/SPS/PPS 与 Windows WebCodecs 错误。
+下一步建议：推送后让 Mac 端保持 `192.168.31.122:43770` 在线，用户在本机终端输入 Mac 临时密码复跑 `WinClientRetest=`，把 `W2W3Retest=` 发通讯板。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 保持 60Hz/H.264 在线；不在通讯板发送密码，不发 input/inject。
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 M4 Mac 第一屏媒体基线统一 60Hz

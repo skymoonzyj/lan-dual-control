@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 首帧队列宽限
+- 针对现场 `W2-H264-KEYFRAME-BLOCKER`（连接、H.264、音频都通，但 Windows 页面长期显示“等待关键帧”且原因是 `queue-overflow-wait-keyframe`），Windows 控制端现在在 H.264 还没有任何 decoded surface 画出前，对 WebCodecs/meta 解码队列给一个首帧暖机宽限：按协商刷新率允许最多约 2 秒帧量，且最长 2200ms 内不因队列超过 8 或 450ms 就关 decoder。这样 1080p/60Hz 刚开始解码时不会还没画出第一帧就反复关 decoder/等关键帧；一旦已经画出过 H.264 帧，原有低延迟队列保护仍然生效。页面自测红灯先失败于 `firstSurfaceQueueGrace=false`，绿灯显示 `H.264 latency queue guard ... firstSurfaceGrace=yes`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-21 W2/W3 Windows 恢复总览暴露真实复测入口
 - `check-windows-resume-status --checkBoard --boardSummary` 现在会在同一行输出 `WinClientRetest=` / `WinClientRetestPs=`，指向 `test-windows-client-browser --discover --discoverNoLocalSubnets --promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000`。该入口用于 Blocker B 真实 60Hz/H.264 复测后直接生成 `W2W3Retest=video=... audio=...` 摘要；目标会优先采用已上板的 `MAC_READY_FOR_REAL_TEST` 或 `MacManualUx target=`，避免 Mac discovery 一时离线时回到 127.0.0.1；命令只让用户在本机隐藏输入 Mac 临时密码，不把密码写进参数、通讯板或日志，不开启真实 input/inject。
 

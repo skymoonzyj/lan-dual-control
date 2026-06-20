@@ -373,7 +373,7 @@ function windowsClientSnapshotExpression() {
     const remote = text("#remoteStatusText");
     const audio = text("#audioText");
     const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
-    const exportLines = exportText.split(/\r?\n/);
+    const exportLines = exportText.split(/\\r?\\n/);
     const exportLine = (prefix) => exportLines.find((line) => line.startsWith(prefix)) || "";
     const logs = [...document.querySelectorAll("#eventLog li")]
       .slice(0, 10)
@@ -5329,6 +5329,44 @@ async function verifyH264LatencyQueueGuard(session) {
           value: FakeVideoDecoder,
         });
 
+        const closeCallsBeforeFirstSurfaceGrace = closeCalls;
+        state.h264Decoder = {
+          state: "configured",
+          decodeQueueSize: 9,
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 9 }, (_, index) => ({
+          frameId: index + 301,
+          queuedAt: 100 + index,
+          timestampUs: index * 33333,
+        }));
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderLatencyMs = 0;
+        state.h264DecoderNeedsKeyFrame = false;
+        state.h264SkippedDeltaFrames = 0;
+        state.h264DecodedFrames = 0;
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+
+        const firstSurfaceGraceResync = maybeResyncH264DecoderQueueForLatency({
+          isKeyFrame: false,
+          frameId: 309,
+          now: 1000,
+        });
+        const firstSurfaceQueueGrace =
+          firstSurfaceGraceResync?.dropFrame === false &&
+          closeCalls === closeCallsBeforeFirstSurfaceGrace &&
+          state.h264Decoder !== null &&
+          state.h264DecoderQueue.length === 9 &&
+          state.h264DecoderNeedsKeyFrame === false &&
+          state.h264DecoderStatus === "decoding" &&
+          state.h264SkippedDeltaFrames === 0 &&
+          state.videoDroppedStaleFrames === 0 &&
+          state.videoLastDropReason === "";
+
         state.h264Decoder = {
           state: "configured",
           close: () => { closeCalls += 1; },
@@ -5342,6 +5380,7 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264DecoderKey = "avc1.420029:annexb";
         state.h264DecoderCodec = "avc1.420029:annexb";
         state.h264DecoderLatencyMs = 333;
+        state.h264DecodedFrames = 12;
         state.h264DecoderNeedsKeyFrame = false;
         state.videoDecoderQueueMs = 0;
         state.videoDroppedStaleFrames = 0;
@@ -5378,6 +5417,7 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264DecoderKey = "avc1.420029:annexb";
         state.h264DecoderCodec = "avc1.420029:annexb";
         state.h264DecoderLatencyMs = 0;
+        state.h264DecodedFrames = 12;
         state.h264DecoderNeedsKeyFrame = false;
         state.h264SkippedDeltaFrames = 0;
         state.videoDecoderQueueMs = 0;
@@ -5551,8 +5591,10 @@ async function verifyH264LatencyQueueGuard(session) {
           fallbackRecoveryPausedExportText.includes("最近回退：第三次等待关键帧");
 
         return {
-          ok: deltaOk && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause,
           deltaOk,
+          firstSurfaceQueueGrace,
+          firstSurfaceGraceResync,
           keyPreserved,
           webCodecsQueueBackpressure,
           keyFrameWaitGrace,
@@ -7214,7 +7256,7 @@ async function run() {
     summary.checks.push("h264-latency-queue");
     print(
       "OK",
-      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
+      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
     );
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");

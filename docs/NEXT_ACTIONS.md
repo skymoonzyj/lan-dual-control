@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- W2-H264-KEYFRAME-BLOCKER 最新口径：Windows 控制端已给 H.264 首个 decoded surface 前的本机解码队列增加暖机宽限，避免 1080p/60Hz 初始 WebCodecs 队列短暂超过 8 帧就关 decoder、随后长期等待关键帧。已经画出过一帧后，原 `queue-overflow-wait-keyframe` 低延迟治理仍保留。下一次真实复测继续用 `WinClientRetest=`，重点看 `W2W3Retest=video=` 是否出现 surface/decoded frame，若仍无画面再让 Mac 端同步确认周期 IDR/SPS/PPS 和 Windows 端 WebCodecs 错误。密码只在本机隐藏提示输入，不发通讯板，不发 input/inject。
 - W2/W3 真实复测入口最新口径：Windows 开工第一屏 `check-windows-resume-status --checkBoard --boardSummary` 会直接给出 `WinClientRetest=` / `WinClientRetestPs=`。需要真实 60Hz/H.264 复测时，优先复制这条命令；它会优先使用已上板的 `MAC_READY_FOR_REAL_TEST` 或 `MacManualUx target=` 作为 Mac LAN 目标，并在本机隐藏提示输入 Mac 临时密码，要求 H.264，输出一行 `W2W3Retest=video=... audio=...`，但不会把密码放到命令参数或通讯板，也不会开启真实 input/inject。
 - W2/W3 真实复测输出最新口径：Windows 端跑 `test-windows-client-browser --boardSummary` 后，摘要会新增 `W2W3Retest=`，直接汇总“现场视频 / 现场声音”。真实 60Hz/H.264 复测时优先把这一行发通讯板；看 `video=` 里的实收 FPS、请求/协商 Hz、平均/最大间隔、卡顿和本机队列，再看 `audio=` 里的队列、接收/播放/丢、补缓冲/稳缓冲/重同步和原因。
 - M3 Mac readiness 60Hz 基线复跑口径：需要重新给 Windows 端提供 Mac 侧 60Hz/H.264/PCM 基线时，用户在场后 Mac 端可跑 `node scripts/mac/check-mac-host-readiness.mjs --promptPassword --probeMedia --probeMediaResourceSample --probeMediaFps 60 --probeMediaBandwidthKbps 20000 --probeMediaVideoDurationMs 5000 --probeMediaAudioDurationMs 5000 --probeMediaVideoMinFps 50 --boardSummary`。输出会带 `mediaTarget=1280x720@60Hz/20000kbps/5000ms audio=5000ms minVideoFps=50`，方便和 Windows `W2W3Retest=` 对照；密码只在本地提示框输入，不发通讯板，不发 input/inject。

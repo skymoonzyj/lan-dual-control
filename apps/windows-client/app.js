@@ -170,6 +170,7 @@ const videoStreamStallThresholdMs = 2500;
 const videoStreamStatusPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
+const h264FirstSurfaceQueueGraceMs = 2200;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
 const h264FallbackRecoveryCooldownMs = 2500;
 const h264FallbackRecoveryStableJpegFrames = 3;
@@ -8845,8 +8846,36 @@ function getH264DecoderQueueMetrics(now = performance.now()) {
   };
 }
 
+function getH264FirstSurfaceQueueGraceFrames() {
+  const fps = Math.max(
+    1,
+    Math.min(
+      60,
+      Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value) || 30,
+    ),
+  );
+  return Math.max(h264MaximumQueuedFrames, Math.ceil(fps * 2));
+}
+
+function shouldKeepH264DecoderForFirstSurface(metrics) {
+  if ((Number(state.h264DecodedFrames) || 0) > 0) {
+    return false;
+  }
+  const status = String(state.h264DecoderStatus || "");
+  if (status !== "decoding" && status !== "configured") {
+    return false;
+  }
+  return (
+    metrics.queueLength <= getH264FirstSurfaceQueueGraceFrames() &&
+    metrics.oldestAgeMs <= h264FirstSurfaceQueueGraceMs
+  );
+}
+
 function shouldResyncH264DecoderQueue(now = performance.now()) {
   const metrics = getH264DecoderQueueMetrics(now);
+  if (shouldKeepH264DecoderForFirstSurface(metrics)) {
+    return false;
+  }
   return (
     metrics.queueLength > h264MaximumQueuedFrames ||
     metrics.oldestAgeMs > h264MaximumQueueAgeMs
