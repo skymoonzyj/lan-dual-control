@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 W2 Windows 视频首帧等待可见性
+- Windows 控制端现在会在连接进入 streaming 后记录 `videoWaitingSince`；如果超过 3 秒还没有收到第一帧视频，远程画面状态行会显示 `等待视频首帧` 和 `已等待 <秒>s`，复制/导出诊断“现场视频”也会追加同样字段。这样可区分“WebSocket/认证已通但首帧没到”和“收到过视频后的帧率/卡顿问题”。页面自测先红于 `videoFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W3 Windows 音频首帧等待可见性
 - Windows 控制端现在会在连接已建立、声音开启且对端已协商音频后记录 `audioWaitingSince`；如果超过 3 秒还没有收到第一个音频帧，页面声音状态行会显示 `等待音频首帧` 和 `已等待 <秒>s`，复制/导出诊断“现场声音”也会追加同样字段。这样可区分“从一开始就没有音频帧到达”和“收过音频后中途断流”。页面自测先红于 `audioFirstFrameWaitVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 

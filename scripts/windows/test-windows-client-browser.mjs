@@ -4976,6 +4976,9 @@ async function verifyVideoStutterDiagnostics(session) {
         decoderQueueMs: state.videoDecoderQueueMs,
         droppedStale: state.videoDroppedStaleFrames,
         lastDropReason: state.videoLastDropReason,
+        connected: state.connected,
+        videoWaitingSince: state.videoWaitingSince,
+        remoteStatusText: document.querySelector("#remoteStatusText")?.textContent || "",
       };
 
       try {
@@ -4991,13 +4994,35 @@ async function verifyVideoStutterDiagnostics(session) {
         state.videoDroppedStaleFrames = 0;
         state.videoLastDropReason = "";
         const exportText = getVideoPerformanceExportStatus();
+        const firstFrameWaitNow = 9000;
+        state.connected = true;
+        state.videoFrames = 0;
+        state.videoFrameTimes = [];
+        state.actualVideoFps = 0;
+        state.videoWaitingSince = firstFrameWaitNow - 4300;
+        const firstFrameWaitRendered =
+          typeof renderVideoFirstFrameWaitStatus === "function" &&
+          renderVideoFirstFrameWaitStatus(firstFrameWaitNow);
+        const firstFrameWaitStatusText = document.querySelector("#remoteStatusText")?.textContent || "";
+        const firstFrameWaitExportText = getVideoPerformanceExportStatus(firstFrameWaitNow);
+        const videoFirstFrameWaitVisible =
+          firstFrameWaitRendered &&
+          firstFrameWaitStatusText.includes("等待视频首帧") &&
+          firstFrameWaitStatusText.includes("已等待 4s") &&
+          firstFrameWaitExportText.includes("等待视频首帧") &&
+          firstFrameWaitExportText.includes("已等待 4s");
         return {
           ok:
             exportText.includes("平均间隔 80 ms") &&
             exportText.includes("最大间隔 184 ms") &&
             exportText.includes("卡顿 2") &&
-            exportText.includes("最大卡顿 184 ms"),
+            exportText.includes("最大卡顿 184 ms") &&
+            videoFirstFrameWaitVisible,
           exportText,
+          videoFirstFrameWaitVisible,
+          firstFrameWaitRendered,
+          firstFrameWaitStatusText,
+          firstFrameWaitExportText,
         };
       } finally {
         state.videoFrameTimes = original.videoFrameTimes;
@@ -5011,6 +5036,14 @@ async function verifyVideoStutterDiagnostics(session) {
         state.videoDecoderQueueMs = original.decoderQueueMs;
         state.videoDroppedStaleFrames = original.droppedStale;
         state.videoLastDropReason = original.lastDropReason;
+        state.connected = original.connected;
+        if (original.videoWaitingSince === undefined) {
+          delete state.videoWaitingSince;
+        } else {
+          state.videoWaitingSince = original.videoWaitingSince;
+        }
+        const remoteStatus = document.querySelector("#remoteStatusText");
+        if (remoteStatus) remoteStatus.textContent = original.remoteStatusText;
       }
     })()`,
   );

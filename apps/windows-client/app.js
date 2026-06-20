@@ -165,6 +165,8 @@ const audioStutterGapThresholdMs = 120;
 const audioFirstFrameWaitThresholdMs = 3000;
 const audioStreamStallThresholdMs = 2500;
 const audioStreamStallPollMs = 1000;
+const videoFirstFrameWaitThresholdMs = 3000;
+const videoFirstFrameWaitPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -538,6 +540,7 @@ const state = {
   activeHost: "",
   activePort: "",
   videoFrames: 0,
+  videoWaitingSince: 0,
   videoFrameTimes: [],
   lastVideoFrameAgeMs: null,
   lastVideoFrameTimestamp: "",
@@ -2079,6 +2082,7 @@ function setUiConnected(answer) {
     maxScreenFps,
     runtime: runtime ?? null,
   });
+  state.videoWaitingSince = performance.now();
   elements.remoteCanvas.focus();
 
   if (answer.width && answer.height) {
@@ -2934,6 +2938,7 @@ function dispatchControlEvent(element, eventName = "change") {
 }
 
 function resetVideoFrameStats() {
+  state.videoWaitingSince = 0;
   state.videoFrameTimes = [];
   state.actualVideoFps = 0;
   state.lastVideoFrameAgeMs = null;
@@ -2982,6 +2987,7 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
 }
 
 function recordVideoFrameTime() {
+  state.videoWaitingSince = 0;
   const now = performance.now();
   state.videoFrameTimes.push(now);
   const cutoff = now - 2000;
@@ -3301,6 +3307,31 @@ function formatAudioBufferHealthStatusText() {
   if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);
   return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
+function getVideoFirstFrameWaitStatus(now = performance.now()) {
+  const frameCount = Number(state.videoFrames) || 0;
+  const waitingSince = Number(state.videoWaitingSince) || 0;
+  if (!state.connected || frameCount > 0 || waitingSince <= 0) {
+    return { waiting: false, ageMs: 0, ageSeconds: 0 };
+  }
+  const ageMs = Math.max(0, now - waitingSince);
+  if (ageMs < videoFirstFrameWaitThresholdMs) {
+    return { waiting: false, ageMs, ageSeconds: 0 };
+  }
+  return {
+    waiting: true,
+    ageMs,
+    ageSeconds: Math.max(1, Math.round(ageMs / 1000)),
+  };
+}
+
+function renderVideoFirstFrameWaitStatus(now = performance.now()) {
+  const waitStatus = getVideoFirstFrameWaitStatus(now);
+  if (!waitStatus.waiting) return false;
+  elements.remoteStatusText.textContent = `画面：等待视频首帧 · 已等待 ${waitStatus.ageSeconds}s`;
+  syncFloatingControlStatus();
+  return true;
 }
 
 function getAudioFirstFrameWaitStatus(now = performance.now()) {
@@ -4743,7 +4774,7 @@ function getAudioFrameGapStats() {
   };
 }
 
-function getVideoPerformanceExportStatus() {
+function getVideoPerformanceExportStatus(now = performance.now()) {
   const requested = Number(state.requestedFps || elements.fpsSelect.value) || 0;
   const negotiated = Number(state.negotiatedFps || requested) || 0;
   const actual = Number(state.actualVideoFps) || 0;
@@ -4767,8 +4798,13 @@ function getVideoPerformanceExportStatus() {
   const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
+  const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
   const parts = [];
   parts.push(actual > 0 ? `实收 ${actual.toFixed(1)} FPS` : "实收 -- FPS");
+  if (firstFrameWaitStatus.waiting) {
+    parts.push("等待视频首帧");
+    parts.push(`已等待 ${firstFrameWaitStatus.ageSeconds}s`);
+  }
   if (requested) parts.push(`请求 ${requested} Hz`);
   if (negotiated) parts.push(`协商 ${negotiated} Hz`);
   if (sampleCount >= 2) {
@@ -9420,6 +9456,7 @@ document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(renderAudioStreamStallStatus, audioStreamStallPollMs);
+setInterval(renderVideoFirstFrameWaitStatus, videoFirstFrameWaitPollMs);
 setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
 setInterval(expirePendingOutgoingFileResult, remoteFileTransferSweepIntervalMs);
 applyPreferences();
