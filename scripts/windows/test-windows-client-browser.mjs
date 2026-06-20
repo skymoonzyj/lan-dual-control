@@ -29,6 +29,7 @@ const defaults = {
   expectDiscoveryRuntimeBuildId: "",
   headless: true,
   boardSummary: false,
+  onlyAudioBufferGuards: false,
 };
 
 let activeOutputArgs = null;
@@ -62,6 +63,7 @@ Options:
   --progressIntervalMs <ms>             Print connection/video/audio wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --headed                              Run browser headed instead of headless.
   --diagnosticsOnly                     Only run local UI diagnostics; do not connect to a Mac host.
+  --onlyAudioBufferGuards               Only run the audio queue/buffer guard browser check.
   --boardSummary                        Print one secret-free Agent Link Board summary line on stdout; progress goes to stderr.
   --noRequireVideoSurface               Do not require a visible decoded video surface.
   --requireH264                         Require H.264/WebCodecs decoded video.
@@ -119,6 +121,12 @@ function parseArgs(argv) {
     }
     if (key === "boardSummary") {
       args.boardSummary = true;
+      continue;
+    }
+    if (key === "onlyAudioBufferGuards") {
+      args.onlyAudioBufferGuards = true;
+      args.diagnosticsOnly = true;
+      args.requireVideoSurface = false;
       continue;
     }
     if (key === "promptPassword") {
@@ -5612,6 +5620,8 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalVisibilityHiddenAt = state.videoVisibilityHiddenAt;
       const originalVisibilityRecoveryCount = state.h264VisibilityRecoveryCount;
       const originalVisibilityRecoveryLastAt = state.h264VisibilityRecoveryLastAt;
+      const originalKeyFrameWaitStartedAt = state.h264KeyFrameWaitStartedAt;
+      const originalKeyFrameRecoveryLastRequestedAt = state.h264KeyFrameRecoveryLastRequestedAt;
       const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
       const originalVideoDecoderDescriptor = Object.getOwnPropertyDescriptor(window, "VideoDecoder");
 
@@ -5993,8 +6003,53 @@ async function verifyH264LatencyQueueGuard(session) {
           visibilityRecoveryExportText.includes("原因 visibility-return-h264-recovery") &&
           !visibilityRecoveryExportText.includes("解码 JPEG 回退");
 
+        const timedKeyFrameRecoverySettingsBefore = fallbackSettings.length;
+        state.connected = true;
+        state.client = {
+          sendDisplaySettings(message) {
+            fallbackSettings.push(message);
+          },
+        };
+        state.h264FallbackActive = false;
+        state.h264Decoder = null;
+        state.h264DecoderQueue = [];
+        state.h264DecoderStatus = "waiting-keyframe";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderNeedsKeyFrame = true;
+        state.h264SkippedDeltaFrames = 12;
+        state.h264DecodedFrames = 12;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.videoLastDropReason = "visibility-return-h264-recovery";
+        state.videoDroppedStaleFrames = 18;
+        state.videoDecoderQueueMs = 503;
+        state.h264KeyFrameWaitStartedAt = performance.now() - 1300;
+        state.h264KeyFrameRecoveryLastRequestedAt = performance.now() - 1300;
+        await renderH264VideoFrame({
+          payload: makeDeltaPayload(),
+          encoding: "annexb-base64",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 701,
+          keyFrame: false,
+        });
+        const timedKeyFrameRecoveryExportText = getVideoPerformanceExportStatus();
+        const timedKeyFrameRecovery =
+          state.h264FallbackActive === false &&
+          state.h264DecoderStatus === "recovering" &&
+          state.h264DecoderNeedsKeyFrame === true &&
+          state.h264SkippedDeltaFrames === 0 &&
+          state.videoLastDropReason === "keyframe-wait-h264-recovery" &&
+          fallbackSettings.length === timedKeyFrameRecoverySettingsBefore + 1 &&
+          fallbackSettings.at(-1)?.preferredVideoCodec === "h264" &&
+          fallbackSettings.at(-1)?.preferredVideoEncoding === "annexb" &&
+          timedKeyFrameRecoveryExportText.includes("原因 keyframe-wait-h264-recovery") &&
+          !timedKeyFrameRecoveryExportText.includes("解码 JPEG 回退");
+
         return {
-          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
           deltaOk,
           firstSurfaceQueueGrace,
           firstSurfaceGraceResync,
@@ -6002,6 +6057,8 @@ async function verifyH264LatencyQueueGuard(session) {
           webCodecsQueueBackpressure,
           keyFrameWaitGrace,
           keyFrameWaitH264Recovery,
+          timedKeyFrameRecovery,
+          timedKeyFrameRecoveryExportText,
           fallbackRecovery,
           secondFallbackRecovery,
           fallbackRecoveryPause,
@@ -6070,6 +6127,8 @@ async function verifyH264LatencyQueueGuard(session) {
         state.videoVisibilityHiddenAt = originalVisibilityHiddenAt;
         state.h264VisibilityRecoveryCount = originalVisibilityRecoveryCount;
         state.h264VisibilityRecoveryLastAt = originalVisibilityRecoveryLastAt;
+        state.h264KeyFrameWaitStartedAt = originalKeyFrameWaitStartedAt;
+        state.h264KeyFrameRecoveryLastRequestedAt = originalKeyFrameRecoveryLastRequestedAt;
         state.hostDiagnostics = originalHostDiagnostics;
         if (originalVideoDecoderDescriptor) {
           Object.defineProperty(window, "VideoDecoder", originalVideoDecoderDescriptor);
@@ -7196,6 +7255,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
         lastBufferReason: state.audioLastBufferReason,
         stablePrebufferCount: state.audioStablePrebufferCount,
         lastUnderrunAt: state.audioLastUnderrunAt,
+        visibilityHiddenAt: state.audioVisibilityHiddenAt,
+        visibilityRecoveryCount: state.audioVisibilityRecoveryCount,
+        visibilityRecoveryLastAt: state.audioVisibilityRecoveryLastAt,
         frames: state.audioFrames,
         lastFrameAt: state.audioLastFrameAt,
         waitingSince: state.audioWaitingSince,
@@ -7365,8 +7427,41 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioResyncCount === 1 &&
           state.audioLastDropReason === "queue-overflow-trim-future";
 
+        state.audioContext = makeFakeContext(30);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 30.52;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 0;
+        state.audioResyncCount = 0;
+        state.audioLastDropReason = "";
+        state.audioLastBufferReason = "";
+        state.audioVisibilityHiddenAt = Math.max(1, performance.now() - 2500);
+        state.audioVisibilityRecoveryCount = 0;
+        state.audioVisibilityRecoveryLastAt = 0;
+        state.audioScheduledSources = [
+          { source: { stop() { stops.push(0.30); }, disconnect() {} }, playAt: 29.9, duration: 0.30 },
+          { source: { stop() { stops.push(0.15); }, disconnect() {} }, playAt: 30.25, duration: 0.15 },
+        ];
+        starts.length = 0;
+        stops.length = 0;
+        const visibilityRecovered =
+          typeof recoverAudioAfterVisibilityReturn === "function" &&
+          recoverAudioAfterVisibilityReturn("visibility-return-audio-recovery");
+        const visibilityRecoveryResetQueue =
+          visibilityRecovered &&
+          stops.length === 2 &&
+          stops.includes(0.30) &&
+          stops.includes(0.15) &&
+          state.audioDroppedFrames === 2 &&
+          state.audioResyncCount === 1 &&
+          state.audioVisibilityRecoveryCount === 1 &&
+          state.audioLastDropReason === "visibility-return-audio-recovery" &&
+          state.audioNextPlayTime >= 30.115 &&
+          state.audioNextPlayTime < 30.2 &&
+          state.audioVisibilityHiddenAt === 0;
+
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -7400,6 +7495,15 @@ async function verifyAudioPlaybackBufferGuards(session) {
           resyncPrebuffered,
           overflowResyncCount: state.audioResyncCount,
           overflowDropReason: state.audioLastDropReason,
+          visibilityRecovered,
+          visibilityRecoveryResetQueue,
+          visibilityRecoveryStops: stops.slice(),
+          visibilityRecoveryDropped: state.audioDroppedFrames,
+          visibilityRecoveryResyncCount: state.audioResyncCount,
+          visibilityRecoveryCount: state.audioVisibilityRecoveryCount,
+          visibilityRecoveryDropReason: state.audioLastDropReason,
+          visibilityRecoveryNextPlayTime: state.audioNextPlayTime,
+          visibilityRecoveryHiddenAt: state.audioVisibilityHiddenAt,
         };
       } finally {
         if (audioToggle) audioToggle.checked = original.checked;
@@ -7421,6 +7525,21 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioLastBufferReason = original.lastBufferReason;
         state.audioStablePrebufferCount = original.stablePrebufferCount;
         state.audioLastUnderrunAt = original.lastUnderrunAt;
+        if (original.visibilityHiddenAt === undefined) {
+          delete state.audioVisibilityHiddenAt;
+        } else {
+          state.audioVisibilityHiddenAt = original.visibilityHiddenAt;
+        }
+        if (original.visibilityRecoveryCount === undefined) {
+          delete state.audioVisibilityRecoveryCount;
+        } else {
+          state.audioVisibilityRecoveryCount = original.visibilityRecoveryCount;
+        }
+        if (original.visibilityRecoveryLastAt === undefined) {
+          delete state.audioVisibilityRecoveryLastAt;
+        } else {
+          state.audioVisibilityRecoveryLastAt = original.visibilityRecoveryLastAt;
+        }
         state.audioFrames = original.frames;
         state.connected = original.connected;
         if (original.waitingSince === undefined) {
@@ -7614,6 +7733,18 @@ async function run() {
       args.timeoutMs,
       "page load",
     );
+
+    if (args.onlyAudioBufferGuards) {
+      const audioBufferGuardCheck = await verifyAudioPlaybackBufferGuards(session);
+      summary.checks.push("audio-buffer-guards");
+      summary.status = "passed";
+      print(
+        "OK",
+        `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} underrun=${audioBufferGuardCheck.underrunCount ?? 0} stable=${audioBufferGuardCheck.stablePrebufferCount ?? 0} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0} visibilityRecovery=${audioBufferGuardCheck.visibilityRecoveryCount ?? 0}`,
+      );
+      emitBoardSummary(summary);
+      return;
+    }
 
     const controlCenterCheck = await verifyFloatingControlCenter(session);
     summary.checks.push("control-center");

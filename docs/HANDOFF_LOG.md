@@ -18,6 +18,16 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 后台低 FPS 关键帧等待时间重试
+开发端：Windows Codex
+本轮目标：修复用户真实复测中最小化/切 app 后视频不完全卡死但出现秒级延迟积压的问题，并保留音频后台恢复改动的验证记录。
+完成内容：Windows 控制端新增 H.264 关键帧等待计时：进入等待关键帧后记录开始时间和上次恢复请求时间；如果后台恢复后低 FPS 下仍只收到 delta，超过约 900ms 就保持 H.264/annexb 重新请求关键帧，诊断原因显示 `keyframe-wait-h264-recovery`，避免按 60Hz 等 180 个 delta 导致 8 秒以上积压。同期本地音频可见性恢复会在恢复可见/聚焦时清掉旧 WebAudio source 并重同步播放时间，诊断显示音频可见恢复次数。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `timedKeyFrameRecovery=false`；绿灯后 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：仍需用户真实最小化/切 app/切回复测，看视频是否仍出现秒级积压、声音是否仍大量 dropped/resync/refill；若仍复现，优先复制 `W2W3Retest=` / 现场诊断再判断是 Windows 本地队列、Mac 发帧还是浏览器后台节流。
+下一步建议：两端拉最新；Mac 保持 host 在线；Windows/用户运行真实复测并重点观察视频 `keyframe-wait-h264-recovery` 是否能及时恢复、音频 `可见恢复` 后 dropped 是否下降。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
 
 日期：2026-06-21 W2 可见性复测提示进入 Windows 恢复总览
 开发端：Windows Codex

@@ -4,6 +4,9 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
+- 当前最高优先级更新：等待双方拉取最新 Windows client 后做一次真实“最小化/切 app/切回”复测。预期视频侧不再出现 8-10 秒级关键帧等待积压；如果仍有卡顿，先看 `W2W3Retest h264=` / 复制诊断里的 `实收 FPS`、`最后收到`、`本机队列`、`本地过期丢帧`、`跳过 delta`、`需要关键帧`、`原因 keyframe-wait-h264-recovery|queue-overflow-wait-keyframe` 和 `h264KeyFrameWaitMs`。音频侧同步看 `现场声音` 的接收/播放/丢、`重同步`、`补缓冲`、`可见恢复` 和最近原因。Mac 侧保持 host 在线即可，除非 Windows 证明确实缺 `recv/key/sps/pps/idr` 或音频源帧。
+- 本轮代码边界：W2 视频修复只在 Windows client H.264/WebCodecs 关键帧等待路径加时间重试；W4 音频恢复只处理 Windows client 本机 WebAudio 可见性恢复和旧 source 清理。不改 WebSocket 协议、不改 Mac host、不做 Mac 控 Windows/反控扩展；真实输入仍保持安全门禁。
+
 - 当前最高优先级：真实复测 Windows 已修的 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`。Windows 控制端现在会在切出/后台后恢复可见时，针对 H.264 等关键帧、`queue-overflow-wait-keyframe` 或队列超阈值主动清本机旧队列，并保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 请求下一关键帧；诊断会显示 `原因 visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。下一步由用户真实切出/切回控制端窗口确认画面是否继续流动；如果仍冻结，先复制诊断，看 `recv/key/sps/pps/idr` 是否齐、`reason` 是否仍回到 queue overflow、canvas 是否还在绘制，再决定是否需要 Mac 补证据。Mac 侧继续保持 host 在线；无密码/auth/input/inject。
 - Windows 开工第一屏新增 W2 可见性复测提示：恢复总览会直接显示 `W2VisibilityRetest=status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。看到这条时，下一步就是运行 `Run-WinClientRetest-And-Post.cmd`，在当前终端隐藏输入 Mac 临时密码，连接后真实切出/切回控制端窗口；不要把密码发通讯板，也不要自动发 input/inject。
 

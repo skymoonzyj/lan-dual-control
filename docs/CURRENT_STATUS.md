@@ -4,6 +4,12 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 后台低 FPS 关键帧等待时间重试
+- 用户真实复测 `215ba92` 后，画面不再完全卡死，但最小化/切 app 后仍出现秒级积压：H.264 实收约 `21.5/60 FPS`、到达 `9.6s`、最后收到 `4s` 前、`queue=503ms`、`decode=194ms`、`staleDrops=18`、`needsKeyframe=yes`、原因 `queue-overflow-wait-keyframe`。Windows 控制端现在会记录 H.264 等待关键帧的开始时间和上次恢复请求时间；如果后台恢复后仍只收到 delta 且等待超过约 `900ms`，不再等到 60Hz 的 `180` 个 delta 才处理，而是保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 立即重新请求 H.264 关键帧，诊断原因保留 `keyframe-wait-h264-recovery`。这只改 Windows client 本机 WebCodecs/H.264 恢复策略，不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。专项回归 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 已覆盖 `timedKeyFrameRecovery`。
+
+## 2026-06-21 W4 音频可见性恢复已随 Windows client 本地验证
+- 本地 Windows client 改动还包含音频后台恢复防护：页面隐藏超过约 `250ms` 后恢复可见/聚焦时，如果 WebAudio 队列已堆到约 `180ms` 或仍有多个计划播放 source，会恢复 AudioContext、停止旧的已排队/仍活动 source，并把 `audioNextPlayTime` 重新接到当前时间后的重同步缓冲，避免后台回来继续播放旧尾巴导致 `queue-overflow-trim-future` 大量丢包；现场诊断会显示音频 `可见恢复 <n>` 和原因 `visibility-return-audio-recovery` / `window-focus-audio-recovery`。该路径仍只在用户已开声音且音量大于 0 时运行，不改系统声音输出，不涉及密码、认证或 input/inject。
+
 ## 2026-06-21 W2 可见性复测提示进入 Windows 恢复总览
 - `check-windows-resume-status --checkBoard` 现在会在 JSON `w2VisibilityRetest`、普通输出和 `--boardSummary` 中固定显示 `W2VisibilityRetest=status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。这是 W2 后台/切出窗口修复后的真实验收提示：下一步不是继续改 Mac 或重复旧 H.264 首屏诊断，而是用户用最新 Windows 控制端连接 Mac 后，真实切出/切回控制端窗口确认画面是否继续流动。该摘要只读生成，不请求密码、不认证、不发通讯板、不发送 input/inject。
 ## 2026-06-21 Windows 修复 W2 后台/切出窗口 H.264 冻结，待真实复测确认
