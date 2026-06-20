@@ -9,6 +9,9 @@
 ## 2026-06-20 W3 Windows 音频低水位补缓冲诊断
 - Windows 控制端 WebAudio 播放队列低于 70ms 并自动补到 80ms 时，现在会记录 `audioUnderrunCount` 和 `audioLastBufferReason=queue-underrun-prebuffer`；复制/导出诊断“现场声音”同步输出 `补缓冲 <n>` 和 `原因 queue-underrun-prebuffer`。这样用户反馈声音断续时，可以区分“本地队列溢出后 flush 重同步”和“采集/网络供流间歇导致低水位补缓冲”。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `underrunPrebufferDiagnosed=false`，绿灯确认 `Audio buffer guards ... underrun=1 ...`。本轮只改 Windows 控制端本地 WebAudio 诊断和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 
+## 2026-06-20 M1 Mac remote audio status gate
+- `check-mac-remote-audio-status --host <Mac host> --port <port> --boardSummary` 现在提供只读 `MacRemoteAudioStatus=`：先请求 Mac host `/discovery` 确认 `capture=system-pcm`，再读取当前 macOS output volume/mute 状态，用 `local-playback-active` 明确表示 Mac 本机仍会出声，用 `local-output-muted` 表示用户手动静音候选但仍需音频 smoke 和恢复路径。`check-mac-resume-status --boardSummary` 同屏新增 `MacRemoteAudioStatus=node scripts/mac/check-mac-remote-audio-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`，方便开工第一屏直接检查。当前真机只读结果为 `status=local-playback-active localOutput=audible volume=71 muted=false remoteOnly=not-active`；脚本不改音量、不切输出设备、不请求密码、不认证、不发送 input/inject。
+
 ## 2026-06-20 W2 Windows WebCodecs decodeQueueSize 背压重同步
 - Windows 控制端 H.264 低延迟重同步现在同时参考本地 meta 队列和 WebCodecs `VideoDecoder.decodeQueueSize`，取较大值判断是否超过 8 帧阈值；浏览器内部解码队列堆积时，即使 meta 队列还没长，也会关闭旧 decoder、清空旧队列、丢弃当前 delta 并等待下一关键帧，避免继续播放过期画面。`test-windows-client-browser --diagnosticsOnly` 已覆盖红灯 `webCodecsQueueBackpressure=false`，绿灯确认 `H.264 latency queue guard: dropped=10 reason=queue-overflow-wait-keyframe`。本轮只改 Windows 控制端本地 H.264 背压和页面自测，不改协议、不认证、不请求或发送密码、不发 input/inject。
 

@@ -43,6 +43,41 @@
 是否改了协议：否；只改 Windows 控制端本地 WebAudio 行为、诊断和页面自测。
 是否需要另一端配合：暂不需要；真实体验复测时可请 Mac 端同步跑音频媒体基线。
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 M1 Mac remote audio status gate
+开发端：Mac Codex
+本轮目标：给远端独占声音路线增加只读状态门禁，先判断当前 Mac 本机是否仍会出声。
+完成内容：
+- 新增 `scripts/mac/check-mac-remote-audio-status.mjs`：只读请求 Mac host `/discovery`，并读取当前 macOS output volume/mute 状态，输出 `MacRemoteAudioStatus=` 摘要。
+- 状态区分 `capture-not-system-pcm`、`local-playback-active`、`local-output-muted` 和 `unknown`；`local-output-muted` 只表示用户手动静音候选，仍需音频 smoke 和恢复路径。
+- `check-mac-resume-status --boardSummary` 新增 `MacRemoteAudioStatus=node scripts/mac/check-mac-remote-audio-status.mjs --host <host> --port <port> --boardSummary` 第一屏入口。
+修改文件：
+- `scripts/mac/check-mac-remote-audio-status.mjs`
+- `scripts/mac/test-mac-remote-audio-status.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-remote-audio-status.mjs`
+- `node --check scripts/mac/test-mac-remote-audio-status.mjs`
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-remote-audio-status.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- 真机只读：`node scripts/mac/check-mac-remote-audio-status.mjs --host 127.0.0.1 --port 43770 --boardSummary` 当前输出 `status=local-playback-active volume=71 muted=false remoteOnly=not-active`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `git diff --check` 和冲突标记扫描
+遗留问题：当前 Mac 本机输出仍为 audible，remote-only 尚未成立；后续若要静音、切输出设备或做 product toggle，必须先说明目标、安全边界和恢复路径，并得到用户明确同意。
+下一步建议：Windows/Mac 做真实声音体验前，先看 `MacRemoteAudioStatus=`；若是 `local-playback-active`，不要宣称远端独占声音，先走用户同意后的静音/虚拟输出/产品开关方案。
+是否改了协议：否；只新增 Mac 侧只读状态脚本和 resume 第一屏入口。
+是否需要另一端配合：暂不需要；后续真实 remote-only audio 验收需要 Windows 端同步观察声音和用户确认。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W3 Windows 音频低水位补缓冲诊断
