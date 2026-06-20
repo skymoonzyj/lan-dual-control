@@ -21,6 +21,7 @@ const defaults = {
   videoMaxGapMs: 1000,
   preferredVideoCodec: "h264",
   requireH264: true,
+  requireH264Keyframe: true,
   requireRealVideo: false,
   width: 1280,
   height: 720,
@@ -74,6 +75,8 @@ Options:
   --videoMaxGapMs <ms>                 Maximum video receive gap. Default: ${defaults.videoMaxGapMs}
   --preferredVideoCodec <codec>        Requested video codec. Default: ${defaults.preferredVideoCodec}
   --requireH264 <true|false>           Require H.264 Annex B frames. Default: true
+  --requireH264Keyframe <true|false>   Require at least one H.264 keyframe with SPS/PPS/IDR.
+                                      Default: true when --requireH264 is true
   --requireRealVideo                   Reject mock/svg frames.
   --width <px> --height <px> --fps <n> Video request. Default: ${defaults.width}x${defaults.height}/${defaults.fps}
   --bandwidthKbps <kbps>               Video bandwidth request. Default: ${defaults.bandwidthKbps}
@@ -153,6 +156,7 @@ function parseArgs(argv) {
   args.videoMaxGapMs = clampInteger(args.videoMaxGapMs, 50, 600000, defaults.videoMaxGapMs);
   args.preferredVideoCodec = String(args.preferredVideoCodec || defaults.preferredVideoCodec).trim().toLowerCase();
   args.requireH264 = booleanArg(args.requireH264, defaults.requireH264);
+  args.requireH264Keyframe = booleanArg(args.requireH264Keyframe, defaults.requireH264Keyframe);
   args.requireRealVideo = booleanArg(args.requireRealVideo, defaults.requireRealVideo);
   args.width = clampInteger(args.width, 1, 16384, defaults.width);
   args.height = clampInteger(args.height, 1, 16384, defaults.height);
@@ -189,6 +193,8 @@ function parseArgs(argv) {
   }
   if (args.requireH264) {
     args.preferredVideoCodec = "h264";
+  } else {
+    args.requireH264Keyframe = false;
   }
   if (args.maxFrameAgeMs > 0) {
     args.requireFrameTimestamp = true;
@@ -248,6 +254,7 @@ function makeVideoArgs(args) {
   if (args.maxTimestampGapUs > 0) addArg(argv, "--maxTimestampGapUs", args.maxTimestampGapUs);
   addArg(argv, "--progressIntervalMs", args.progressIntervalMs);
   addFlag(argv, "--requireH264", args.requireH264);
+  addFlag(argv, "--requireH264Keyframe", args.requireH264Keyframe);
   addFlag(argv, "--requireRealVideo", args.requireRealVideo);
   addFlag(argv, "--requireFrameTimestamp", args.requireFrameTimestamp);
   addFlag(argv, "--requireTimestampUs", args.requireMonotonicTimestamp || args.maxTimestampGapUs > 0);
@@ -702,7 +709,10 @@ function formatProbeSummary(probe) {
     const codec = firstObjectKey(obs.codecs) || probe.session?.videoCodec || "unknown";
     const pipeline = firstObjectKey(obs.pipelines) || probe.session?.capturePipeline || "unknown";
     const age = obs.timestamp?.ageMaxMs ?? "n/a";
-    return `${obs.frameCount || 0} frames, ${obs.fps || 0} fps, maxGap=${obs.maxGapMs ?? "?"}ms, ageMax=${age}ms, ${codec}/${pipeline}`;
+    const h264 = obs.h264?.frames > 0
+      ? `, h264Key=${obs.h264.keyFrames || 0},sps=${obs.h264.spsFrames || 0},pps=${obs.h264.ppsFrames || 0},idr=${obs.h264.idrFrames || 0},keyParam=${obs.h264.keyFramesWithParameterSets || 0}`
+      : "";
+    return `${obs.frameCount || 0} frames, ${obs.fps || 0} fps, maxGap=${obs.maxGapMs ?? "?"}ms, ageMax=${age}ms${h264}, ${codec}/${pipeline}`;
   }
   if (probe.id === "audio") {
     const codec = firstObjectKey(obs.codecs) || probe.session?.audioCodec || "unknown";
@@ -787,6 +797,7 @@ function summarizeArgs(args) {
     videoMaxGapMs: args.videoMaxGapMs,
     preferredVideoCodec: args.preferredVideoCodec,
     requireH264: args.requireH264,
+    requireH264Keyframe: args.requireH264Keyframe,
     requireRealVideo: args.requireRealVideo,
     width: args.width,
     height: args.height,

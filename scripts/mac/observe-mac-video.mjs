@@ -12,6 +12,7 @@ const defaults = {
   maxGapMs: 1000,
   preferredVideoCodec: "h264",
   requireH264: false,
+  requireH264Keyframe: false,
   requireRealVideo: false,
   expectedCodec: "",
   expectedPipeline: "",
@@ -68,6 +69,7 @@ function parseArgs(argv) {
   args.maxGapMs = positiveInteger(args.maxGapMs, defaults.maxGapMs);
   args.preferredVideoCodec = normalizedText(args.preferredVideoCodec || defaults.preferredVideoCodec) || "h264";
   args.requireH264 = booleanArg(args.requireH264, defaults.requireH264);
+  args.requireH264Keyframe = booleanArg(args.requireH264Keyframe, defaults.requireH264Keyframe);
   args.requireRealVideo = booleanArg(args.requireRealVideo, defaults.requireRealVideo);
   args.expectedCodec = normalizedText(args.expectedCodec);
   args.expectedPipeline = normalizedText(args.expectedPipeline);
@@ -94,10 +96,11 @@ function parseArgs(argv) {
   if (args.requireMonotonicTimestampUs || args.maxTimestampGapUs > 0) {
     args.requireTimestampUs = true;
   }
-  if (args.requireH264) {
+  if (args.requireH264 || args.requireH264Keyframe) {
     args.preferredVideoCodec = "h264";
     args.expectedCodec ||= "h264";
     args.expectedPipeline ||= "screencapturekit-h264";
+    args.requireH264 = true;
   }
   return args;
 }
@@ -332,12 +335,26 @@ function createVideoStats(args) {
     maxDurationUs: 0,
     durationUsTotal: 0,
     timestampUsRegressions: 0,
+    h264: {
+      frames: 0,
+      keyFrames: 0,
+      keyFrameFlagFrames: 0,
+      payloadKeyFrames: 0,
+      spsFrames: 0,
+      ppsFrames: 0,
+      idrFrames: 0,
+      keyFramesWithParameterSets: 0,
+      firstNalTypes: [],
+      firstKeyFrameNalTypes: [],
+      nalTypes: new Map(),
+    },
     invalidFrames: [],
   };
 
   function addFrame(frame) {
     const now = Date.now();
     const payloadBytes = framePayloadBytes(frame);
+    const h264Info = h264FrameInfo(frame);
 
     if (stats.lastReceivedAt) {
       stats.gaps.push(now - stats.lastReceivedAt);
@@ -357,9 +374,10 @@ function createVideoStats(args) {
     countValue(stats.activeDisplayIds, frame.activeDisplayId || frame.displayId || "");
     countValue(stats.displayNames, frame.displayName || "");
     countValue(stats.sizes, `${frame.width || "?"}x${frame.height || "?"}`);
+    trackH264Frame(stats, h264Info);
 
     const problems = [
-      ...validateVideoFrame(frame, args),
+      ...validateVideoFrame(frame, args, h264Info),
       ...trackFrameTiming(stats, frame, now, args),
     ];
     if (problems.length > 0 && stats.invalidFrames.length < 5) {
@@ -454,7 +472,7 @@ function hasVideoPayload(frame) {
   return framePayloadBytes(frame) > 0 || Boolean(frame.dataUrl || frame.payload);
 }
 
-function validateVideoFrame(frame, args) {
+function validateVideoFrame(frame, args, h264Info = null) {
   const problems = [];
   const codec = normalizedText(frame.codec || frame.videoCodec);
   const encoding = normalizedText(frame.encoding || frame.videoEncoding);
@@ -475,6 +493,9 @@ function validateVideoFrame(frame, args) {
     if (!encoding.includes("annexb")) problems.push(`encoding=${frame.encoding || "missing"}`);
     if (pipeline !== "screencapturekit-h264") problems.push(`capturePipeline=${frame.capturePipeline || "missing"}`);
     if (!frame.payload) problems.push("h264 payload missing");
+    if (args.requireH264Keyframe && h264Info && h264Info.nalTypes.length === 0) {
+      problems.push("H.264 NAL types missing");
+    }
   }
   if (args.requireRealVideo) {
     if (codec === "mock-svg") problems.push("codec=mock-svg");
@@ -483,6 +504,87 @@ function validateVideoFrame(frame, args) {
     if (dataUrl.startsWith("data:image/svg")) problems.push("dataUrl is svg mock");
   }
   return problems;
+}
+
+function h264FrameInfo(frame) {
+  const codec = normalizedText(frame.codec || frame.videoCodec);
+  const encoding = normalizedText(frame.encoding || frame.videoEncoding);
+  if (codec !== "h264" && !encoding.includes("h264")) return null;
+  const payload = h264PayloadBytes(frame);
+  const nalTypes = encoding.includes("annexb") ? annexBNalTypes(payload) : [];
+  const hasSps = nalTypes.includes(7);
+  const hasPps = nalTypes.includes(8);
+  const hasIdr = nalTypes.includes(5);
+  const payloadKeyFrame = hasSps || hasPps || hasIdr;
+  const keyFrameFlag = frame.keyFrame === true;
+  return {
+    nalTypes,
+    hasSps,
+    hasPps,
+    hasIdr,
+    payloadKeyFrame,
+    keyFrameFlag,
+    keyFrame: keyFrameFlag || payloadKeyFrame,
+    keyFrameWithParameterSets: hasSps && hasPps && hasIdr,
+  };
+}
+
+function h264PayloadBytes(frame) {
+  if (typeof frame.payload !== "string" || frame.payload.length === 0) return Buffer.alloc(0);
+  try {
+    return Buffer.from(frame.payload, "base64");
+  } catch {
+    return Buffer.alloc(0);
+  }
+}
+
+function annexBNalTypes(bytes) {
+  const nalTypes = [];
+  let cursor = findAnnexBStartCode(bytes, 0);
+  while (cursor) {
+    const nalStart = cursor.index + cursor.length;
+    const next = findAnnexBStartCode(bytes, nalStart);
+    const nalEnd = next ? next.index : bytes.length;
+    if (nalStart < nalEnd) {
+      nalTypes.push(bytes[nalStart] & 0x1f);
+    }
+    cursor = next;
+  }
+  return nalTypes;
+}
+
+function findAnnexBStartCode(bytes, fromIndex) {
+  for (let index = Math.max(0, fromIndex); index + 3 < bytes.length; index += 1) {
+    if (bytes[index] !== 0 || bytes[index + 1] !== 0) continue;
+    if (bytes[index + 2] === 1) return { index, length: 3 };
+    if (index + 4 <= bytes.length && bytes[index + 2] === 0 && bytes[index + 3] === 1) {
+      return { index, length: 4 };
+    }
+  }
+  return null;
+}
+
+function trackH264Frame(stats, h264Info) {
+  if (!h264Info) return;
+  stats.h264.frames += 1;
+  if (stats.h264.firstNalTypes.length === 0) {
+    stats.h264.firstNalTypes = h264Info.nalTypes;
+  }
+  for (const nalType of h264Info.nalTypes) {
+    countValue(stats.h264.nalTypes, nalType);
+  }
+  if (h264Info.keyFrame) {
+    stats.h264.keyFrames += 1;
+    if (stats.h264.firstKeyFrameNalTypes.length === 0) {
+      stats.h264.firstKeyFrameNalTypes = h264Info.nalTypes;
+    }
+  }
+  if (h264Info.keyFrameFlag) stats.h264.keyFrameFlagFrames += 1;
+  if (h264Info.payloadKeyFrame) stats.h264.payloadKeyFrames += 1;
+  if (h264Info.hasSps) stats.h264.spsFrames += 1;
+  if (h264Info.hasPps) stats.h264.ppsFrames += 1;
+  if (h264Info.hasIdr) stats.h264.idrFrames += 1;
+  if (h264Info.keyFrameWithParameterSets) stats.h264.keyFramesWithParameterSets += 1;
 }
 
 function summarizeStats(stats, args) {
@@ -502,6 +604,7 @@ function summarizeStats(stats, args) {
     `encoding=${formatCounts(stats.encodings)}`,
     `pipeline=${formatCounts(stats.pipelines)}`,
     `source=${formatCounts(stats.sources)}`,
+    stats.h264.frames > 0 ? formatH264Summary(stats.h264) : "",
     `activeDisplayId=${formatCounts(stats.activeDisplayIds)}`,
     `displayName=${formatCounts(stats.displayNames)}`,
     `size=${formatCounts(stats.sizes)}`,
@@ -565,7 +668,24 @@ function makeObservation(stats, args) {
       avg: stats.durationUsFrames > 0 ? Math.round(durationAvg) : null,
       max: stats.durationUsFrames > 0 ? Math.round(stats.maxDurationUs) : null,
     },
+    h264: makeH264Observation(stats.h264),
     invalidFrames: stats.invalidFrames,
+  };
+}
+
+function makeH264Observation(h264) {
+  return {
+    frames: h264.frames,
+    keyFrames: h264.keyFrames,
+    keyFrameFlagFrames: h264.keyFrameFlagFrames,
+    payloadKeyFrames: h264.payloadKeyFrames,
+    spsFrames: h264.spsFrames,
+    ppsFrames: h264.ppsFrames,
+    idrFrames: h264.idrFrames,
+    keyFramesWithParameterSets: h264.keyFramesWithParameterSets,
+    firstNalTypes: h264.firstNalTypes,
+    firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
+    nalTypes: countsToObject(h264.nalTypes),
   };
 }
 
@@ -644,6 +764,7 @@ function summarizeArgs(args) {
     maxGapMs: args.maxGapMs,
     preferredVideoCodec: args.preferredVideoCodec,
     requireH264: args.requireH264,
+    requireH264Keyframe: args.requireH264Keyframe,
     requireRealVideo: args.requireRealVideo,
     expectedCodec: args.expectedCodec,
     expectedPipeline: args.expectedPipeline,
@@ -745,6 +866,17 @@ function actualFps(stats, args) {
   return stats.frames > 1 ? ((stats.frames - 1) * 1000) / elapsedMs : 0;
 }
 
+function formatH264Summary(h264) {
+  return [
+    `h264 key=${h264.keyFrames}`,
+    `sps=${h264.spsFrames}`,
+    `pps=${h264.ppsFrames}`,
+    `idr=${h264.idrFrames}`,
+    `keyParam=${h264.keyFramesWithParameterSets}`,
+    `first=${h264.firstNalTypes.join(",") || "none"}`,
+  ].join("/");
+}
+
 function progressDetails(stats, args) {
   const maxGap = stats.gaps.length > 0 ? Math.max(...stats.gaps) : 0;
   const ageText = stats.timestampFrames > 0
@@ -788,6 +920,11 @@ function assertStats(stats, args) {
   if (stats.invalidFrames.length > 0) {
     problems.push(`invalid video frame(s): ${stats.invalidFrames.join(" | ")}`);
   }
+  if (args.requireH264Keyframe && stats.h264.keyFramesWithParameterSets < 1) {
+    problems.push(
+      `H.264 keyframe SPS/PPS/IDR not observed: keyframes=${stats.h264.keyFrames} sps=${stats.h264.spsFrames} pps=${stats.h264.ppsFrames} idr=${stats.h264.idrFrames}`,
+    );
+  }
   if (stats.gaps.length > 0) {
     const maxGap = Math.max(...stats.gaps);
     if (maxGap > args.maxGapMs) {
@@ -814,6 +951,7 @@ Options:
   --maxGapMs <ms>                  Maximum allowed receive gap. Default: 1000
   --preferredVideoCodec <codec>    Requested codec: h264 or mjpeg. Default: h264
   --requireH264                    Require h264 / annexb / screencapturekit-h264 frames.
+  --requireH264Keyframe            Require at least one H.264 keyframe carrying SPS/PPS/IDR.
   --requireRealVideo               Reject mock/svg video frames.
   --expectedCodec <codec>          Require an exact frame codec.
   --expectedPipeline <pipeline>    Require an exact capturePipeline.

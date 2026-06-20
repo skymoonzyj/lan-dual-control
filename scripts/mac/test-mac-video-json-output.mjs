@@ -144,8 +144,20 @@ function makeDiscoveryPayload(port) {
   };
 }
 
-function makeVideoFrame(frameId) {
+function makeAnnexBPayload(nalTypes) {
+  const chunks = [];
+  for (const nalType of nalTypes) {
+    chunks.push(Buffer.from([0x00, 0x00, 0x00, 0x01, nalType & 0x1f, 0x88, 0x84, 0x21]));
+  }
+  return Buffer.concat(chunks);
+}
+
+function makeVideoFrame(frameId, options = {}) {
   const timestampUs = 1_000_000 + frameId * 33_333;
+  const keyFrame = options.keyframes !== false && (frameId === 1 || frameId % 30 === 0);
+  const payload = keyFrame
+    ? makeAnnexBPayload(options.omitParameterSets ? [1] : [7, 8, 5])
+    : makeAnnexBPayload([1]);
   return {
     type: "video_frame",
     frameId,
@@ -156,15 +168,16 @@ function makeVideoFrame(frameId) {
     height: 720,
     codec: "h264",
     encoding: "annexb-base64",
+    keyFrame,
     capturePipeline: "screencapturekit-h264",
     activeDisplayId: "main",
     displayName: "Main",
-    payload: Buffer.from(`fake-h264-${frameId}`, "utf8").toString("base64"),
-    payloadBytes: Buffer.byteLength(`fake-h264-${frameId}`),
+    payload: payload.toString("base64"),
+    payloadBytes: payload.length,
   };
 }
 
-async function withVideoServer(fn) {
+async function withVideoServer(fn, options = {}) {
   const port = await getFreePort();
   const clients = new Set();
   const server = http.createServer((request, response) => {
@@ -208,7 +221,7 @@ async function withVideoServer(fn) {
       if (videoTimer) return;
       videoTimer = setInterval(() => {
         frameId += 1;
-        send(makeVideoFrame(frameId));
+        send(makeVideoFrame(frameId, options));
       }, 35);
     }
 
@@ -342,7 +355,7 @@ function parseJsonOutput(stdout, label) {
 
 async function assertJsonSuccess(timeoutMs) {
   await withVideoServer(async (port) => {
-    const result = await runObserver(port, ["--minFrames", "4", "--minFps", "5"], timeoutMs);
+    const result = await runObserver(port, ["--minFrames", "4", "--minFps", "5", "--requireH264Keyframe"], timeoutMs);
     const output = `${result.stdout}\n${result.stderr}`;
     if (result.exitCode !== 0 || result.timedOut) {
       throw new Error(
@@ -359,6 +372,15 @@ async function assertJsonSuccess(timeoutMs) {
     if (payload.observation?.codecs?.h264 < 1) {
       throw new Error(`JSON success should count h264 frames.\n${result.stdout}`);
     }
+    if (!payload.observation?.h264 || Number(payload.observation.h264.keyFrames) < 1) {
+      throw new Error(`JSON success should count H.264 keyframes.\n${result.stdout}`);
+    }
+    if (Number(payload.observation.h264.spsFrames) < 1 || Number(payload.observation.h264.ppsFrames) < 1 || Number(payload.observation.h264.idrFrames) < 1) {
+      throw new Error(`JSON success should count H.264 SPS/PPS/IDR frames.\n${result.stdout}`);
+    }
+    if (Number(payload.observation.h264.keyFramesWithParameterSets) < 1) {
+      throw new Error(`JSON success should count H.264 keyframes with parameter sets.\n${result.stdout}`);
+    }
     if (payload.observation?.activeDisplayIds?.main < 1) {
       throw new Error(`JSON success should count activeDisplayId main.\n${result.stdout}`);
     }
@@ -373,6 +395,26 @@ async function assertJsonSuccess(timeoutMs) {
     }
     print("OK", "observe-mac-video JSON success output is parseable");
   });
+}
+
+async function assertH264KeyframeRequirementFailure(timeoutMs) {
+  await withVideoServer(async (port) => {
+    const result = await runObserver(port, ["--minFrames", "4", "--requireH264Keyframe"], timeoutMs);
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode === 0 || result.timedOut) {
+      throw new Error(
+        `observe-mac-video should fail when required H.264 keyframe SPS/PPS/IDR are absent. exit=${result.exitCode} timedOut=${result.timedOut}\n${output}`,
+      );
+    }
+    const payload = parseJsonOutput(result.stdout, "observe-mac-video H.264 keyframe failure");
+    if (payload.ok !== false) {
+      throw new Error(`H.264 keyframe failure should report ok=false.\n${result.stdout}`);
+    }
+    if (!String(payload.error?.message || "").includes("H.264 keyframe")) {
+      throw new Error(`H.264 keyframe failure should mention missing keyframe evidence.\n${result.stdout}`);
+    }
+    print("OK", "observe-mac-video fails when required H.264 keyframe evidence is missing");
+  }, { omitParameterSets: true });
 }
 
 async function assertJsonFailure(timeoutMs) {
@@ -408,6 +450,7 @@ async function main() {
     return;
   }
   await assertJsonSuccess(args.timeoutMs);
+  await assertH264KeyframeRequirementFailure(args.timeoutMs);
   await assertJsonFailure(args.timeoutMs);
   print("OK", "Mac video JSON output self-test passed");
 }

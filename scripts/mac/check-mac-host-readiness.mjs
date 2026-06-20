@@ -581,6 +581,7 @@ function mediaCommandArgs(args) {
     "--audioMaxGapMs",
     String(args.probeMediaAudioMaxGapMs),
     "--requireFrameTimestamp",
+    "--requireH264Keyframe",
   ];
   if (args.probeMediaVideoMinFps > 0) {
     mediaArgs.push("--videoMinFps", String(args.probeMediaVideoMinFps));
@@ -1135,7 +1136,8 @@ function formatMediaBoardSummary(summary) {
   const failed = Number(details.summary?.failed);
   const passed = Number(details.summary?.passed);
   const status = normalizeMediaStatus(details.summary?.status, result.ok, passed, failed);
-  if (status === "ok") return "media=ok";
+  const h264Evidence = formatMediaH264BoardSummary(details);
+  if (status === "ok") return `media=ok${h264Evidence ? ` ${h264Evidence}` : ""}`;
   if (status === "partial") {
     return `media=partial(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
   }
@@ -1144,6 +1146,24 @@ function formatMediaBoardSummary(summary) {
   }
   if (result.ok) return "media=ok";
   return "media=failed";
+}
+
+function formatMediaH264BoardSummary(details) {
+  const h264 = details?.video?.observation?.h264;
+  if (!h264 || typeof h264 !== "object") return "";
+  const keyFrames = Number(h264.keyFrames);
+  const spsFrames = Number(h264.spsFrames);
+  const ppsFrames = Number(h264.ppsFrames);
+  const idrFrames = Number(h264.idrFrames);
+  const keyParam = Number(h264.keyFramesWithParameterSets);
+  if (![keyFrames, spsFrames, ppsFrames, idrFrames, keyParam].every(Number.isFinite)) return "";
+  return [
+    `h264Key=${keyFrames}`,
+    `sps=${spsFrames}`,
+    `pps=${ppsFrames}`,
+    `idr=${idrFrames}`,
+    `keyParam=${keyParam}`,
+  ].join(" ");
 }
 
 function normalizeMediaStatus(value, ok, passed, failed) {

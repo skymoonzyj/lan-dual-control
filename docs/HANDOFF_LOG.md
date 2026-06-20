@@ -31,6 +31,19 @@
 是否需要另一端配合：需要 Mac host 保持 60Hz/H.264 在线；不在通讯板发送密码，不发 input/inject。
 ## 2026-06-21 Mac Codex
 
+日期：2026-06-21 M5 Mac H.264 keyframe 证据上板
+开发端：Mac Codex
+本轮目标：回应 W2-H264-KEYFRAME-BLOCKER 里的 Mac 侧待确认项，自动验证 Mac H.264 首屏/周期关键帧是否带 SPS/PPS/IDR。
+完成内容：`observe-mac-video` 新增 Annex B NAL 解析和 `--requireH264Keyframe`；`observe-mac-media` 默认把 H.264 基线纳入关键帧强校验；`check-mac-host-readiness --probeMedia --boardSummary` 在 `media=ok` 后追加 `h264Key/sps/pps/idr/keyParam` 证据。
+修改文件：scripts/mac/observe-mac-video.mjs；scripts/mac/observe-mac-media.mjs；scripts/mac/check-mac-host-readiness.mjs；scripts/mac/test-mac-video-json-output.mjs；scripts/mac/test-mac-host-readiness-board.mjs；CURRENT_STATUS/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先证明缺 SPS/PPS/IDR 的假 H.264 流仍会误通过；绿灯 `node scripts/mac/test-mac-video-json-output.mjs --timeoutMs 12000`、`node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 20000` 通过；真机只读 `MacHostMedia` 60Hz/20000kbps/5000ms 输出 `media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3`。
+遗留问题：用户此前仍反馈 Windows 页面看不到画面；本轮证据表明 Mac 当前发送的 H.264 keyframe 带 SPS/PPS/IDR，下一步更可能在 Windows WebCodecs keyframe 判定、decoder 重建/flush 时机或队列处理侧继续排查。
+下一步建议：Windows 端继续 W2-H264-KEYFRAME-BLOCKER，用新的 Mac 摘要对照 `W2W3Retest=`；如果仍等待关键帧，优先记录 Windows 收到的 NAL 类型、decoder configure/decode 输入和 flush 后第一帧路径。
+是否改了协议：否。只扩展 Mac 观察脚本/ready 摘要，不改变 WebSocket 消息格式。
+是否需要另一端配合：需要 Windows 端继续真实 60Hz/H.264 页面复测和解码侧排查；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Mac Codex
+
 日期：2026-06-21 M4 Mac 第一屏媒体基线统一 60Hz
 开发端：Mac Codex
 本轮目标：让 Mac heartbeat/resume 第一屏里的 `MacHostMedia=` 不再回到默认媒体探测，直接指向当前 W2/W3 复测需要的正式 60Hz H.264/PCM 基线。

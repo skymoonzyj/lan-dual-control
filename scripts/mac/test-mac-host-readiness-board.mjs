@@ -294,6 +294,7 @@ function formatMediaBoardSummaryFixture(summary) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const formatter = [
     functionBlock(source, "formatMediaBoardSummary"),
+    functionBlock(source, "formatMediaH264BoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
   ].join("\n");
   return Function("summary", `${formatter}\nreturn formatMediaBoardSummary(summary);`)(summary);
@@ -368,6 +369,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "getMaxScreenFps"),
     functionBlock(source, "formatMediaProbeTarget"),
     functionBlock(source, "formatMediaBoardSummary"),
+    functionBlock(source, "formatMediaH264BoardSummary"),
     functionBlock(source, "normalizeMediaStatus"),
     functionBlock(source, "formatHostBuildBoardSummary"),
     functionBlock(source, "formatHostMediaBoardSummary"),
@@ -587,10 +589,23 @@ function checkMediaBoardSummaryStatusFormatting() {
       results: [{
         label: "Mac host media aggregate",
         ok: true,
-        details: { summary: { status: "ok", passed: 2, failed: 0 } },
+        details: {
+          summary: { status: "ok", passed: 2, failed: 0 },
+          video: {
+            observation: {
+              h264: {
+                keyFrames: 2,
+                spsFrames: 2,
+                ppsFrames: 2,
+                idrFrames: 2,
+                keyFramesWithParameterSets: 2,
+              },
+            },
+          },
+        },
       }],
-    }) === "media=ok",
-    "media board summary should surface ok status",
+    }) === "media=ok h264Key=2 sps=2 pps=2 idr=2 keyParam=2",
+    "media board summary should surface ok status and H.264 keyframe evidence",
   );
   assert(
     formatMediaBoardSummaryFixture({
@@ -661,6 +676,7 @@ function checkProbeMediaTuningCommandArgs() {
   assert(joined.includes("--videoMaxGapMs 250"), "media aggregate should forward custom video max gap");
   assert(joined.includes("--audioMaxGapMs 250"), "media aggregate should forward custom audio max gap");
   assert(joined.includes("--maxFrameAgeMs 250"), "media aggregate should keep freshness threshold forwarding");
+  assert(joined.includes("--requireH264Keyframe"), "media aggregate should require H.264 keyframe SPS/PPS/IDR evidence");
   assert(joined.includes("--resourceSample"), "media aggregate should preserve resource sampling");
   assert(!joined.includes("--password"), "media aggregate command args should not embed passwords");
   assert(!joined.includes("input_event"), "media aggregate command args should not send input events");
