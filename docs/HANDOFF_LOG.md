@@ -19,6 +19,31 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac discovery 上板 POST 重试
+开发端：Mac Codex
+本轮目标：修复真实运行 `discover-windows-hosts --sendStatus --sendMessage --sendCall` 时，discovery 已输出安全摘要但 Agent Link Board `/api/status` 偶发/重复 `ECONNRESET` 会中断后续 message/call 的问题。
+完成内容：
+- `discover-windows-hosts` 的 `postToBoard` 对一次连接重置、socket closed、`UND_ERR_SOCKET`、`EPIPE` 或 `ETIMEDOUT` 做 200ms 短重试。
+- 保持 HTTP 非 2xx / board reject 不重试，避免掩盖真实拒绝；默认不带 `--sendStatus/--sendMessage/--sendCall` 仍只读。
+- 假通讯板新增首个 `/api/status` 直接断开连接的回归测试，确认第二次 POST 成功后只记录一条状态。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 12000` 先失败于 `fetch failed cause=UND_ERR_SOCKET:other side closed`。
+- 绿灯：同一测试通过，新增 `Agent Link Board POST retries one connection reset`。
+- 真实复测：`node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendStatus --sendMessage --sendCall --boardSummary --scanTimeoutMs 12000` 已成功刷新真实通讯板状态/消息/call；仍显示 Windows host discovery timeout。
+遗留问题：
+- Windows host 仍未被 Mac 发现，当前 active call 仍需要 Windows Codex 刷新 Windows host status/readiness 或安全启动 Windows host。
+下一步建议：
+- Windows 端继续按通讯板 currentCall 执行 `WindowsHostStatus=` / `WindowsHostReadiness=`；Mac 端后续可从 `MacResumeStatus` 的 `MacClientDiscoverWindowsCall=` 重新刷新该 call。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端处理当前 host readiness call；本轮不要求 Windows 代码修改。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac resume 第一屏暴露 discovery readiness call 命令
 开发端：Mac Codex
 本轮目标：让 Mac 开工第一屏在 Windows discovery timeout 时，不只显示当前状态，还能直接给出显式刷新 Windows host readiness call 的安全命令。

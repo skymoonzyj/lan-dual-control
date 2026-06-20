@@ -874,17 +874,24 @@ async function postToBoard(args, path, payload) {
   const token = String(args.token || process.env.CODEX_LINK_TOKEN || "");
   if (token) headers["X-Codex-Link-Token"] = token;
   let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    const cause = error?.cause
-      ? ` cause=${error.cause.code || error.cause.name || "unknown"}:${error.cause.message || error.cause}`
-      : "";
-    throw new Error(`Agent Link Board ${path} fetch failed at ${url}: ${error.message}${cause}`);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      break;
+    } catch (error) {
+      if (attempt < 2 && isRetryableBoardPostError(error)) {
+        await sleep(200);
+        continue;
+      }
+      const cause = error?.cause
+        ? ` cause=${error.cause.code || error.cause.name || "unknown"}:${error.cause.message || error.cause}`
+        : "";
+      throw new Error(`Agent Link Board ${path} fetch failed at ${url}: ${error.message}${cause}`);
+    }
   }
   const text = await response.text();
   let body = {};
@@ -897,6 +904,16 @@ async function postToBoard(args, path, payload) {
     throw new Error(`Agent Link Board ${path} rejected discovery summary: HTTP ${response.status} ${text}`.trim());
   }
   return body;
+}
+
+function isRetryableBoardPostError(error) {
+  const code = String(error?.cause?.code || error?.code || "");
+  const message = String(error?.cause?.message || error?.message || "");
+  return /^(?:ECONNRESET|EPIPE|ETIMEDOUT|UND_ERR_SOCKET)$/.test(code) || /\b(?:ECONNRESET|EPIPE|ETIMEDOUT|socket|closed)\b/i.test(message);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function sendStatus(args, report) {

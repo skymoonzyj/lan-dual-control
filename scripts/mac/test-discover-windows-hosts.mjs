@@ -446,7 +446,7 @@ async function waitForHttpPath(port, pathname, timeoutMs) {
   throw new Error(`HTTP server on ${port}${pathname} did not become ready`);
 }
 
-async function withBoardStateServer(args, state, callback) {
+async function withBoardStateServer(args, state, callback, options = {}) {
   const port = await getFreePort();
   const postDir = mkdtempSync(join(tmpdir(), "lan-dual-discover-board-posts-"));
   const postLogPath = join(postDir, "posts.jsonl");
@@ -459,9 +459,17 @@ import { appendFileSync } from "node:fs";
 const port = Number(process.argv[1]);
 const postLogPath = process.argv[2];
 const state = ${JSON.stringify(state)};
+const options = ${JSON.stringify(options)};
+const postAttempts = new Map();
 createServer((request, response) => {
   const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
   if (request.method === "POST" && (pathname === "/api/status" || pathname === "/api/message" || pathname === "/api/call")) {
+    const attempts = (postAttempts.get(pathname) || 0) + 1;
+    postAttempts.set(pathname, attempts);
+    if (options.resetFirstPostPath === pathname && attempts === 1) {
+      request.socket.destroy();
+      return;
+    }
     let body = "";
     request.setEncoding("utf8");
     request.on("data", (chunk) => {
@@ -1023,6 +1031,34 @@ async function checkExplicitBoardPostsForScannerTimeout(tmp, args) {
   console.log("[OK] Explicit scanner-timeout status/message posts are secret-free");
 }
 
+async function checkBoardPostRetriesConnectionReset(tmp, args) {
+  await withBoardStateServer(args, { statuses: {}, events: [] }, async (serverUrl, postLogPath) => {
+    const result = run([
+      "--server",
+      serverUrl,
+      "--checkBoard",
+      "--json",
+      "--scanTimeoutMs",
+      "1000",
+      "--sendStatus",
+    ], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+    });
+    assert(result.status === 0, `sendStatus should retry one reset Agent Link Board POST.\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "scanner timeout retry JSON");
+    assert(payload.scanError?.reason === "timeout", `retry payload should preserve scan timeout reason: ${JSON.stringify(payload.scanError)}`);
+    const posts = readPostLog(postLogPath);
+    assert(posts.length === 1, `retry should eventually post one status record: ${JSON.stringify(posts)}`);
+    assert(posts[0].path === "/api/status", `retry should post status: ${JSON.stringify(posts)}`);
+    assert(posts[0].body.status === "windows-discovery-timeout", `retry status mismatch: ${JSON.stringify(posts[0].body)}`);
+    assertIncludes(posts[0].body.note, "ScannerWarning=timeout", "retry status note");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "LAN_DUAL_PASSWORD", "retry status output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "--password", "retry status output");
+  }, { resetFirstPostPath: "/api/status" });
+  console.log("[OK] Agent Link Board POST retries one connection reset");
+}
+
 async function checkExplicitReadinessCallForScannerTimeout(tmp, args) {
   await withBoardStateServer(args, { statuses: {}, events: [], currentCall: null }, async (serverUrl, postLogPath) => {
     const result = run([
@@ -1118,6 +1154,7 @@ async function main() {
     await checkBoardWindowsLanRisk(tmp, args);
     await checkBoardMacUnattendedFreshness(tmp, args);
     await checkExplicitBoardPostsForScannerTimeout(tmp, args);
+    await checkBoardPostRetriesConnectionReset(tmp, args);
     await checkExplicitReadinessCallForScannerTimeout(tmp, args);
     await checkSendCallRefusesUnrelatedActiveCall(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");
