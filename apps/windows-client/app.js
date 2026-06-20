@@ -3654,6 +3654,29 @@ function parseMacInputSafetyPlanEvidenceLabels(text) {
   }
   return [...new Set(labels)];
 }
+
+function parseMacHostAuthPathEvidenceLabels(text) {
+  const source = String(text || "");
+  const match = /\bMacHostAuthPath\s*=\s*([^;\r\n]+)/i.exec(source);
+  if (!match || !/\bprompt-password-required\b/i.test(match[1])) return [];
+  const labels = [
+    "Mac host 需要前台输入连接密码",
+    "Windows 控制页密码框填写同一个临时密码",
+    "不要把密码发到通讯板",
+  ];
+  if (/launch-agent-ephemeral-password|\bmode\s*=\s*ephemeral\b|ephemeral/i.test(match[1])) {
+    labels.push("当前 Mac host 是一次性密码模式");
+  }
+  if (/MacMaxFpsSafeStart|MacHostStop->MacMaxFpsSafeStart|--maxScreenFps\s+60|60\s*Hz/i.test(source)) {
+    labels.push("先在 Mac 前台同密重启 60Hz host");
+  } else if (/MacHostSafeStart|MacHostStop->MacHostSafeStart/i.test(source)) {
+    labels.push("先在 Mac 前台同密重启 host");
+  }
+  if (/\bsafety\s*=\s*[^;\r\n]*no-password\b|\bno-password\b|不要.*密码.*通讯板/i.test(source)) {
+    labels.push("不要把密码发到通讯板");
+  }
+  return [...new Set(labels)];
+}
 function splitMacHeartbeatHealthReasonValues(segment) {
   const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
   if (!reason) return [];
@@ -3766,6 +3789,7 @@ function parseMacPositiveEvidenceLabels(text) {
   labels.push(...parsePostPassManualUxEvidenceLabels(source));
   labels.push(...parseMacRemoteAudioPlanEvidenceLabels(source));
   labels.push(...parseMacInputSafetyPlanEvidenceLabels(source));
+  labels.push(...parseMacHostAuthPathEvidenceLabels(source));
   return [...new Set(labels)];
 }
 
@@ -4272,7 +4296,7 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
     note: unattendedSummary
       ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : evidenceSummary
-        ? "Windows 已从 Mac 提醒 watcher 状态里识别到 Mac 媒体或本机短验收通过证据；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
+        ? "Windows 已从 Mac 提醒 watcher 状态里识别到 Mac 媒体、本机短验收或认证路径提示；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
   };
 }

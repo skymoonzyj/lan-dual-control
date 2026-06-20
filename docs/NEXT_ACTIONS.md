@@ -50,7 +50,7 @@
 
 最新 Mac client 安全提示：Mac 控 Windows 页面现在在密码框下显示 `passwordSafetyStatus` 和固定的 `passwordLocationHint`，提示 Windows 临时密码只填 Mac 页面密码框、不要发通讯板、不保存到最近连接或诊断；复制/导出诊断会带 `密码安全` 和 `密码输入位置` 状态，但不输出连接密码或英文 `password` 字样。若页面仍显示“演示密码”，不要把它当正式联调密码。
 
-复跑/重启认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。只有需要复跑正式 Windows 控 Mac 或重新启动 host 时，才按这条路径在用户在场时输入同一个临时密码；密码仍不要发通讯板。
+- 复跑/重启认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。Windows 控制端现在也会把这条显示为“Mac host 需要前台输入连接密码 / 当前 Mac host 是一次性密码模式 / Windows 控制页密码框填写同一个临时密码 / 先在 Mac 前台同密重启 60Hz host / 不要把密码发到通讯板”。只有需要复跑正式 Windows 控 Mac 或重新启动 host 时，才按这条路径在用户在场时输入同一个临时密码；密码仍不要发通讯板。
 
 1. Mac 端保持值守并准备手工体验测试。
    - 默认使用 `LAN_DUAL_INPUT_MODE=log` 做安全联调。

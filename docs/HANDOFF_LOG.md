@@ -55,6 +55,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控制端 MacHostAuthPath 提示
+开发端：Windows Codex
+本轮目标：让 Windows 控制页和复制诊断能直接解释 Mac host 一次性密码认证路径，减少“密码输入到哪”的现场混淆。
+完成内容：
+- Windows 控制端 Mac 提醒解析新增 `MacHostAuthPath=prompt-password-required` 只读证据识别。
+- Mac 提醒区、值守证据和复制/导出诊断现在显示“Mac host 需要前台输入连接密码 / 当前 Mac host 是一次性密码模式 / Windows 控制页密码框填写同一个临时密码 / 先在 Mac 前台同密重启 60Hz host / 不要把密码发到通讯板”。
+- 更新页面自检，覆盖解析结果、提醒状态栏和复制诊断导出；红灯先失败于 `macHostAuthPathAttention.evidenceSummary` 为空，修复后通过。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 MacHostAuthPath 提示缺失。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只做 Windows 端只读中文提示，不会重启 Mac host，也不会认证或请求密码；真实复跑仍需用户在两端本机输入同一个临时密码。
+下一步建议：
+- 继续推进用户在场的手工体验清单：连接、画面、声音、文本/文件剪贴板、小窗、全屏/原画和复制诊断。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端只需继续上报 `MacHostAuthPath=`。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 控制页连接密码位置提示
 开发端：Windows Codex
 本轮目标：减少现场混淆，让用户能区分网页登录 Mac 密码框和终端隐藏密码输入。

@@ -1524,6 +1524,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
+        "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -1622,6 +1623,32 @@ async function verifyDesktopOnlyHostPanel(session) {
               server: "http://192.168.31.68:17888",
               recentAlerts: [{ at: "2026-06-20 02:35:00", title: "Mac input safety", message: macInputSafetyPlanText }],
               lastAlert: { at: "2026-06-20 02:35:00", title: "Mac input safety", message: macInputSafetyPlanText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const macHostAuthPathText = [
+        "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+        "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+        "safety=no-password,no-input-inject",
+      ].join("; ");
+      const macHostAuthPathAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(macHostAuthPathText)
+          : null;
+      const macHostAuthPathBareAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention("MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia")
+          : null;
+      const macHostAuthPathView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2471],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 09:30:00", title: "Mac auth path", message: macHostAuthPathText }],
+              lastAlert: { at: "2026-06-20 09:30:00", title: "Mac auth path", message: macHostAuthPathText },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
@@ -2602,6 +2629,23 @@ async function verifyDesktopOnlyHostPanel(session) {
           macInputSafetyPlanView.statusText.includes("先用 safe 输入事件集") &&
           macInputSafetyPlanView.statusText.includes("不发送输入事件或执行注入") &&
           !macInputSafetyPlanView.statusText.includes("风险：") &&
+          macHostAuthPathAttention?.summary === "" &&
+          macHostAuthPathAttention?.evidenceSummary.includes("Mac host 需要前台输入连接密码") &&
+          macHostAuthPathAttention?.evidenceSummary.includes("当前 Mac host 是一次性密码模式") &&
+          macHostAuthPathAttention?.evidenceSummary.includes("Windows 控制页密码框填写同一个临时密码") &&
+          macHostAuthPathAttention?.evidenceSummary.includes("先在 Mac 前台同密重启 60Hz host") &&
+          macHostAuthPathAttention?.evidenceSummary.includes("不要把密码发到通讯板") &&
+          macHostAuthPathBareAttention?.evidenceSummary.includes("不要把密码发到通讯板") &&
+          macHostAuthPathBareAttention?.evidenceSummary.includes("Windows 控制页密码框填写同一个临时密码") &&
+          Array.isArray(macHostAuthPathAttention?.evidenceLabels) &&
+          macHostAuthPathAttention.evidenceLabels.length >= 5 &&
+          macHostAuthPathView.statusText.includes("证据：") &&
+          macHostAuthPathView.statusText.includes("Mac host 需要前台输入连接密码") &&
+          macHostAuthPathView.statusText.includes("当前 Mac host 是一次性密码模式") &&
+          macHostAuthPathView.statusText.includes("Windows 控制页密码框填写同一个临时密码") &&
+          macHostAuthPathView.statusText.includes("先在 Mac 前台同密重启 60Hz host") &&
+          macHostAuthPathView.statusText.includes("不要把密码发到通讯板") &&
+          !macHostAuthPathView.statusText.includes("风险：") &&
           positiveMacValidationAttention?.summary === "" &&
           Array.isArray(positiveMacValidationAttention?.labels) &&
           positiveMacValidationAttention.labels.length === 0 &&
@@ -2795,6 +2839,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         macRemoteAudioPlanView,
         macInputSafetyPlanAttention,
         macInputSafetyPlanView,
+        macHostAuthPathAttention,
+        macHostAuthPathBareAttention,
+        macHostAuthPathView,
         positiveMacValidationAttention,
         positiveMacValidationView,
         positiveMacFormalE2eAttention,
@@ -5323,6 +5370,7 @@ async function verifyReconnectControls(session) {
         "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
+        "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -5664,6 +5712,13 @@ async function verifyReconnectControls(session) {
             exportText.includes("真实输入需 --confirmUserWatching") &&
             exportText.includes("先用 safe 输入事件集") &&
             exportText.includes("不发送输入事件或执行注入") &&
+            exportText.includes("MacHostAuthPath=prompt-password-required") &&
+            exportText.includes("reason=launch-agent-ephemeral-password") &&
+            exportText.includes("Mac host 需要前台输入连接密码") &&
+            exportText.includes("当前 Mac host 是一次性密码模式") &&
+            exportText.includes("Windows 控制页密码框填写同一个临时密码") &&
+            exportText.includes("先在 Mac 前台同密重启 60Hz host") &&
+            exportText.includes("不要把密码发到通讯板") &&
             exportText.includes("capture=system-pcm-does-not-mute-local") &&
             exportText.includes("recommended=product-toggle-with-explicit-consent") &&
             exportText.includes("safety=no-volume-change") &&

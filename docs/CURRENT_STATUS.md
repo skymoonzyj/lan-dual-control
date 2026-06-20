@@ -87,6 +87,7 @@
 - 本轮没有认证 WebSocket、没有请求或发送密码、没有发送 `input_event`，也没有执行 `inject`；真实输入注入仍需用户明确确认正在看 Mac 屏幕后另行启动。
 
 ## Windows 端状态
+- 最新 Windows 控制端认证路径提示：Mac 提醒区、值守证据和复制/导出诊断现在会消费 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`，显示“Mac host 需要前台输入连接密码 / 当前 Mac host 是一次性密码模式 / Windows 控制页密码框填写同一个临时密码 / 先在 Mac 前台同密重启 60Hz host / 不要把密码发到通讯板”。这只读 Agent Link Board 和 watcher 文本，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 - 最新 Windows 控制端 PostPass 摘要：Mac 提醒区、值守证据和复制/导出诊断现在会消费 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby` 与 `ManualUxChecklist=`，显示“已进入手工体验清单：连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断”。这只做本地中文摘要，不回旧 formal E2E，不认证、不请求密码、不发 input/inject。
 
 - 最新现场状态：Windows 控 Mac formal E2E 主体已通过；不要再回到旧的 Mac ready、formal E2E 第二步或 diagnostics 循环。Windows 端当前后续任务是记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误：`node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`。该尾部错误属于外壳/退出阶段问题，不推翻主体 PASS；排查过程中仍不要发送密码、不要认证无关 WebSocket、不要发 input/inject。
