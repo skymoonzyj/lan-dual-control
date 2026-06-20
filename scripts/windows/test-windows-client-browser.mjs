@@ -6481,6 +6481,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         lastBufferReason: state.audioLastBufferReason,
         stablePrebufferCount: state.audioStablePrebufferCount,
         lastUnderrunAt: state.audioLastUnderrunAt,
+        frameTimes: Array.isArray(state.audioFrameTimes) ? state.audioFrameTimes.slice() : undefined,
       };
       const starts = [];
       const stops = [];
@@ -6561,6 +6562,13 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const adaptiveUnderrunPlayed = await playPcmAudioFrame(makeFrame());
         const adaptiveUnderrunStart = starts[0] || 0;
         const adaptiveUnderrunExportText = getAudioPerformanceExportStatus();
+        state.audioFrameTimes = [0, 20, 210, 250, 470];
+        const arrivalGapExportText = getAudioPerformanceExportStatus();
+        const arrivalGapDiagnosed =
+          arrivalGapExportText.includes("平均间隔 118 ms") &&
+          arrivalGapExportText.includes("最大间隔 220 ms") &&
+          arrivalGapExportText.includes("音频卡顿 2") &&
+          arrivalGapExportText.includes("最大音频卡顿 220 ms");
         const adaptivePrebuffered =
           adaptiveUnderrunPlayed &&
           adaptiveUnderrunStart >= 10.315 &&
@@ -6599,7 +6607,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && flushedOldQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -6607,6 +6615,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           underrunExportText,
           underrunStart,
           adaptivePrebuffered,
+          arrivalGapDiagnosed,
+          arrivalGapExportText,
           adaptiveUnderrunStart,
           adaptiveUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,
@@ -6639,6 +6649,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioLastBufferReason = original.lastBufferReason;
         state.audioStablePrebufferCount = original.stablePrebufferCount;
         state.audioLastUnderrunAt = original.lastUnderrunAt;
+        if (original.frameTimes === undefined) {
+          delete state.audioFrameTimes;
+        } else {
+          state.audioFrameTimes = original.frameTimes;
+        }
       }
     })()`,
   );

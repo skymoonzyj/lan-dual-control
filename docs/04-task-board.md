@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W3 Windows 音频到达间隔诊断：Windows 控制端最近 2 秒记录 `audioFrameTimes`，复制/导出诊断“现场声音”输出 `平均间隔`、`最大间隔`、`音频卡顿` 和 `最大音频卡顿`，用于区分 Mac/网络供流抖动与本地 WebAudio 队列问题；页面自测先红于缺少到达间隔诊断，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W2 Windows H.264 恢复暂停追溯诊断：短时间多次 H.264/JPEG fallback-recovery 后，Windows 控制端保留 `h264FallbackRecoveryPauseCount`，现场诊断/复制诊断显示 `恢复暂停 <n> 次`，暂停窗口内显示 `暂停剩余 <秒>s`；页面自测先红于缺少暂停次数，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] W2 Windows H.264 fallback/recovery 循环诊断：Windows 控制端在 JPEG 兜底稳定并恢复 H.264 后记录 `h264FallbackRecoveryCount` 和 `h264FallbackLastReason`，现场诊断/复制诊断显示 `回退恢复 <n> 次` 与最近回退原因；页面自测先红于缺少循环诊断，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] M1 Mac Remote Audio sendStatus：`check-mac-remote-audio-status --sendStatus --boardSummary` 可把当前只读 `MacRemoteAudioStatus=` 发布到 Agent Link Board 的 `Mac Remote Audio` 状态；本机仍出声时上板 `blocked-local-output`，静音/0 音量候选上板 `candidate-manual-muted`，都不代表 remote-only 已启用。只读、不改系统音量/输出设备、不请求密码、不认证、不发 input/inject。

@@ -161,6 +161,7 @@ const audioMaximumQueuedSeconds = 0.45;
 const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
+const audioStutterGapThresholdMs = 120;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -567,6 +568,7 @@ const state = {
   h264FallbackRecoveryPauseCount: 0,
   h264FallbackRecoveryTimestamps: [],
   audioFrames: 0,
+  audioFrameTimes: [],
   audioLevel: 0,
   audioContext: null,
   audioGain: null,
@@ -2176,6 +2178,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   resetVideoDecoder({ resetFallback: true });
   resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
+  state.audioFrameTimes = [];
   state.audioLevel = 0;
   resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
@@ -2208,6 +2211,7 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   resetVideoDecoder({ resetFallback: true });
   resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
+  state.audioFrameTimes = [];
   state.audioLevel = 0;
   resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
@@ -2979,6 +2983,16 @@ function recordVideoFrameTime() {
   return state.actualVideoFps;
 }
 
+function recordAudioFrameTime() {
+  const now = performance.now();
+  if (!Array.isArray(state.audioFrameTimes)) state.audioFrameTimes = [];
+  state.audioFrameTimes.push(now);
+  const cutoff = now - 2000;
+  while (state.audioFrameTimes.length > 0 && state.audioFrameTimes[0] < cutoff) {
+    state.audioFrameTimes.shift();
+  }
+}
+
 function updateFpsMetric() {
   const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
   const negotiated = state.negotiatedFps || requested;
@@ -3274,6 +3288,7 @@ function renderAudioStatusFromFrame(frame, options = {}) {
 
 function updateAudioStatusFromFrame(frame) {
   state.audioFrames += 1;
+  recordAudioFrameTime();
   state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
   renderAudioStatusFromFrame(frame, { force: state.audioFrames === 1 });
 }
@@ -4594,6 +4609,34 @@ function getVideoFrameGapStats() {
   };
 }
 
+function getAudioFrameGapStats() {
+  const times = Array.isArray(state.audioFrameTimes)
+    ? state.audioFrameTimes.filter((time) => Number.isFinite(Number(time))).map(Number)
+    : [];
+  if (times.length < 2) {
+    return { sampleCount: times.length, averageGapMs: 0, maxGapMs: 0, stutterCount: 0, maxStutterGapMs: 0 };
+  }
+
+  const gaps = [];
+  for (let index = 1; index < times.length; index += 1) {
+    const gap = times[index] - times[index - 1];
+    if (Number.isFinite(gap) && gap >= 0) gaps.push(gap);
+  }
+  if (!gaps.length) {
+    return { sampleCount: times.length, averageGapMs: 0, maxGapMs: 0, stutterCount: 0, maxStutterGapMs: 0 };
+  }
+
+  const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  const stutterGaps = gaps.filter((gap) => gap >= audioStutterGapThresholdMs);
+  return {
+    sampleCount: times.length,
+    averageGapMs: Math.round(total / gaps.length),
+    maxGapMs: Math.round(Math.max(...gaps)),
+    stutterCount: stutterGaps.length,
+    maxStutterGapMs: stutterGaps.length ? Math.round(Math.max(...stutterGaps)) : 0,
+  };
+}
+
 function getVideoPerformanceExportStatus() {
   const requested = Number(state.requestedFps || elements.fpsSelect.value) || 0;
   const negotiated = Number(state.negotiatedFps || requested) || 0;
@@ -4664,8 +4707,17 @@ function getAudioPerformanceExportStatus() {
   const underrunCount = Number(state.audioUnderrunCount) || 0;
   const stablePrebufferCount = Number(state.audioStablePrebufferCount) || 0;
   const dropReason = String(state.audioLastDropReason || state.audioLastBufferReason || "").trim();
+  const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getAudioFrameGapStats();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
+  if (sampleCount >= 2) {
+    parts.push(`平均间隔 ${averageGapMs} ms`);
+    parts.push(`最大间隔 ${maxGapMs} ms`);
+    if (stutterCount > 0) {
+      parts.push(`音频卡顿 ${stutterCount}`);
+      parts.push(`最大音频卡顿 ${maxStutterGapMs} ms`);
+    }
+  }
   if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
   if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);

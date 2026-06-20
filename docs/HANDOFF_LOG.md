@@ -18,6 +18,19 @@
 ```
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W3 Windows 音频到达间隔诊断
+开发端：Windows Codex
+本轮目标：让现场声音复制诊断能判断音频帧本身是否成批/断续到达。
+完成内容：Windows 控制端新增最近 2 秒 audioFrameTimes；现场声音输出 平均间隔 / 最大间隔 / 音频卡顿 / 最大音频卡顿；页面自测补红绿断言。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/ACTIVE_LOCKS。
+验证方式：红灯先失败于 arrivalGapDiagnosed=false；绿灯 test-windows-client-browser --diagnosticsOnly 通过。
+遗留问题：只增强诊断，不改变 Mac 采集、网络传输或 WebAudio 播放策略；如果音频卡顿持续增长，下一步查 Mac 采集/网络供流节奏。
+下一步建议：真实听感测试时先看平均/最大间隔、音频卡顿、补缓冲、稳缓冲、重同步，再判断查供流端还是播放队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实听感和 remote-only 声音路径仍需要用户现场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows H.264 恢复暂停追溯诊断
 开发端：Windows Codex
 本轮目标：让 Windows 控制端在 H.264/JPEG 恢复循环触发暂停后, 即使用户稍后才复制诊断, 也能追溯到暂停发生过。
