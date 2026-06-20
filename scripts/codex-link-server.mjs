@@ -72,6 +72,25 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/presence") {
+      if (!isAuthorized(req, url)) return unauthorized(res);
+      const body = await readJson(req);
+      const userPresence = makeUserPresence(body);
+      if (!userPresence) {
+        sendJson(res, { ok: false, error: "status must be present or away" }, 400);
+        return;
+      }
+      state.userPresence = userPresence;
+      addEvent({
+        type: "presence",
+        from: userPresence.updatedBy || "unknown",
+        text: `${userPresence.label}: status=${userPresence.status}${userPresence.reason ? ` reason=${userPresence.reason}` : ""}`,
+      });
+      await persistAndBroadcast();
+      sendJson(res, { ok: true, state });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/call") {
       if (!isAuthorized(req, url)) return unauthorized(res);
       const body = await readJson(req);
@@ -156,6 +175,49 @@ function normalizeState(input) {
     statuses: input.statuses || {},
     currentCall: input.currentCall || null,
     events: Array.isArray(input.events) ? input.events.slice(-200) : [],
+    pinnedTasks: Array.isArray(input.pinnedTasks) ? input.pinnedTasks : [],
+    userPresence: input.userPresence && typeof input.userPresence === "object" ? input.userPresence : null,
+  };
+}
+
+function makeUserPresence(body = {}) {
+  const status = normalizePresenceStatus(body.status || body.presence || body.state);
+  if (!status) return null;
+  const defaults = defaultPresence(status);
+  return {
+    status,
+    state: status,
+    label: clean(body.label) || defaults.label,
+    instruction: clean(body.instruction) || defaults.instruction,
+    reason: clean(body.reason) || defaults.reason,
+    updatedAt: now(),
+    updatedBy: clean(body.updatedBy || body.by || body.from) || "unknown",
+  };
+}
+
+function normalizePresenceStatus(value) {
+  const text = clean(value).toLowerCase();
+  if (["present", "awake", "user-present", "user_present", "用户在场", "在场", "我在场"].includes(text)) {
+    return "present";
+  }
+  if (["away", "sleeping", "asleep", "sleep", "user-away", "user_away", "用户不在", "不在", "休息", "睡觉"].includes(text)) {
+    return "away";
+  }
+  return "";
+}
+
+function defaultPresence(status) {
+  if (status === "present") {
+    return {
+      label: "用户在场",
+      instruction: "可以安排需要用户配合的任务；需要密码、系统授权、真实 input/inject 或人工确认前，仍必须先说明目标、安全边界和预计耗时，并先提醒用户。",
+      reason: "用户已明确表示在场/可操作",
+    };
+  }
+  return {
+    label: "用户不在",
+    instruction: "只做无授权任务；需要用户密码、系统授权、真实 input/inject、改系统声音输出或人工观感确认时，先标记 BLOCKED_BY_USER_AWAY。",
+    reason: "用户休息/离开，直到用户明确说回来/可以授权之前，只允许无授权任务",
   };
 }
 

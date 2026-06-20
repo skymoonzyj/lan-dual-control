@@ -23,6 +23,14 @@ try {
       status: args.status || "online",
       note: args.note || args._.slice(1).join(" "),
     });
+  } else if (command === "presence") {
+    await post(args, "/api/presence", {
+      status: args.status || args.presence || args.state || args._[1] || "present",
+      label: args.label || "",
+      instruction: args.instruction || "",
+      reason: args.reason || args.note || args._.slice(2).join(" "),
+      updatedBy: args.updatedBy || args.by || args.from || args.device || "Codex",
+    });
   } else if (command === "send") {
     await post(args, "/api/message", {
       from: args.from || args.device || "Codex",
@@ -190,6 +198,7 @@ function printHelp() {
   node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
   node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
+  node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "user returned"
   node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"
   node scripts/codex-link-client.mjs --server http://host:17888 call --from "Windows Codex" --need "Mac Codex" --goal "test" --ask "please verify"
   node scripts/codex-link-client.mjs --server http://host:17888 clear-call`);

@@ -80,13 +80,27 @@ function makeState() {
   };
 }
 
+async function readJson(request) {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : {};
+}
+
 async function withFakeBoard(state, fn) {
   const requests = [];
-  const server = http.createServer((request, response) => {
-    requests.push({ method: request.method, url: request.url });
+  const server = http.createServer(async (request, response) => {
+    const record = { method: request.method, url: request.url };
+    requests.push(record);
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify(state));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/presence") {
+      record.body = await readJson(request);
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ ok: true, state: { ...state, userPresence: record.body } }));
       return;
     }
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
@@ -164,6 +178,28 @@ async function checkStateTextStillHumanReadable(args) {
   console.log("[OK] codex-link-client state default output stays human-readable");
 }
 
+async function checkPresencePost(args) {
+  await withFakeBoard(makeState(), async (serverUrl, requests) => {
+    const result = await run([
+      "--server", serverUrl,
+      "presence",
+      "--status", "present",
+      "--updatedBy", "Mac Codex",
+      "--reason", "user returned in current chat",
+    ], args);
+    assert(result.status === 0, `presence should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assert(result.stdout.trim() === "ok", `presence should print ok. stdout=${result.stdout}`);
+    const presencePost = requests.find((request) => request.method === "POST" && request.url === "/api/presence");
+    assert(presencePost, `presence should post /api/presence: ${JSON.stringify(requests)}`);
+    assert(presencePost.body.status === "present", `presence status mismatch: ${JSON.stringify(presencePost.body)}`);
+    assert(presencePost.body.updatedBy === "Mac Codex", `presence updatedBy mismatch: ${JSON.stringify(presencePost.body)}`);
+    assert(presencePost.body.reason === "user returned in current chat", `presence reason mismatch: ${JSON.stringify(presencePost.body)}`);
+    assertNotIncludes(JSON.stringify(presencePost.body), "password", "presence POST");
+    assertNotIncludes(JSON.stringify(presencePost.body), "input_event", "presence POST");
+  });
+  console.log("[OK] codex-link-client presence posts structured userPresence safely");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -173,6 +209,7 @@ async function main() {
 
   await checkStateJson(args);
   await checkStateTextStillHumanReadable(args);
+  await checkPresencePost(args);
   console.log("[OK] codex-link-client self-test passed");
 }
 
