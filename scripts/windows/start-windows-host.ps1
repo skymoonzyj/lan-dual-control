@@ -72,6 +72,7 @@ Options:
   -Help, -h           Show this help.
 
 Status summaries include:
+  WindowsHostStartAction=needs-local-password-prompt Start=node scripts/windows/start-windows-host.mjs --host <host> --port <port> --promptPassword --requirePassword AfterStart=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary Safety=no-password-on-board,no-auth,no-input-inject
   WindowsSecureAuthPath=Restart Windows host locally with node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword; user enters the same temporary password in Windows and Mac prompts; do not send passwords.
   WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port <port> --json
   WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port <port> --dryRunRule --ruleProfile Private

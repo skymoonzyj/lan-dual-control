@@ -286,6 +286,9 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsWgcComparePs=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsHostStartAction=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "discover-windows-hosts.mjs --checkBoard --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertNotIncludes(output, "discover-windows-hosts.mjs --checkBoard --sendCall", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrant=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrantPs=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsReverseGrantStatus=", `PowerShell wrapper ${helpArg}`);
@@ -357,6 +360,7 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   const expectedSafeStart = `node scripts/windows/start-windows-host.mjs --host 127.0.0.1 --port ${port} --promptPassword --requirePassword`;
   const expectedEphemeralStart = `${expectedSafeStart} --skipFirewallCheck`;
   const expectedSecureAuthStart = `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`;
+  const expectedMacRetry = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
   const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
     timeoutMs,
     env: { LAN_DUAL_PASSWORD: "" },
@@ -372,6 +376,10 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, expectedEphemeralStart, "offline status ephemeral start command");
   assertIncludes(output, "Windows secure auth path:", "offline status secure auth path");
   assertIncludes(output, expectedSecureAuthStart, "offline status secure auth start command");
+  assertIncludes(output, "Windows host start action:", "offline status start action");
+  assertIncludes(output, "needs-local-password-prompt", "offline status start action");
+  assertIncludes(output, expectedSafeStart, "offline status start action command");
+  assertIncludes(output, expectedMacRetry, "offline status Mac retry command");
   assertIncludes(output, "Windows host media baseline command:", "offline status");
   assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertIncludes(output, "Windows video support command:", "offline status");
@@ -421,6 +429,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.windowsSecureAuthPath || "").includes(expectedSecureAuthStart) || !String(parsed.windowsSecureAuthPath || "").includes("same temporary password")) {
     throw new Error(`Offline JSON status did not include the secure auth path.\n${jsonResult.stdout}`);
+  }
+  if (parsed.windowsHostStartAction?.status !== "needs-local-password-prompt" || parsed.windowsHostStartAction?.startCommand !== expectedSafeStart || parsed.windowsHostStartAction?.macRetryCommand !== expectedMacRetry) {
+    throw new Error(`Offline JSON status did not include Windows host start action.\n${jsonResult.stdout}`);
   }
   if (String(parsed.windowsSecureAuthPath || "").includes("--password ")) {
     throw new Error(`Offline JSON secure auth path should not include a password argument.\n${jsonResult.stdout}`);
@@ -472,6 +483,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.windowsOpenOneTimeReverseGrantCommand || "").includes("--grant") || !String(parsed.windowsOpenOneTimeReverseGrantPowerShellCommand || "").includes("-Grant")) {
     throw new Error(`Offline JSON status did not include Windows one-time reverse grant commands.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsHostStartAction=needs-local-password-prompt") || !String(parsed.boardSummary || "").includes(expectedSafeStart) || !String(parsed.boardSummary || "").includes(expectedMacRetry)) {
+    throw new Error(`Offline JSON board summary did not include WindowsHostStartAction.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
@@ -545,6 +559,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, expectedEphemeralStart, "offline board summary ephemeral start command");
   assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "offline board summary secure auth path");
   assertIncludes(boardResult.stdout, expectedSecureAuthStart, "offline board summary secure auth command");
+  assertIncludes(boardResult.stdout, "WindowsHostStartAction=needs-local-password-prompt", "offline board summary start action");
+  assertIncludes(boardResult.stdout, expectedSafeStart, "offline board summary start action command");
+  assertIncludes(boardResult.stdout, expectedMacRetry, "offline board summary Mac retry command");
   assertWindowsFirewallBoardSummary(boardResult.stdout, "offline board summary firewall commands", port);
   assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");

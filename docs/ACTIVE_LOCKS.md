@@ -16,7 +16,6 @@
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
 
-
 ## 高冲突区域
 
 - `shared/protocol`
@@ -32,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/start-windows-host.mjs`, `scripts/windows/start-windows-host.ps1`, `scripts/windows/test-windows-host-start-helper.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows host 离线/no-listener 摘要新增 `WindowsHostStartAction=needs-local-password-prompt`：给出 Windows 本机隐藏密码启动命令和 Mac 只读 discovery 重试命令；不启动 host、不认证、不请求或发送密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/start-windows-control-mac.mjs`, `scripts/windows/start-windows-control-mac.ps1`, `scripts/windows/test-windows-control-mac-entry.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 控 Mac 一键入口只读消费 Agent Link Board Mac 目标候选作为 `/discovery` 候选；选中需真实 macOS host discovery，支持关闭候选，不认证、不请求密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 恢复总览和 Windows 控制页只读消费 `MacClientPasswordLocation=`：显示 Mac client 页面密码框位置、formal/browser runner 终端隐藏输入边界和不要把密码发通讯板；拒绝 password/token/secret、input_event、inject 或自动发送伪造候选。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。 |
 | Mac Codex | `apps/mac-client/index.html`, `apps/mac-client/app.js`, `apps/mac-client/styles.css`, `apps/mac-client/README.md`, `scripts/windows/test-mac-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac 控 Windows 页面密码框下新增 Windows 临时密码输入位置提示；复制/导出诊断新增 `密码输入位置` 无密说明；自测覆盖页面提示、诊断复制和密码不泄漏。不改协议、不认证、不请求或发送密码、不发 input/inject。 |

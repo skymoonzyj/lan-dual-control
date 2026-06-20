@@ -172,7 +172,7 @@ Options:
                           and surface active Mac -> Windows currentCall.
   --server <url>          Agent Link Board URL. Default: ${defaults.server}
   --boardSummary          With --status, print a short secret-free Agent Link Board summary.
-                          The summary includes a WindowsHostMedia command for local
+                          The summary includes WindowsHostStartAction for offline local password-prompt startup, a WindowsHostMedia command for local
                           video/audio baseline checks and a WindowsVideoSupport
                           command for H.264/WGC/WebCodecs capability checks, plus
                           WindowsWgcSupport for WGC/WinRT/GPU preflight checks and
@@ -630,6 +630,37 @@ function macFormalSendCallCommand(host, port) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${host} --port ${port} --sendCall`;
 }
 
+function macDiscoverWindowsRetryCommand() {
+  return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
+}
+
+function windowsHostStartAction(args = {}) {
+  return {
+    status: "needs-local-password-prompt",
+    startCommand: windowsHostSafeStartCommand(args),
+    macRetryCommand: macDiscoverWindowsRetryCommand(),
+    safety: "no-password-on-board,no-auth,no-input-inject",
+  };
+}
+
+function windowsHostOnlineAction(status = {}) {
+  const firstTarget = Array.isArray(status.macClientReadinessCommands) ? status.macClientReadinessCommands[0] : null;
+  return {
+    status: "online-no-start-needed",
+    startCommand: "",
+    macRetryCommand: firstTarget?.sendCallCommand || macDiscoverWindowsRetryCommand(),
+    safety: "no-password-on-board,no-auth,no-input-inject",
+  };
+}
+
+function windowsHostStartActionSummary(action = {}) {
+  if (!action.status) return "";
+  const start = action.startCommand ? ` Start=${action.startCommand}` : "";
+  const retry = action.macRetryCommand ? ` AfterStart=${action.macRetryCommand}` : "";
+  const safety = action.safety ? ` Safety=${action.safety}` : "";
+  return `WindowsHostStartAction=${action.status}${start}${retry}${safety}`;
+}
+
 function windowsHostMediaReadinessCommand() {
   return "node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary";
 }
@@ -784,7 +815,9 @@ function makeBoardSummary(status) {
   if (!status.ok) {
     const safeStart = status.safeStartCommand || status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword";
     const ephemeralStart = status.ephemeralStartCommand ? ` temporary smoke with ${status.ephemeralStartCommand}.` : "";
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+    const startAction = windowsHostStartActionSummary(status.windowsHostStartAction);
+    const startActionText = startAction ? ` ${startAction}.` : "";
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart}${startActionText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -841,6 +874,7 @@ function applyDiscoveryStatus(status, discovery, args) {
     status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
   }
   status.macClientReadinessCommands = macReadinessTargets(status);
+  status.windowsHostStartAction = windowsHostOnlineAction(status);
   status.boardSummary = makeBoardSummary(status);
   return status;
 }
@@ -878,6 +912,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsReverseGrantStatusPowerShellCommand: windowsReverseGrantStatusPowerShellCommand(args.port),
     windowsOpenOneTimeReverseGrantCommand: windowsOpenOneTimeReverseGrantCommand(args.port),
     windowsOpenOneTimeReverseGrantPowerShellCommand: windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
+    windowsHostStartAction: windowsHostStartAction(args),
     safeStartCommand: windowsHostSafeStartCommand(args),
     ephemeralStartCommand: windowsHostEphemeralStartCommand(args),
     windowsSecureAuthPath: windowsSecureAuthPath(args.port),
@@ -1019,6 +1054,10 @@ async function printStatus(args) {
   console.log(`[WARN] /discovery offline on ${status.probe.host}:${status.probe.port}: ${status.error?.message || "unknown error"}`);
   console.log(`[INFO] Start safely with: ${status.safeStartCommand || status.suggestions[0]}`);
   console.log(`[INFO] Temporary local smoke without firewall check: ${status.ephemeralStartCommand}`);
+  if (status.windowsHostStartAction?.status) {
+    const action = status.windowsHostStartAction;
+    console.log(`[INFO] Windows host start action: ${action.status}; run ${action.startCommand}; after start ask Mac to retry ${action.macRetryCommand}; safety=${action.safety}`);
+  }
   console.log(`[INFO] Add --wasapi when Mac should receive Windows system sound.`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   console.log(`[INFO] Windows host media baseline PowerShell command after host is online: ${status.windowsHostMediaReadinessPowerShellCommand}`);

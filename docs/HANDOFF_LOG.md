@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows host 安全启动动作摘要
+开发端：Windows Codex
+本轮目标：让 Mac 端发现 Windows host 离线/no-listener 时，Windows 状态摘要能给出下一步现场动作，同时保持不传密码、不认证、不发送输入。
+完成内容：
+- `start-windows-host --status` 的普通输出、JSON 和 `--boardSummary` 新增 `WindowsHostStartAction=needs-local-password-prompt`。
+- `Start=` 指向 Windows 本机前台隐藏密码启动命令，保留当前 host/port；`AfterStart=` 指向 Mac 端只读 `discover-windows-hosts --checkBoard --boardSummary` 重试命令。
+- PowerShell wrapper `-Help/-h` 同步说明该摘要，测试断言不会把 `--sendCall` 放进只读重试命令。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 20000` 先失败于离线 status 缺少 `Windows host start action`。
+- 绿灯：同一测试通过，覆盖普通输出、JSON、`--boardSummary` 和 PowerShell help。
+遗留问题：
+- 真实 Windows host 是否上线仍需要用户在 Windows 本机终端输入临时密码后启动；密码不要写进通讯板。
+下一步建议：
+- Windows 用户在场时按 `Start=` 启动 host；启动后 Mac 端跑 `node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary` 做只读发现，再进入 formal checklist。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端在 Windows host 启动后只读重试 discovery。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac client H.264 解码队列保护

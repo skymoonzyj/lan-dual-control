@@ -83,6 +83,8 @@ node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status
 
 离线时普通输出、`--json` 和 `--boardSummary` 都会保留当前检查使用的 `--host` / `--port`；JSON 字段 `safeStartCommand` 是正式安全启动命令，`ephemeralStartCommand` 是跳过防火墙检查的临时冒烟启动命令，适合 Mac 反控 Windows 前从通讯板或桌面壳直接复制，不会把自定义端口退回默认 `43770`。
 
+离线/no-listener 场景下，状态摘要还会额外输出 `WindowsHostStartAction=needs-local-password-prompt`。这是一条给现场用的无密动作：`Start=` 是 Windows 本机前台隐藏密码启动命令，`AfterStart=` 是启动后让 Mac 端只读重试 discovery 的命令，`Safety=` 明确不走通讯板传密码、不认证、不发输入/注入；它不会默认让 Mac 再发 call。
+
 如果当前 Windows host 是先前用随机运行期密码启动的，Mac 真实 browser smoke 无法再安全拿到那次密码。此时看状态摘要里的 `WindowsSecureAuthPath=`：在 Windows 本机前台用 `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword` 重启 host，由用户在 Windows 与 Mac 的隐藏密码提示里输入同一个临时密码，再让 Mac 端复跑 smoke。这个路径不会输出 `--password` 参数，也不要把密码发到 Agent Link Board、命令行参数或日志里。
 
 需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；如果还要同时看 Agent Link Board 当前是否有 Mac -> Windows 呼叫，加 `--checkBoard` / `-CheckBoard` 只读读取 `/api/state.currentCall`。PowerShell 包装也可以用 `-Status -Json` 走同一条只读检查：
