@@ -37,6 +37,8 @@ const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
 const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
 const w2VisibilityRetestEvidence = "visibility-return-h264-recovery";
+const w2w4BackgroundRetestEvidence = "keyframe-wait-h264-recovery,audio-visibility-recovery";
+const w2w4BackgroundRetestWatch = "video-latency,audio-dropped-resync";
 const w2VisibilityRetestSafety = "no-password-on-board,no-auth,no-input-inject";
 const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 const macClientManualChecklistOfflineAction = `页面在线后在 ${macClientManualChecklistAction}`;
@@ -5142,6 +5144,19 @@ function makeW2VisibilityRetest(commands) {
   return retest;
 }
 
+function makeW2W4BackgroundRetest(commands) {
+  const next = commands.windowsClientRetestAndPostUserEntryCommand || windowsClientRetestAndPostUserEntryCommand;
+  const retest = {
+    status: "pending-user-retest",
+    action: "minimize-switch-app-and-return",
+    evidence: w2w4BackgroundRetestEvidence,
+    watch: w2w4BackgroundRetestWatch,
+    next,
+    safety: w2VisibilityRetestSafety,
+  };
+  retest.summary = `status=${retest.status} action=${retest.action} evidence=${retest.evidence} watch=${retest.watch} next=${retest.next} safety=${retest.safety}`;
+  return retest;
+}
 function makeBoardSummary(report) {
   const mac = report.macPreflight?.payload || {};
   const failedChecks = Array.isArray(mac.failedChecks) && mac.failedChecks.length > 0
@@ -5297,6 +5312,7 @@ function makeBoardSummary(report) {
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientRetestEntry=${report.commands.windowsClientRetestUserEntryCommand}; WinClientRetestAndPostEntry=${report.commands.windowsClientRetestAndPostUserEntryCommand}; WinClientRetest=${report.commands.windowsClientRetestBoardSummaryCommand}; WinClientRetestPs=${report.commands.windowsClientRetestBoardSummaryPowerShellCommand}.`,
     `W2VisibilityRetest=${report.w2VisibilityRetest.summary}.`,
+    `W2W4BackgroundRetest=${report.w2w4BackgroundRetest.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
@@ -5602,6 +5618,7 @@ async function makeReport(args) {
   report.board.macManualUxAck = makeMacManualUxAck(effectiveArgs, report.board?.macManualUx);
   report.board.macCodexStaleAction = makeMacCodexStaleAction(effectiveArgs, report.board?.macHeartbeatHealth);
   report.w2VisibilityRetest = makeW2VisibilityRetest(commands);
+  report.w2w4BackgroundRetest = makeW2W4BackgroundRetest(commands);
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
   report.sentUserAuthRequest = sendUserAuthRequest(effectiveArgs, report);
@@ -5768,6 +5785,7 @@ function printHuman(report) {
       console.log(`  WinClientRetestPreflight=${report.board.winClientRetestPreflight.summary}`);
     }
     console.log(`  W2VisibilityRetest=${report.w2VisibilityRetest.summary}`);
+    console.log(`  W2W4BackgroundRetest=${report.w2w4BackgroundRetest.summary}`);
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
@@ -5867,6 +5885,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsClientRetestUserEntryCommand}`);
   console.log(`  ${report.commands.windowsClientRetestAndPostUserEntryCommand}`);
   console.log(`  W2VisibilityRetest=${report.w2VisibilityRetest.summary}`);
+  console.log(`  W2W4BackgroundRetest=${report.w2w4BackgroundRetest.summary}`);
   console.log(`  ${report.commands.windowsClientRetestBoardSummaryCommand}`);
   console.log(`  ${report.commands.windowsClientRetestBoardSummaryPowerShellCommand}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);

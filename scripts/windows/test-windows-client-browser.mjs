@@ -7460,8 +7460,40 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioNextPlayTime < 30.2 &&
           state.audioVisibilityHiddenAt === 0;
 
+        state.audioContext = makeFakeContext(40);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 40.211;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 0;
+        state.audioResyncCount = 3;
+        state.audioLastDropReason = "queue-overflow-trim-future";
+        state.audioLastBufferReason = "queue-overflow-trim-future";
+        state.audioVisibilityHiddenAt = 0;
+        state.audioVisibilityRecoveryCount = 1;
+        state.audioVisibilityRecoveryLastAt = performance.now() - 200;
+        state.audioScheduledSources = [
+          { source: { stop() { stops.push(0.22); }, disconnect() {} }, playAt: 39.99, duration: 0.22 },
+          { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 40.22, duration: 0.12 },
+        ];
+        starts.length = 0;
+        stops.length = 0;
+        const postVisibilityPlayed = await playPcmAudioFrame(makeFrame());
+        const postVisibilitySnapToLive =
+          postVisibilityPlayed &&
+          starts.length === 1 &&
+          stops.length === 2 &&
+          stops.includes(0.22) &&
+          stops.includes(0.12) &&
+          state.audioDroppedFrames === 2 &&
+          state.audioResyncCount === 4 &&
+          state.audioLastDropReason === "queue-overflow-snap-live" &&
+          starts[0] >= 40.115 &&
+          starts[0] < 40.2 &&
+          state.audioNextPlayTime >= 40.135 &&
+          state.audioNextPlayTime < 40.23;
+
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -7504,6 +7536,14 @@ async function verifyAudioPlaybackBufferGuards(session) {
           visibilityRecoveryDropReason: state.audioLastDropReason,
           visibilityRecoveryNextPlayTime: state.audioNextPlayTime,
           visibilityRecoveryHiddenAt: state.audioVisibilityHiddenAt,
+          postVisibilityPlayed,
+          postVisibilitySnapToLive,
+          postVisibilityStops: stops.slice(),
+          postVisibilityDropped: state.audioDroppedFrames,
+          postVisibilityResyncCount: state.audioResyncCount,
+          postVisibilityDropReason: state.audioLastDropReason,
+          postVisibilityStart: starts[0] || 0,
+          postVisibilityNextPlayTime: state.audioNextPlayTime,
         };
       } finally {
         if (audioToggle) audioToggle.checked = original.checked;

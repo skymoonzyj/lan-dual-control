@@ -163,6 +163,7 @@ const audioStableUnderrunBufferSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const audioVisibilityRecoveryMinimumHiddenMs = 250;
 const audioVisibilityRecoveryQueuedSeconds = 0.18;
+const audioVisibilityRecoveryFollowupWindowMs = 3000;
 const audioStutterGapThresholdMs = 120;
 const audioFirstFrameWaitThresholdMs = 3000;
 const audioStreamStallThresholdMs = 2500;
@@ -3423,6 +3424,19 @@ function recoverAudioAfterVisibilityReturn(reason = "visibility-return-audio-rec
   return true;
 }
 
+function shouldSnapAudioQueueToLive(now, currentNow = performance.now()) {
+  if (!state.audioContext || !elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
+    return false;
+  }
+  const queuedSeconds = Math.max(0, Number(state.audioNextPlayTime) - now);
+  if (queuedSeconds < audioVisibilityRecoveryQueuedSeconds) {
+    return false;
+  }
+  const lastVisibilityRecoveryAt = Number(state.audioVisibilityRecoveryLastAt) || 0;
+  return lastVisibilityRecoveryAt > 0 &&
+    currentNow - lastVisibilityRecoveryAt <= audioVisibilityRecoveryFollowupWindowMs;
+}
+
 function primeAudioPlayback() {
   if (!elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
     return;
@@ -3533,10 +3547,18 @@ async function playPcmAudioFrame(frame) {
   }
 
   const now = audioContext.currentTime;
+  const currentNow = performance.now();
   pruneScheduledAudioSources(now);
   const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
   if (queuedSeconds > audioMaximumQueuedSeconds) {
-    resyncAudioQueue("queue-overflow-trim-future", now);
+    const snapToLive = shouldSnapAudioQueueToLive(now, currentNow);
+    resyncAudioQueue(
+      snapToLive ? "queue-overflow-snap-live" : "queue-overflow-trim-future",
+      now,
+      { dropActive: snapToLive },
+    );
+  } else if (shouldSnapAudioQueueToLive(now, currentNow)) {
+    resyncAudioQueue("queue-overflow-snap-live", now, { dropActive: true });
   }
   if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
     const lastUnderrunAt = Number(state.audioLastUnderrunAt);

@@ -18,6 +18,26 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W4 音频恢复后 snap-live 防积压
+开发端：Windows Codex
+本轮目标：补强后台/切 app 恢复后的音频低延迟策略，避免恢复后一小段时间又继续积累播放尾巴。
+完成内容：Windows 控制端新增 `audioVisibilityRecoveryFollowupWindowMs=3000` 和 `shouldSnapAudioQueueToLive`：在音频可见性恢复后约 3 秒内，如果 WebAudio 队列超过约 180ms，就用 `dropActive` 清掉 active/future source，并把下一帧接到当前时间附近，原因记录为 `queue-overflow-snap-live`。专项测试新增 `postVisibilitySnapToLive` 场景。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md。
+验证方式：`node --check apps/windows-client/app.js`；`node --check scripts/windows/test-windows-client-browser.mjs`；`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000`；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`。
+遗留问题：仍需用户真实最小化/切 app/切回复测，确认音频 dropped/resync/refill 是否明显下降。
+下一步建议：真实复测时同时看 `现场声音` 的 `可见恢复`、`queue-overflow-snap-live`、dropped/resync/refill。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
+日期：2026-06-21 W2/W4 背景媒体复测进入 Windows 恢复总览
+开发端：Windows Codex
+本轮目标：把 `a51cc60` 后的最新真实复测口径放到 Windows 开工第一屏，避免白天继续按旧 W2VisibilityRetest 口径测试。
+完成内容：`check-windows-resume-status` 新增只读 `w2w4BackgroundRetest` 对象，JSON、普通输出和 `--boardSummary` 都会显示 `W2W4BackgroundRetest=...`，明确动作是最小化/切 app/切回，证据看 `keyframe-wait-h264-recovery` 与 `audio-visibility-recovery`，观察项是视频延迟和音频 dropped/resync。旧 `W2VisibilityRetest=` 保留兼容。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000` 先失败于缺少 `W2W4BackgroundRetest`；绿灯后 Node resume-status 回归、PowerShell wrapper 回归、`node --check` 和真实只读 `check-windows-resume-status --checkBoard --boardSummary` 均通过。
+遗留问题：仍需用户真实连接 Mac 后最小化/切 app/切回复测，确认视频延迟和音频 dropped/resync 是否改善。
+下一步建议：双方拉最新；Windows 第一屏看到 `W2W4BackgroundRetest=` 后，按 `Run-WinClientRetest-And-Post.cmd` 做真实复测并把脱敏结果上板。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
 日期：2026-06-21 W2 后台低 FPS 关键帧等待时间重试
 开发端：Windows Codex
 本轮目标：修复用户真实复测中最小化/切 app 后视频不完全卡死但出现秒级延迟积压的问题，并保留音频后台恢复改动的验证记录。

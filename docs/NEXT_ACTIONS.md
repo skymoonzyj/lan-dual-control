@@ -3,6 +3,7 @@
 最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- Windows 开工第一屏最新口径：`check-windows-resume-status --checkBoard --boardSummary` 会直接显示 `W2W4BackgroundRetest=... action=minimize-switch-app-and-return evidence=keyframe-wait-h264-recovery,audio-visibility-recovery watch=video-latency,audio-dropped-resync next=Run-WinClientRetest-And-Post.cmd`。看到这条时，不要只按旧 W2 可见性修复复测；应运行 `Run-WinClientRetest-And-Post.cmd`，连接后真实最小化/切 app/切回，同时观察视频延迟和声音 dropped/resync。密码只在本机隐藏终端输入，不上通讯板，不发 input/inject。
 
 - 当前最高优先级更新：等待双方拉取最新 Windows client 后做一次真实“最小化/切 app/切回”复测。预期视频侧不再出现 8-10 秒级关键帧等待积压；如果仍有卡顿，先看 `W2W3Retest h264=` / 复制诊断里的 `实收 FPS`、`最后收到`、`本机队列`、`本地过期丢帧`、`跳过 delta`、`需要关键帧`、`原因 keyframe-wait-h264-recovery|queue-overflow-wait-keyframe` 和 `h264KeyFrameWaitMs`。音频侧同步看 `现场声音` 的接收/播放/丢、`重同步`、`补缓冲`、`可见恢复` 和最近原因。Mac 侧保持 host 在线即可，除非 Windows 证明确实缺 `recv/key/sps/pps/idr` 或音频源帧。
 - 本轮代码边界：W2 视频修复只在 Windows client H.264/WebCodecs 关键帧等待路径加时间重试；W4 音频恢复只处理 Windows client 本机 WebAudio 可见性恢复和旧 source 清理。不改 WebSocket 协议、不改 Mac host、不做 Mac 控 Windows/反控扩展；真实输入仍保持安全门禁。

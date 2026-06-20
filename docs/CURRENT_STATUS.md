@@ -3,6 +3,10 @@
 最后更新：2026-06-21
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+## 2026-06-21 W4 音频恢复后 snap-live 防积压
+- Windows 控制端在 `a51cc60` 的音频可见性恢复基础上继续补了一层跟随窗口：页面恢复可见/聚焦后的约 `3000ms` 内，如果 WebAudio 队列再次超过约 `180ms`，会把 active/future scheduled source 都丢掉并把下一帧播放贴回当前 `now + 120ms`，诊断原因改为 `queue-overflow-snap-live`。这样后台回来后不会因为旧播放尾巴或后续排队继续积累延迟。`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000` 已覆盖 `postVisibilitySnapToLive`，完整 `--diagnosticsOnly` 也通过。不改系统声音输出、不请求密码、不认证、不发 input/inject。
+## 2026-06-21 W2/W4 背景媒体复测进入 Windows 恢复总览
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 现在新增 `W2W4BackgroundRetest=status=pending-user-retest action=minimize-switch-app-and-return evidence=keyframe-wait-h264-recovery,audio-visibility-recovery watch=video-latency,audio-dropped-resync next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。这是 `a51cc60` 后的最新复测口径：用户连接后最小化/切到其他 app/切回，重点看视频是否还会秒级积压，以及音频 dropped/resync 是否继续暴涨；旧 `W2VisibilityRetest=` 保留兼容。该摘要只读生成，不请求密码、不认证、不发通讯板、不发 input/inject。
 
 ## 2026-06-21 W2 后台低 FPS 关键帧等待时间重试
 - 用户真实复测 `215ba92` 后，画面不再完全卡死，但最小化/切 app 后仍出现秒级积压：H.264 实收约 `21.5/60 FPS`、到达 `9.6s`、最后收到 `4s` 前、`queue=503ms`、`decode=194ms`、`staleDrops=18`、`needsKeyframe=yes`、原因 `queue-overflow-wait-keyframe`。Windows 控制端现在会记录 H.264 等待关键帧的开始时间和上次恢复请求时间；如果后台恢复后仍只收到 delta 且等待超过约 `900ms`，不再等到 60Hz 的 `180` 个 delta 才处理，而是保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 立即重新请求 H.264 关键帧，诊断原因保留 `keyframe-wait-h264-recovery`。这只改 Windows client 本机 WebCodecs/H.264 恢复策略，不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。专项回归 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 已覆盖 `timedKeyFrameRecovery`。

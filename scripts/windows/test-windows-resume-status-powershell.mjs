@@ -10,6 +10,7 @@ const repoRoot = resolve(scriptDir, "../..");
 const wrapperScript = "scripts/windows/check-windows-resume-status.ps1";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
 const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
+const w2w4BackgroundRetestSummary = "status=pending-user-retest action=minimize-switch-app-and-return evidence=keyframe-wait-h264-recovery,audio-visibility-recovery watch=video-latency,audio-dropped-resync next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject";
 
 const defaults = {
   timeoutMs: 30000,
@@ -1899,6 +1900,7 @@ async function checkBoardWinClientRetestPreflightExtraction(args) {
       assert(payload.board.winClientRetestPreflight.next === windowsClientRetestAndPostUserEntryCommand, "PowerShell WinClientRetestPreflight next command mismatch");
       assert(payload.board.winClientRetestPreflight.rejectedCount >= 3, "PowerShell unsafe WinClientRetestPreflight candidates should be rejected");
       assertIncludes(payload.boardSummary, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "PowerShell WinClientRetestPreflight JSON board summary");
+      assertIncludes(payload.boardSummary, `W2W4BackgroundRetest=${w2w4BackgroundRetestSummary}.`, "PowerShell W2/W4 background retest JSON board summary");
       assertNotIncludes(output, "secret-value", "PowerShell WinClientRetestPreflight JSON should not leak rejected text");
       assertNotIncludes(output, "input_event", "PowerShell WinClientRetestPreflight JSON should not leak unsafe input text");
     }, boardState);
@@ -1920,6 +1922,7 @@ async function checkBoardWinClientRetestPreflightExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell WinClientRetestPreflight board summary failed\n${output}`);
       assertIncludes(output, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd.", "PowerShell WinClientRetestPreflight board summary");
+      assertIncludes(output, `W2W4BackgroundRetest=${w2w4BackgroundRetestSummary}.`, "PowerShell W2/W4 background retest board summary");
       assertNotIncludes(output, "secret-value", "PowerShell WinClientRetestPreflight board summary should not leak rejected text");
       console.log("[OK] PowerShell resume-status wrapper extracts WinClientRetestPreflight safely");
     }, boardState);
