@@ -376,6 +376,15 @@ function makeMacInputSafetyAction(report) {
   };
 }
 
+function makeUserNotice() {
+  return {
+    goal: "verify-real-mac-input-safe-event-set",
+    userAction: "watch-mac-screen-and-be-ready-to-take-over",
+    safetyBoundary: "safe-event-set-only-no-click-delete-shortcuts-return-log",
+    estimatedDuration: "2-3-minutes",
+  };
+}
+
 function applyUserPresenceGate(report, userPresence, args = defaults) {
   report.commands.macSafeInjectRehearsal = makeMacSafeInjectRehearsalCommand(args, report.host);
   if (!userPresence?.checked) {
@@ -397,7 +406,18 @@ function applyUserPresenceGate(report, userPresence, args = defaults) {
     }
   }
   report.macInputSafetyAction = makeMacInputSafetyAction(report);
+  if (report.macInputSafetyAction?.id === "explain-before-inject") {
+    report.userNotice = makeUserNotice();
+  }
   return report;
+}
+
+function appendUserNoticeParts(parts, notice) {
+  if (!notice) return;
+  parts.push(`UserNoticeGoal=${boardToken(notice.goal)}`);
+  parts.push(`UserNoticeAction=${boardToken(notice.userAction)}`);
+  parts.push(`UserNoticeBoundary=${boardToken(notice.safetyBoundary)}`);
+  parts.push(`UserNoticeDuration=${boardToken(notice.estimatedDuration)}`);
 }
 
 function makeBoardSummary(report) {
@@ -424,6 +444,7 @@ function makeBoardSummary(report) {
       parts.push(`MacInputSafetyAction=${action}`);
     }
   }
+  appendUserNoticeParts(parts, report.userNotice);
   if (report.macInputSafetyAction?.id === "explain-before-inject" && report.commands?.macSafeInjectRehearsal) {
     parts.push(`MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}.`);
   }

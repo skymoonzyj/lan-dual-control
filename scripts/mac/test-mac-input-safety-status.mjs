@@ -303,9 +303,17 @@ async function checkBoardUserPresencePresentAllowsExplainedInject(args) {
       assert(payload.userPresence?.status === "present", `present user JSON should expose userPresence: ${JSON.stringify(payload.userPresence)}`);
       assert(payload.userPresence?.source === "api-state", "present user JSON should mark api-state source");
       assert(payload.macInputSafetyAction?.id === "explain-before-inject", `present user JSON action mismatch: ${JSON.stringify(payload.macInputSafetyAction)}`);
+      assert(payload.userNotice?.goal === "verify-real-mac-input-safe-event-set", `present user JSON notice goal mismatch: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.userAction === "watch-mac-screen-and-be-ready-to-take-over", `present user JSON notice user action mismatch: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.safetyBoundary === "safe-event-set-only-no-click-delete-shortcuts-return-log", `present user JSON notice boundary mismatch: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.estimatedDuration === "2-3-minutes", `present user JSON notice duration mismatch: ${JSON.stringify(payload.userNotice)}`);
       assertIncludes(payload.boardSummary, "UserPresence=present", "present user boardSummary");
       assertIncludes(payload.boardSummary, "source=api-state", "present user boardSummary");
       assertIncludes(payload.boardSummary, "MacInputSafetyAction=explain-before-inject", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeGoal=verify-real-mac-input-safe-event-set", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeDuration=2-3-minutes", "present user boardSummary");
       assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "present user boardSummary");
       assertIncludes(payload.boardSummary, "--checkBoard", "present user boardSummary");
       assertIncludes(payload.boardSummary, "--boardSummary", "present user boardSummary");

@@ -261,6 +261,10 @@ async function checkPresentReadyPrintsPlanOnlyCommands(args) {
       assert(payload.userPresence?.status === "present", "ready rehearsal should expose userPresence=present");
       assert(payload.safeEventSet === "safe", "ready rehearsal should expose safe event set");
       assert(payload.requiresUserWatching === true, "ready rehearsal should require user watching");
+      assert(payload.userNotice?.goal === "verify-real-mac-input-safe-event-set", `ready rehearsal should expose notice goal: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.userAction === "watch-mac-screen-and-be-ready-to-take-over", `ready rehearsal should expose notice user action: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.safetyBoundary === "safe-event-set-only-no-click-delete-shortcuts-return-log", `ready rehearsal should expose notice boundary: ${JSON.stringify(payload.userNotice)}`);
+      assert(payload.userNotice?.estimatedDuration === "2-3-minutes", `ready rehearsal should expose notice duration: ${JSON.stringify(payload.userNotice)}`);
       assert(payload.commands?.macStartInject?.includes("--confirmUserWatching"), "ready rehearsal should include confirmation flag");
       assert(payload.commands?.macStartInject?.includes("--inputMode inject"), "ready rehearsal should include inject start command");
       assert(payload.commands?.windowsProbeSafe?.includes("--inputEvents"), "ready rehearsal should include Windows safe probe command");
@@ -271,6 +275,10 @@ async function checkPresentReadyPrintsPlanOnlyCommands(args) {
       assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=status=call-ready", "ready boardSummary");
       assertIncludes(payload.boardSummary, "UserPresence=present", "ready boardSummary");
       assertIncludes(payload.boardSummary, "eventSet=safe", "ready boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeGoal=verify-real-mac-input-safe-event-set", "ready boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over", "ready boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log", "ready boardSummary");
+      assertIncludes(payload.boardSummary, "UserNoticeDuration=2-3-minutes", "ready boardSummary");
       assertIncludes(payload.boardSummary, "MacSafeInjectStart=", "ready boardSummary");
       assertIncludes(payload.boardSummary, "WindowsSafeInjectProbe=", "ready boardSummary");
       assertIncludes(payload.boardSummary, "MacSafeInjectReturnLog=", "ready boardSummary");

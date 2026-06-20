@@ -16,6 +16,39 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 M2 Mac input safety user notice
+开发端：Mac Codex
+本轮目标：把真实输入安全测试前必须告知用户的目标、用户动作、安全边界和预计耗时结构化，避免把 `UserPresence=present` 误解成可以直接 inject。
+完成内容：
+- `check-mac-input-safety-status --checkBoard --json/--boardSummary` 在 ready + `UserPresence=present` 时新增 `userNotice` 和 `UserNoticeGoal/UserNoticeAction/UserNoticeBoundary/UserNoticeDuration`。
+- `plan-mac-safe-inject-rehearsal --checkBoard --json/--boardSummary` 在 `call-ready` 时输出同一套 `userNotice` 字段。
+- 字段固定为 safe 事件集小验收：目标 `verify-real-mac-input-safe-event-set`，用户动作 `watch-mac-screen-and-be-ready-to-take-over`，边界 `safe-event-set-only-no-click-delete-shortcuts-return-log`，预计 `2-3-minutes`。
+修改文件：
+- `scripts/mac/check-mac-input-safety-status.mjs`
+- `scripts/mac/test-mac-input-safety-status.mjs`
+- `scripts/mac/plan-mac-safe-inject-rehearsal.mjs`
+- `scripts/mac/test-mac-safe-inject-rehearsal.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-input-safety-status.mjs --timeoutMs 10000` 先失败于缺少 `userNotice`。
+- 红灯：`node scripts/mac/test-mac-safe-inject-rehearsal.mjs --timeoutMs 10000` 先失败于缺少 `userNotice`。
+- 绿灯：`node --check scripts/mac/check-mac-input-safety-status.mjs && node --check scripts/mac/plan-mac-safe-inject-rehearsal.mjs && node --check scripts/mac/test-mac-input-safety-status.mjs && node --check scripts/mac/test-mac-safe-inject-rehearsal.mjs`
+- 绿灯：`node scripts/mac/test-mac-input-safety-status.mjs --timeoutMs 10000 && node scripts/mac/test-mac-safe-inject-rehearsal.mjs --timeoutMs 10000`
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真板只读抽样：当前 Agent Link Board `userPresence=away`，`check-mac-input-safety-status --checkBoard --boardSummary` 输出 `reason=user-away` / `MacInputSafetyAction=no-auth-only`，`plan-mac-safe-inject-rehearsal --checkBoard --boardSummary` 输出 `BLOCKED_BY_USER_AWAY`，均未给出实际 input/inject 执行动作。
+- 收尾：`git diff --check` / `git diff --cached --check`；冲突标记扫描无结果。
+遗留问题：仍未执行真实输入注入；后续若要验收，必须先让用户明确确认正在看 Mac 屏幕，并按 `--confirmUserWatching` / `--inputEventSet safe` 单步执行。
+下一步建议：Windows 端若消费这些字段，只把它们当作“可发起用户说明”的门禁提示，不要自动运行 Mac/Windows 注入命令。
+是否改了协议：否；只增加 Mac 侧只读状态/计划摘要字段。
+是否需要另一端配合：暂不需要；真实 inject 验收时需要用户在场和 Windows 端按 call 配合。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W3/M1 Windows 消费 Mac remote audio consent/restore guard

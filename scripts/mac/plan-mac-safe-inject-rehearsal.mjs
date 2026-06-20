@@ -371,6 +371,15 @@ function makeRehearsalCommands(args, probeHost) {
   };
 }
 
+function makeUserNotice() {
+  return {
+    goal: "verify-real-mac-input-safe-event-set",
+    userAction: "watch-mac-screen-and-be-ready-to-take-over",
+    safetyBoundary: "safe-event-set-only-no-click-delete-shortcuts-return-log",
+    estimatedDuration: "2-3-minutes",
+  };
+}
+
 function applyPresenceGate(base, userPresence, args) {
   const probeHost = windowsProbeHost(args);
   const report = {
@@ -429,6 +438,7 @@ function applyPresenceGate(base, userPresence, args) {
     "return-mac-host-to-log-mode",
   ];
   report.commands = makeRehearsalCommands(args, probeHost);
+  report.userNotice = makeUserNotice();
   return report;
 }
 
@@ -455,6 +465,14 @@ function summarizeList(items) {
   return Array.isArray(items) && items.length > 0 ? items.map((item) => safeToken(item)).join(",") : "none";
 }
 
+function appendUserNoticeParts(parts, notice) {
+  if (!notice) return;
+  parts.push(`UserNoticeGoal=${safeToken(notice.goal)}`);
+  parts.push(`UserNoticeAction=${safeToken(notice.userAction)}`);
+  parts.push(`UserNoticeBoundary=${safeToken(notice.safetyBoundary)}`);
+  parts.push(`UserNoticeDuration=${safeToken(notice.estimatedDuration)}`);
+}
+
 function makeBoardSummary(report) {
   const parts = [
     `MacSafeInjectRehearsal=status=${safeToken(report.status)}`,
@@ -473,6 +491,7 @@ function makeBoardSummary(report) {
   if (report.userPresence?.blocker) {
     parts.push(report.userPresence.blocker);
   }
+  appendUserNoticeParts(parts, report.userNotice);
   if (report.status === "call-ready") {
     parts.push(
       `MacSafeInjectStopCurrent=${report.commands.macStopCurrent}.`,
