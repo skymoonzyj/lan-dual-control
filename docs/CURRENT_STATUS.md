@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 通讯板对照诊断
+- 新增 `scripts/windows/diagnose-w2-h264-board.mjs` 只读诊断入口，用于读取 Agent Link Board `/api/state`，把 Windows `W2W3Retest h264=` 的 `recv/key/sps/pps/idr/lastNal/decoded/needsKeyframe` 与 Mac `MacHostMedia` / readiness / media 摘要里的 `h264Key/sps/pps/idr/firstKeyNal/lastKeyNal/lastNal` 对照，自动给出 `waiting-for-w2w3-retest`、`windows-decode-path`、`windows-receive-missing-keyframe`、`windows-receive-missing-video` 或 `decoded-surface-seen`。`--boardSummary` 输出稳定 `W2H264BoardDiagnosis=` 一行，`--json` 给自动化消费；脚本不打印通讯板原文，只输出解析后的安全字段，不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 W2 Windows 真连复测密码提示统一
 - 底层 `probe-mac-host --promptPassword` 现在和 formal runner、browser runner 一样，先打印“等待隐藏密码输入：请直接在当前终端窗口输入 Mac 端当前临时密码；输入时不会显示字符，按 Enter 继续；这是正常等待，不是卡住；不要输到网页或通讯板。”，实际等待标签改为“当前终端输入 Mac 临时密码（输入不显示，回车继续）: ”。这修复现场第二步/探针阶段仍显示英文 `Mac host password:` 导致用户不知道输到哪里的 UX 问题；测试新增 probe runner 非交互提示回归和源码断言。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

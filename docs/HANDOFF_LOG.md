@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 Windows H.264 通讯板对照诊断
+开发端：Windows Codex
+本轮目标：让用户真连后不用人工翻通讯板长日志，直接判断 H.264 黑屏证据更像 Mac 发送、Windows 接收还是 Windows 解码路径。
+完成内容：新增 `scripts/windows/diagnose-w2-h264-board.mjs`，只读读取 Agent Link Board `/api/state`，解析 Windows `W2W3Retest h264=` 与 Mac `MacHostMedia` / readiness / media 的 H.264 NAL 摘要，输出 JSON、普通文本或一行 `W2H264BoardDiagnosis=`。诊断会区分 `waiting-for-w2w3-retest`、`waiting-for-mac-nal-evidence`、`windows-decode-path`、`windows-receive-missing-keyframe`、`windows-receive-missing-video` 和 `decoded-surface-seen`；输出只包含解析后的安全字段，不回显通讯板原文。
+修改文件：scripts/windows/diagnose-w2-h264-board.mjs；scripts/windows/test-diagnose-w2-h264-board.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-diagnose-w2-h264-board --timeoutMs 30000` 先失败于目标脚本不存在；绿灯同命令通过，覆盖 Windows 已收到 SPS/PPS/IDR 但 decoded=0、缺少 W2W3Retest、已 decoded surface 和秘密样本文本不泄露。
+遗留问题：仍需要用户跑真实 `WinClientRetest=` 并把 `W2W3Retest=` 上板；本工具只负责复测后的读板归因，不替代真实远控画面测试。
+下一步建议：真连复测后先跑 `node scripts/windows/diagnose-w2-h264-board.mjs --server http://192.168.31.68:17888 --boardSummary`。若 `reason=windows-decode-path`，继续查 Windows WebCodecs configure/decode/flush/队列；若缺复测，先重新跑 `WinClientRetest=`。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；需要 Mac host 和 Mac media/readiness 摘要保持在线/可上板。不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows 真连复测密码提示统一
 开发端：Windows Codex
 本轮目标：修复现场第二步/底层探针仍显示英文 `Mac host password:`，导致用户不知道密码该输入到哪里。
