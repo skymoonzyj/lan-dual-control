@@ -166,6 +166,9 @@ Machine-readable JSON fields:
   windowsLanRisk          Secret-free WindowsLanRisk= hints copied from Agent
                            Link Board when --checkBoard is enabled. Only safe
                            comma-separated risk tokens are accepted.
+  scanError               Optional secret-free scanner failure details. A LAN
+                           scan timeout is reported as reason=timeout while
+                           still printing actionable next-step commands.
   reverseControlRehearsal  Secret-free human rehearsal for the guarded
                            reverse-control request loop after authentication:
                            Mac expects LAN008 first, Windows opens a local
@@ -321,6 +324,19 @@ function runScanner(args) {
     },
   });
   if (result.error) {
+    if (isScannerTimeoutError(result.error)) {
+      return {
+        ok: false,
+        found: [],
+        scanned: 0,
+        ports: args.ports,
+        subnets: [],
+        scanError: {
+          reason: "timeout",
+          timeoutMs: timeoutBudgetMs,
+        },
+      };
+    }
     throw new Error(`LAN discovery scanner failed: ${result.error.message}`);
   }
   const stdout = String(result.stdout || "").trim();
@@ -329,6 +345,10 @@ function runScanner(args) {
   } catch (error) {
     throw new Error(`LAN discovery scanner did not print valid JSON: ${error.message}\n${stdout}\n${result.stderr || ""}`);
   }
+}
+
+function isScannerTimeoutError(error) {
+  return error?.code === "ETIMEDOUT" || /\bETIMEDOUT\b/i.test(String(error?.message || ""));
 }
 
 function isWindowsHost(item) {
@@ -669,15 +689,24 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), ma
     windowsOpenOneTimeReverseGrantNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "grant") : "",
     windowsLanRisk,
     reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
+    scanError: scan.scanError || null,
     boardSummary: "",
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
 
+function formatScannerWarning(scanError) {
+  const reason = String(scanError?.reason || "").toLowerCase();
+  if (reason === "timeout") return "ScannerWarning=timeout";
+  return "";
+}
+
 function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
+  const scannerWarning = formatScannerWarning(report.scanError);
+  const scannerWarningSummary = scannerWarning ? ` ${scannerWarning}.` : "";
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
   const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
   if (report.best) {
@@ -686,7 +715,7 @@ function makeBoardSummary(report) {
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${scannerWarningSummary}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -720,6 +749,10 @@ function printText(report, args) {
     console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
     console.log("[WARN] No Windows LAN dual-control host was found.");
+    const scannerWarning = formatScannerWarning(report.scanError);
+    if (scannerWarning) {
+      console.log(`[WARN] ${scannerWarning}`);
+    }
     if (report.ignored.length > 0) {
       for (const item of report.ignored.slice(0, 6)) {
         console.log(`[INFO] Ignored non-Windows host: ${summarizeHost(item)} platform=${item.platform || "unknown"}`);

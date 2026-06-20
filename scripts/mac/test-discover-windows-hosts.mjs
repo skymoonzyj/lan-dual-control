@@ -374,6 +374,9 @@ const common = {
   ports: [43770],
   subnets: [{ network: "192.168.31.0", prefix: 24, interfaceName: "en0", interfaceAddress: "192.168.31.122" }],
 };
+if (mode === "hang") {
+  setTimeout(() => {}, 60000);
+}
 if (mode === "none") {
   console.log(JSON.stringify({
     ok: true,
@@ -526,6 +529,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "windowsHostStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsHostReadinessCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
+    assertIncludes(result.stdout, "scanError", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -797,6 +801,38 @@ function checkNoneRequireFound(tmp, args) {
   console.log("[OK] Missing Windows host fails only when required and explains next step");
 }
 
+function checkScannerTimeoutProducesActionableSummary(tmp, args) {
+  const result = run(["--json", "--requireFound", "--scanTimeoutMs", "1000"], args, {
+    FAKE_SCANNER_ROOT: tmp,
+    FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+  });
+  assert(result.status !== 0, "scanner timeout with requireFound should exit non-zero");
+  const payload = parseJson(result.stdout, "scanner timeout JSON");
+  assert(payload.ok === false, "scanner timeout payload should be ok=false");
+  assert(payload.found.length === 0, "scanner timeout payload should not invent Windows hosts");
+  assert(payload.scanError?.reason === "timeout", `scanner timeout should expose a timeout reason: ${JSON.stringify(payload.scanError)}`);
+  assertIncludes(payload.boardSummary, "ScannerWarning=timeout", "scanner timeout board summary");
+  assertIncludes(payload.boardSummary, "Ask Windows Codex to start Windows host", "scanner timeout board summary");
+  assertWindowsHostStatusCommand(payload.windowsHostStatusCommand || "", "scanner timeout JSON Windows host status command");
+  assertWindowsHostReadinessCommand(payload.windowsHostReadinessCommand || "", "scanner timeout JSON Windows host readiness command");
+  assertWindowsHostStatusCommand(
+    extractWindowsHostStatusCommand(payload.boardSummary, "scanner timeout board summary"),
+    "scanner timeout board summary Windows host status command",
+  );
+  assertWindowsHostReadinessCommand(
+    extractWindowsHostReadinessCommand(payload.boardSummary, "scanner timeout board summary"),
+    "scanner timeout board summary Windows host readiness command",
+  );
+  assertMacClientBrowserSelfTestCommand(
+    payload.macClientBrowserSelfTestCommand || "",
+    "scanner timeout JSON Mac client browser self-test command",
+  );
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "scanner timeout output");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "scanner timeout output");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "input_event", "scanner timeout output");
+  console.log("[OK] Scanner timeout still prints actionable Windows host next steps");
+}
+
 async function checkBoardWindowsLanRisk(tmp, args) {
   const boardState = {
     updatedAt: "2026-06-18T12:58:23.345Z",
@@ -914,6 +950,7 @@ async function main() {
     checkBoardSummaryFound(tmp, args);
     checkPlainFound(tmp, args);
     checkNoneRequireFound(tmp, args);
+    checkScannerTimeoutProducesActionableSummary(tmp, args);
     await checkBoardWindowsLanRisk(tmp, args);
     await checkBoardMacUnattendedFreshness(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");

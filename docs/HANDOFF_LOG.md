@@ -17,6 +17,31 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac Windows host discovery 超时摘要
+开发端：Mac Codex
+本轮目标：让 Mac 侧发现 Windows host 的入口在 LAN 扫描超时时仍给出可执行下一步，避免通讯板 active call 卡在底层 ETIMEDOUT。
+完成内容：
+- `discover-windows-hosts` 子扫描器超时时不再只输出 `[FAIL] ... ETIMEDOUT`；会生成结构化 no-host 报告。
+- `--boardSummary` 现在会输出 `ScannerWarning=timeout`，并继续给出 `WindowsHostStatus=`、`WindowsHostReadiness=`、Mac client 自测、脚本 help、电源/音频/input 安全预案等无密下一步。
+- JSON 新增 `scanError.reason=timeout` / `timeoutMs`，帮助上层工具区分“未发现 host”和“扫描器超时但仍有可执行下一步”。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：新增 fake scanner `hang` 场景后，`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 12000` 先失败于超时路径没有 JSON。
+- 绿灯：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 12000`
+- 绿灯：`node --check scripts/mac/discover-windows-hosts.mjs`、`node --check scripts/mac/test-discover-windows-hosts.mjs`
+- 真实摘要：`node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary --scanTimeoutMs 12000` 输出 `ScannerWarning=timeout` 和 Windows host status/readiness 下一步。
+遗留问题：
+- 当前通讯板 active call 仍需要 Windows Codex 在 Windows 本机运行 host status/readiness 或安全启动 Windows host 后上板。
+下一步建议：
+- Windows 端看到 `ScannerWarning=timeout` 或 Mac 发现不到 Windows host 时，优先运行同屏 `WindowsHostStatus=` / `WindowsHostReadiness=`，确认监听地址、防火墙和网络配置后再让 Mac 重跑 discovery/formal smoke。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端按通讯板 currentCall 刷新 Windows host 状态；本轮 Mac 改动本身不要求 Windows 代码修改。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 端消费 MacClientPasswordLocation
