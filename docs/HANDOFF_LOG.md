@@ -46,6 +46,33 @@
 是否需要另一端配合：不需要立即配合；Mac 端只需消费/展示该只读状态即可。
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac manual UX 本机目标 fallback
+开发端：Mac Codex
+本轮目标：让手工体验第一屏在通讯板只给 loopback 时，也能直接告诉 Windows/User 当前 Mac LAN 连接目标。
+完成内容：
+- `check-mac-manual-ux-status` 增加本机 Mac host `/discovery` fallback：通讯板没有可用 LAN target 时，只读探测 `127.0.0.1:43770/discovery`，确认 macOS host 后用 discovery `lanAddresses` 或本机非 loopback IPv4 生成 `Target=<LAN>:<port>`。
+- JSON 和 `--boardSummary` 新增 `targetSource` / `TargetSource=`，区分 `board`、`mac-host-discovery` 和 `unknown`。
+- 真机 fallback 验证中，手工体验状态可从 `Target=unknown` 变为 `Target=192.168.31.122:43770 TargetSource=mac-host-discovery`；该摘要上板后后续也可能由通讯板文本显示为 `TargetSource=board`。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败于 `loopback-only JSON target source mismatch: undefined`，证明旧脚本缺 `targetSource` / fallback。
+- 绿灯：语法检查和同一手工体验状态自测通过；真机 fallback 验证输出 `MacManualUx=status=ready ... Target=192.168.31.122:43770 TargetSource=mac-host-discovery`，摘要上板后复查也可从通讯板读到同一 Target。
+遗留问题：
+- 该脚本只提供目标和清单，不自动打开 Windows 控制端、不请求密码、不执行真实输入；手工体验仍需 Windows/User 按清单实际验证。
+下一步建议：
+- Windows Codex 防火墙口径收尾后，双方可在通讯板按 `MacManualUx=status=ready Target=192.168.31.122:43770` 进入 5-10 分钟手工体验窗口，重点记录画面、声音、剪贴板、文件、窗口/全屏/原画和复制诊断。
+是否改了协议：否。只读 HTTP `/discovery` 和本机网卡枚举，不改 WebSocket。
+是否需要另一端配合：不需要立即配合；进入真实手工体验窗口时需要 Windows/User 参与。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac formal 消费 WindowsHostSession
 开发端：Mac Codex
 本轮目标：把 Windows host 新增的无密 `/diagnostics` 会话证据接入 Mac formal/status 第一屏，帮助定位 Mac 控 Windows smoke 超时层。

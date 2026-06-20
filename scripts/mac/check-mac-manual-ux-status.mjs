@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import http from "node:http";
 import https from "node:https";
+import os from "node:os";
 
 const defaults = {
   server: "http://192.168.31.68:17888",
@@ -9,6 +10,9 @@ const defaults = {
   role: "Mac 端",
   from: "Mac Codex",
   timeoutMs: 5000,
+  macHost: process.env.LAN_DUAL_MANUAL_UX_DISCOVERY_HOST || "127.0.0.1",
+  macHostPort: Number(process.env.LAN_DUAL_MANUAL_UX_DISCOVERY_PORT || 43770),
+  localDiscoveryTimeoutMs: 900,
   requireReady: false,
   json: false,
   boardSummary: false,
@@ -53,6 +57,10 @@ function printHelp() {
 Options:
   --server <url>       Agent Link Board URL. Default: ${defaults.server}
   --timeoutMs <ms>     Board request timeout. Default: ${defaults.timeoutMs}
+  --macHost <host>     Local Mac host discovery address. Default: ${defaults.macHost}
+  --macHostPort <port> Local Mac host discovery port. Default: ${defaults.macHostPort}
+  --localDiscoveryTimeoutMs <ms>
+                       Local Mac host discovery timeout. Default: ${defaults.localDiscoveryTimeoutMs}
   --requireReady       Exit non-zero unless PostPass/ManualUxStandby is visible.
   --boardSummary       Print one secret-free Agent Link Board summary line.
   --json               Print one machine-readable JSON object.
@@ -147,6 +155,21 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if ((token === "--macHost" || token === "--host") && next && !next.startsWith("--")) {
+      args.macHost = next;
+      index += 1;
+      continue;
+    }
+    if ((token === "--macHostPort" || token === "--port") && next && !next.startsWith("--")) {
+      args.macHostPort = Number(next);
+      index += 1;
+      continue;
+    }
+    if (token === "--localDiscoveryTimeoutMs" && next && !next.startsWith("--")) {
+      args.localDiscoveryTimeoutMs = Math.max(100, Number(next) || defaults.localDiscoveryTimeoutMs);
+      index += 1;
+      continue;
+    }
     if ((token === "--device" || token === "--role" || token === "--from" || token === "--token") && next && !next.startsWith("--")) {
       args[token.slice(2)] = next;
       index += 1;
@@ -156,6 +179,10 @@ function parseArgs(argv) {
   }
   args.server = String(args.server || defaults.server).replace(/\/+$/, "");
   args.token = String(args.token || "");
+  args.macHost = String(args.macHost || defaults.macHost);
+  args.macHostPort = Number(args.macHostPort);
+  if (!Number.isFinite(args.macHostPort)) args.macHostPort = defaults.macHostPort;
+  args.localDiscoveryTimeoutMs = Math.max(100, Number(args.localDiscoveryTimeoutMs) || defaults.localDiscoveryTimeoutMs);
   return args;
 }
 
@@ -260,7 +287,7 @@ function boardEndpoint(server) {
   }
 }
 
-function firstLanMacHostEndpoint(texts, server) {
+function firstLanMacHostTarget(texts, server) {
   const board = boardEndpoint(server);
   const candidates = [];
   for (const text of texts) {
@@ -272,9 +299,124 @@ function firstLanMacHostEndpoint(texts, server) {
     }
   }
   const preferredMacHost = candidates.find((item) => item.port === 43770 && !item.host.startsWith("127."));
-  if (preferredMacHost) return preferredMacHost.endpoint;
+  if (preferredMacHost) {
+    return {
+      endpoint: preferredMacHost.endpoint,
+      source: "board",
+    };
+  }
   const lan = candidates.find((item) => !item.host.startsWith("127."));
-  return lan?.endpoint || "unknown";
+  if (lan) {
+    return {
+      endpoint: lan.endpoint,
+      source: "board",
+    };
+  }
+  return {
+    endpoint: "unknown",
+    source: "unknown",
+  };
+}
+
+function isUsableLanAddress(address) {
+  const text = normalizedText(address);
+  return /^(?:10|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(text)
+    && !text.startsWith("127.")
+    && !text.startsWith("169.254.");
+}
+
+function getLanAddresses(port) {
+  const addresses = [];
+  for (const [name, entries] of Object.entries(os.networkInterfaces())) {
+    for (const entry of entries || []) {
+      if (!entry || entry.family !== "IPv4" || entry.internal) continue;
+      if (!isUsableLanAddress(entry.address)) continue;
+      addresses.push({
+        name,
+        address: entry.address,
+        port,
+        endpoint: `${entry.address}:${port}`,
+      });
+    }
+  }
+  return addresses;
+}
+
+function lanAddressesFromDiscovery(payload, port) {
+  const addresses = [];
+  const items = Array.isArray(payload?.lanAddresses) ? payload.lanAddresses : [];
+  for (const item of items) {
+    const address = normalizedText(item?.address || item?.host || item);
+    const itemPort = Number(item?.port || port);
+    if (!isUsableLanAddress(address) || !Number.isFinite(itemPort) || itemPort <= 0) continue;
+    addresses.push({
+      name: normalizedText(item?.name),
+      address,
+      port: itemPort,
+      endpoint: `${address}:${itemPort}`,
+    });
+  }
+  return addresses;
+}
+
+function looksLikeMacHostDiscovery(payload) {
+  const platform = normalizedText(payload?.platform).toLowerCase();
+  const role = normalizedText(payload?.role).toLowerCase();
+  const type = normalizedText(payload?.type).toLowerCase();
+  return platform === "macos" || role === "host" || type === "lan_dual_discovery";
+}
+
+async function readLocalMacHostTarget(args) {
+  const discoveryPort = Number(args.macHostPort);
+  if (!Number.isFinite(discoveryPort) || discoveryPort <= 0) {
+    return {
+      ok: false,
+      target: "unknown",
+      source: "disabled",
+      reason: "disabled",
+    };
+  }
+  const url = new URL(`http://${args.macHost}:${discoveryPort}/discovery`);
+  try {
+    const payload = await fetchJson(url, args.localDiscoveryTimeoutMs);
+    if (!looksLikeMacHostDiscovery(payload)) {
+      return {
+        ok: false,
+        target: "unknown",
+        source: "mac-host-discovery",
+        reason: "not-mac-host",
+      };
+    }
+    const controlPort = Number(payload?.controlPort || payload?.port || discoveryPort);
+    const targetPort = Number.isFinite(controlPort) && controlPort > 0 ? controlPort : discoveryPort;
+    const fromDiscovery = lanAddressesFromDiscovery(payload, targetPort);
+    const fromInterfaces = getLanAddresses(targetPort);
+    const target = fromDiscovery[0] || fromInterfaces[0] || null;
+    return {
+      ok: Boolean(target),
+      target: target?.endpoint || "unknown",
+      source: target ? "mac-host-discovery" : "mac-host-discovery-no-lan",
+      reason: target ? "ok" : "no-lan-address",
+      discovery: {
+        host: args.macHost,
+        port: discoveryPort,
+        controlPort: targetPort,
+        platform: normalizedText(payload?.platform),
+        role: normalizedText(payload?.role),
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      target: "unknown",
+      source: "mac-host-discovery",
+      reason: normalizedText(error?.message || error || "unreachable"),
+      discovery: {
+        host: args.macHost,
+        port: discoveryPort,
+      },
+    };
+  }
 }
 
 function isUsableEntryManualUxCall(text) {
@@ -707,10 +849,24 @@ function makeUserPresenceSummary(userPresence) {
   ].join(",");
 }
 
-function makeReport(state, server) {
+async function makeReport(state, args) {
   const texts = collectBoardTexts(state);
   const eventSources = boardEventSources(state);
   const combined = texts.join("\n");
+  const boardTarget = firstLanMacHostTarget(texts, args.server);
+  const localMacHostDiscovery = boardTarget.endpoint === "unknown"
+    ? await readLocalMacHostTarget(args)
+    : null;
+  const target = boardTarget.endpoint !== "unknown"
+    ? boardTarget.endpoint
+    : localMacHostDiscovery?.ok
+      ? localMacHostDiscovery.target
+      : "unknown";
+  const targetSource = boardTarget.endpoint !== "unknown"
+    ? boardTarget.source
+    : localMacHostDiscovery?.ok
+      ? "mac-host-discovery"
+      : "unknown";
   const boardCallBeforeCheck = normalizeCurrentBoardCall(state.currentCall);
   const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
   const userPresence = detectUserPresence(state);
@@ -751,9 +907,11 @@ function makeReport(state, server) {
   const report = {
     ok: ready || calling || callReady,
     status,
-    server,
+    server: args.server,
     checkedAt: new Date().toISOString(),
-    target: firstLanMacHostEndpoint(texts, server),
+    target,
+    targetSource,
+    localMacHostDiscovery,
     boardEventSources: eventSources,
     boardCallBeforeCheck,
     signals,
@@ -769,12 +927,12 @@ function makeReport(state, server) {
       rerunFormalE2E: false,
     },
     commands: {
-      manualUxCallCommand: callReady && manualUxGate === "clear" ? makeManualUxCallCommand(server) : null,
+      manualUxCallCommand: callReady && manualUxGate === "clear" ? makeManualUxCallCommand(args.server) : null,
       manualUxReconfirmCommand: calling && manualUxCall?.timedOut && manualUxGate === "clear"
-        ? makeManualUxReconfirmCommand(server)
+        ? makeManualUxReconfirmCommand(args.server)
         : null,
       manualUxAfterGateCommand: manualUxGate === "wait-windows-codex-push"
-        ? makeManualUxAfterGateCommand(server)
+        ? makeManualUxAfterGateCommand(args.server)
         : null,
     },
     manualUxCall,
@@ -785,7 +943,7 @@ function makeReport(state, server) {
     },
     blockers,
     warnings,
-    nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination, userPresence),
+    nextActions: makeNextActions(status, manualUxCall, args.server, windowsCoordination, userPresence),
   };
   report.manualUxMissingSignal = makeManualUxMissingSignal(blockers);
   refreshOperatorAction(report);
@@ -866,6 +1024,7 @@ function makeBoardSummary(report) {
     `Signals=${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(",") || "none"}`,
     `BoardEventSources=${report.boardEventSources?.join(",") || "none"}`,
     `Target=${report.target}`,
+    `TargetSource=${report.targetSource || "unknown"}`,
     `Next=${next}`,
     `ManualUxAction=${operatorAction.id}`,
     `ManualUxUserPresence=${makeUserPresenceSummary(report.coordination?.userPresence)}`,
@@ -929,6 +1088,8 @@ function makeOfflineReport(server, error) {
     server,
     checkedAt: new Date().toISOString(),
     target: "unknown",
+    targetSource: "unknown",
+    localMacHostDiscovery: null,
     boardEventSources: [],
     signals: {
       realTestPass: false,
@@ -978,7 +1139,7 @@ async function main() {
   try {
     const url = normalizeServerUrl(args.server);
     const state = await fetchJson(url, args.timeoutMs);
-    report = makeReport(state, args.server);
+    report = await makeReport(state, args);
   } catch (error) {
     report = makeOfflineReport(args.server, error);
   }

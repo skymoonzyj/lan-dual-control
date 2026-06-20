@@ -6,6 +6,7 @@
 ## 2026-06-20 现场校正
 
 - 不要再回旧第二步/diagnostics 循环：Windows 控 Mac formal E2E 主体已经 PASS。
+- 手工体验第一屏口径：`node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --boardSummary` 若通讯板只有 loopback，会只读本机 Mac host `/discovery` 和本机 LAN IPv4，输出 `Target=<Mac LAN>:43770 TargetSource=mac-host-discovery`；本轮真机 fallback 已验证 `Target=192.168.31.122:43770`。看到 `MacManualUx=status=ready` 且 `Target` 是非 127 的 LAN 地址时，Windows/User 可直接用该目标进入手工体验清单；脚本不认证、不请求密码、不发 user-auth/input/inject。
 - 密码输入位置当前口径：Windows 控制页手动连接时，Mac 当前临时密码填页面左侧“连接密码”框；页面会清空演示密码、聚焦该框并显示提示。只有 `--promptPassword` / formal runner 出现“终端隐藏输入”提示时，才把密码输入黑色终端窗口；不要把密码发通讯板。
 - Mac 控 Windows 页面当前口径：Windows host 临时密码填 Mac 页面里的“密码”框；该框下方会固定提示“在这里输入 Windows 临时密码；不要发到通讯板；不保存到最近连接或诊断”。复制/导出诊断会带 `密码输入位置`，但不会带连接密码或英文 `password` 字样。
 - 如果 Windows 恢复总览或 Windows 控制页看到 `MacClientPasswordLocation=`，按“Mac client 页面密码框填写 Windows 临时密码；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板”理解。这只是无密位置提示，不代表已经连接、认证或发送输入。

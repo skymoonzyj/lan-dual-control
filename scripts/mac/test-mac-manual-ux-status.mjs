@@ -67,6 +67,7 @@ function run(extraArgs, args) {
       env: {
         ...process.env,
         LAN_DUAL_PASSWORD: "",
+        LAN_DUAL_MANUAL_UX_DISCOVERY_PORT: "0",
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -163,6 +164,31 @@ async function withFakeBoard(state, callback, options = {}) {
   const url = `http://127.0.0.1:${address.port}`;
   try {
     await callback(url, posts);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
+async function withFakeMacHostDiscovery(payload, callback) {
+  const server = http.createServer((request, response) => {
+    const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
+    const headers = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    };
+    if (path !== "/discovery") {
+      response.writeHead(404, headers);
+      response.end(JSON.stringify({ ok: false, error: "not found" }));
+      return;
+    }
+    response.writeHead(200, headers);
+    response.end(JSON.stringify(payload));
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    await callback({ url, host: "127.0.0.1", port: address.port });
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
@@ -902,9 +928,44 @@ async function checkLoopbackTargetIsNotAdvertised(args) {
     const payload = parseJson(result.stdout, "loopback-only JSON");
     assert(payload.status === "ready", `loopback-only JSON status mismatch: ${payload.status}`);
     assert(payload.target === "unknown", `loopback-only JSON should not advertise 127.0.0.1 as Windows target, got ${payload.target}`);
+    assert(payload.targetSource === "unknown", `loopback-only JSON target source mismatch: ${payload.targetSource}`);
     assertIncludes(payload.boardSummary, "Target=unknown", "loopback-only boardSummary");
+    assertIncludes(payload.boardSummary, "TargetSource=unknown", "loopback-only boardSummary");
   });
   console.log("[OK] Mac manual UX status does not advertise loopback-only Mac target");
+}
+
+async function checkLocalDiscoveryFillsManualUxTarget(args) {
+  await withFakeMacHostDiscovery({
+    platform: "macos",
+    role: "host",
+    type: "lan_dual_discovery",
+    host: "127.0.0.1",
+    port: 43770,
+    controlPort: 43770,
+    lanAddresses: [
+      { name: "en0", address: "192.168.31.122", port: 43770 },
+    ],
+    capabilities: {
+      inputMode: "log",
+      h264Stream: true,
+      audio: true,
+    },
+  }, async ({ host, port }) => {
+    await withFakeBoard(loopbackOnlyBoardState(), async (serverUrl) => {
+      const result = await run(["--server", serverUrl, "--macHost", host, "--macHostPort", String(port), "--json"], args);
+      assert(result.exitCode === 0, `local discovery target JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+      const payload = parseJson(result.stdout, "local discovery target JSON");
+      assert(payload.status === "ready", `local discovery target status mismatch: ${payload.status}`);
+      assert(payload.target === "192.168.31.122:43770", `local discovery target mismatch: ${payload.target}`);
+      assert(payload.targetSource === "mac-host-discovery", `local discovery target source mismatch: ${payload.targetSource}`);
+      assert(payload.localMacHostDiscovery?.ok === true, `local discovery evidence missing: ${JSON.stringify(payload.localMacHostDiscovery)}`);
+      assertIncludes(payload.boardSummary, "Target=192.168.31.122:43770", "local discovery boardSummary");
+      assertIncludes(payload.boardSummary, "TargetSource=mac-host-discovery", "local discovery boardSummary");
+      assertSecretSafe(JSON.stringify(payload), "local discovery target JSON");
+    });
+  });
+  console.log("[OK] Mac manual UX status fills Target from local Mac host discovery when board only has loopback");
 }
 
 async function checkChinesePunctuationAfterChecklist(args) {
@@ -1400,6 +1461,7 @@ async function main() {
   await checkReadyWhileUserSleepingWaitsForUserAwake(args);
   await checkSendStatusWhileUserSleepingPostsWaiting(args);
   await checkLoopbackTargetIsNotAdvertised(args);
+  await checkLocalDiscoveryFillsManualUxTarget(args);
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
   await checkSendStatusAndMessage(args);
