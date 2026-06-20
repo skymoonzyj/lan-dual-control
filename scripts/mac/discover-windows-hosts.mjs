@@ -20,6 +20,7 @@ const defaults = {
   scanTimeoutMs: 0,
   sendStatus: false,
   sendMessage: false,
+  sendCall: false,
   device: "Mac Client Discover Windows",
   role: "Mac 端",
   from: "Mac Codex",
@@ -101,6 +102,8 @@ Options:
   --boardSummary          Print a short secret-free Agent Link Board summary.
   --sendStatus            Post the board summary to Agent Link Board /api/status.
   --sendMessage           Post the board summary to Agent Link Board /api/message.
+  --sendCall              Send or refresh a Windows host readiness call only
+                          when no Windows host is found.
   --device <name>         Status device name. Default: ${defaults.device}
   --role <role>           Status role. Default: ${defaults.role}
   --from <name>           Message sender. Default: ${defaults.from}
@@ -112,6 +115,7 @@ Options:
 Examples:
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendStatus --sendMessage --boardSummary
+  node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendCall --boardSummary
   node scripts/mac/discover-windows-hosts.mjs --subnet 192.168.31.0/24 --requireFound
   node scripts/mac/discover-windows-hosts.mjs --host 192.168.31.68 --json
 
@@ -186,6 +190,9 @@ Machine-readable JSON fields:
                            reverse-control request loop after authentication:
                            Mac expects LAN008 first, Windows opens a local
                            one-time grant, then Mac retries.
+  windowsHostReadinessCall
+                           Secret-free call payload sent only by explicit
+                           --sendCall when Mac discovery found no Windows host.
   manualChecklistSummary   Human true-test checklist order:
                            ${manualChecklistSummary}.
 `);
@@ -209,6 +216,7 @@ function parseArgs(argv) {
     verbose: defaults.verbose,
     sendStatus: defaults.sendStatus,
     sendMessage: defaults.sendMessage,
+    sendCall: defaults.sendCall,
     device: defaults.device,
     role: defaults.role,
     from: defaults.from,
@@ -223,7 +231,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets" || token === "--checkBoard" || token === "--sendStatus" || token === "--sendMessage") {
+    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets" || token === "--checkBoard" || token === "--sendStatus" || token === "--sendMessage" || token === "--sendCall") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -292,6 +300,43 @@ function clampInteger(value, min, max, fallback) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function compactText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.replace(/\s+/g, " ").trim();
+  if (typeof value !== "object") return String(value).replace(/\s+/g, " ").trim();
+  return Object.values(value)
+    .map((item) => compactText(item))
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isActiveBoardCall(call) {
+  if (!call || typeof call !== "object") return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function normalizeCurrentBoardCall(call) {
+  if (!call || typeof call !== "object") {
+    return {
+      active: false,
+      raw: "",
+    };
+  }
+  const currentCall = {
+    active: isActiveBoardCall(call),
+    raw: compactText(call),
+  };
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "startedAt", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) currentCall[key] = value;
+  }
+  return currentCall;
 }
 
 function hasSecretLikeCommandValue(text) {
@@ -464,13 +509,13 @@ async function readMacUnattendedFreshnessFromBoard(options = {}) {
   }
 }
 
-async function readBoardState(server, timeoutMs) {
+async function readBoardState(server, timeoutMs, tokenOverride = "") {
   const baseUrl = String(server || "").trim().replace(/\/+$/, "");
   if (!baseUrl) throw new Error("missing Agent Link Board URL");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
   try {
-    const token = process.env.CODEX_LINK_TOKEN || "";
+    const token = String(tokenOverride || process.env.CODEX_LINK_TOKEN || "");
     const response = await fetch(`${baseUrl}/api/state`, {
       cache: "no-store",
       signal: controller.signal,
@@ -713,9 +758,11 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), ma
     windowsOpenOneTimeReverseGrantNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "grant") : "",
     windowsLanRisk,
     reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
+    windowsHostReadinessCall: null,
     scanError: scan.scanError || null,
     boardSummary: "",
   };
+  report.windowsHostReadinessCall = best ? null : windowsHostReadinessCallPayload(args, report);
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
@@ -869,6 +916,72 @@ async function sendMessage(args, report) {
   });
 }
 
+function windowsHostReadinessCallPayload(args, report) {
+  const status = discoveryBoardStatus(report);
+  const scannerWarning = formatScannerWarning(report.scanError);
+  const actual = [
+    `MacDiscovery=${status}`,
+    `found=${report.found.length}`,
+    `scanned=${report.scanned}`,
+    scannerWarning,
+  ].filter(Boolean).join(" ");
+  const ask = [
+    "Mac discovery did not find a Windows host.",
+    scannerWarning,
+    `WindowsHostStatus=${report.windowsHostStatusCommand}.`,
+    `WindowsHostReadiness=${report.windowsHostReadinessCommand}.`,
+    "Please run or refresh the Windows host locally, then post a secret-free boardSummary with reachable LAN IP/port.",
+    "No password; no auth; no input/inject.",
+  ].filter(Boolean).join(" ");
+  return {
+    status: "CALLING",
+    from: args.from,
+    need: "Windows Codex",
+    owner: "Windows Codex",
+    goal: "Start or refresh Windows host for Mac-control-Windows preflight",
+    environment: "Mac client Windows discovery",
+    connection: "Agent Link Board only; no password/auth/input/inject.",
+    command: "",
+    expected: "Windows host status/readiness boardSummary shows a reachable LAN host/port for Mac client formal preflight.",
+    actual,
+    blockedBy: "Windows host not discoverable from Mac LAN scan",
+    ask,
+    timeout: "30m",
+  };
+}
+
+function isMatchingWindowsHostReadinessCall(call, payload) {
+  return Boolean(
+    call?.active &&
+    call.from === payload.from &&
+    call.need === payload.need &&
+    call.goal === payload.goal
+  );
+}
+
+async function sendWindowsHostReadinessCall(args, report) {
+  if (report.best) {
+    throw new Error(`Refusing to send Windows host readiness call because discovery already found ${report.best.host}:${report.best.port}; use ${report.sendCallCommand} after the formal checklist if coordination is needed.`);
+  }
+  const payload = report.windowsHostReadinessCall || windowsHostReadinessCallPayload(args, report);
+  const state = await readBoardState(args.server, args.timeoutMs, args.token);
+  const currentCall = normalizeCurrentBoardCall(state.currentCall);
+  if (currentCall.active && !isMatchingWindowsHostReadinessCall(currentCall, payload)) {
+    const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
+    const goal = currentCall.goal || currentCall.raw || "unknown goal";
+    throw new Error(`Refusing to replace existing Agent Link Board active call from ${owner}: ${goal}. Wait for it to resolve before sending the Windows host readiness call.`);
+  }
+  const result = await postToBoard(args, "/api/call", payload);
+  return {
+    ok: true,
+    attempted: true,
+    refreshed: Boolean(currentCall.active),
+    payload,
+    boardCallBeforeSend: currentCall,
+    result: result || { ok: true },
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help || helpRequested(process.argv)) {
@@ -902,6 +1015,9 @@ async function main() {
   }
   if (args.sendMessage) {
     await sendMessage(args, report);
+  }
+  if (args.sendCall) {
+    await sendWindowsHostReadinessCall(args, report);
   }
   process.exitCode = report.ok ? 0 : 1;
 }

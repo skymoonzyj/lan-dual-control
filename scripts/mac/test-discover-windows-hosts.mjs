@@ -461,7 +461,7 @@ const postLogPath = process.argv[2];
 const state = ${JSON.stringify(state)};
 createServer((request, response) => {
   const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
-  if (request.method === "POST" && (pathname === "/api/status" || pathname === "/api/message")) {
+  if (request.method === "POST" && (pathname === "/api/status" || pathname === "/api/message" || pathname === "/api/call")) {
     let body = "";
     request.setEncoding("utf8");
     request.on("data", (chunk) => {
@@ -576,6 +576,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--checkBoard", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendMessage", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsLanRisk", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -1022,6 +1023,83 @@ async function checkExplicitBoardPostsForScannerTimeout(tmp, args) {
   console.log("[OK] Explicit scanner-timeout status/message posts are secret-free");
 }
 
+async function checkExplicitReadinessCallForScannerTimeout(tmp, args) {
+  await withBoardStateServer(args, { statuses: {}, events: [], currentCall: null }, async (serverUrl, postLogPath) => {
+    const result = run([
+      "--server",
+      serverUrl,
+      "--checkBoard",
+      "--json",
+      "--scanTimeoutMs",
+      "1000",
+      "--sendCall",
+    ], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+    });
+    assert(result.status === 0, `scanner timeout sendCall should exit 0 without requireFound.\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "scanner timeout sendCall JSON");
+    assert(payload.scanError?.reason === "timeout", `sendCall payload should preserve scan timeout reason: ${JSON.stringify(payload.scanError)}`);
+    assert(payload.windowsHostReadinessCall?.goal === "Start or refresh Windows host for Mac-control-Windows preflight", `sendCall JSON should expose readiness call payload: ${JSON.stringify(payload.windowsHostReadinessCall)}`);
+    assertIncludes(payload.windowsHostReadinessCall.ask, "WindowsHostStatus=", "sendCall JSON readiness call ask");
+    const posts = readPostLog(postLogPath);
+    assert(posts.length === 1, `sendCall should post one record: ${JSON.stringify(posts)}`);
+    const callPost = posts.find((post) => post.path === "/api/call");
+    assert(callPost, `missing /api/call post: ${JSON.stringify(posts)}`);
+    assert(callPost.body.status === "CALLING", `call status mismatch: ${JSON.stringify(callPost.body)}`);
+    assert(callPost.body.from === "Mac Codex", `call sender mismatch: ${JSON.stringify(callPost.body)}`);
+    assert(callPost.body.need === "Windows Codex", `call need mismatch: ${JSON.stringify(callPost.body)}`);
+    assert(callPost.body.owner === "Windows Codex", `call owner mismatch: ${JSON.stringify(callPost.body)}`);
+    assert(callPost.body.goal === "Start or refresh Windows host for Mac-control-Windows preflight", `call goal mismatch: ${JSON.stringify(callPost.body)}`);
+    assertIncludes(callPost.body.ask, "ScannerWarning=timeout", "call ask");
+    assertIncludes(callPost.body.ask, "WindowsHostStatus=", "call ask");
+    assertIncludes(callPost.body.ask, "WindowsHostReadiness=", "call ask");
+    assertIncludes(callPost.body.actual, "windows-discovery-timeout", "call actual");
+    assertIncludes(callPost.body.actual, "ScannerWarning=timeout", "call actual");
+    assertIncludes(callPost.body.connection, "Agent Link Board only", "call connection");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "LAN_DUAL_PASSWORD", "scanner timeout sendCall output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "--password", "scanner timeout sendCall output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "input_event", "scanner timeout sendCall output");
+  });
+  console.log("[OK] Explicit scanner-timeout readiness call is secret-free");
+}
+
+async function checkSendCallRefusesUnrelatedActiveCall(tmp, args) {
+  const boardState = {
+    statuses: {},
+    events: [],
+    currentCall: {
+      status: "CALLING",
+      from: "Windows Codex",
+      need: "Mac Codex",
+      goal: "Manual UX confirmation",
+      ask: "Please keep this unrelated call intact.",
+      owner: "Mac Codex",
+    },
+  };
+  await withBoardStateServer(args, boardState, async (serverUrl, postLogPath) => {
+    const result = run([
+      "--server",
+      serverUrl,
+      "--checkBoard",
+      "--json",
+      "--scanTimeoutMs",
+      "1000",
+      "--sendCall",
+    ], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+    });
+    assert(result.status !== 0, `sendCall should refuse an unrelated active call.\n${result.stdout}\n${result.stderr}`);
+    assert(readPostLog(postLogPath).length === 0, `sendCall should not post over an unrelated call: ${JSON.stringify(readPostLog(postLogPath))}`);
+    assertIncludes(result.stderr, "active call", "sendCall unrelated active call stderr");
+    assertIncludes(result.stderr, "Manual UX confirmation", "sendCall unrelated active call stderr");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "sendCall unrelated active call output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "sendCall unrelated active call output");
+  });
+  console.log("[OK] sendCall refuses to replace unrelated active calls");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -1040,6 +1118,8 @@ async function main() {
     await checkBoardWindowsLanRisk(tmp, args);
     await checkBoardMacUnattendedFreshness(tmp, args);
     await checkExplicitBoardPostsForScannerTimeout(tmp, args);
+    await checkExplicitReadinessCallForScannerTimeout(tmp, args);
+    await checkSendCallRefusesUnrelatedActiveCall(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");
   } finally {
     rmSync(tmp, { recursive: true, force: true });
