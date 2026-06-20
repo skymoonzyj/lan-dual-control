@@ -11,6 +11,7 @@ const repoRoot = resolve(scriptDir, "../..");
 const script = "scripts/windows/check-windows-resume-status.mjs";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
 const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
+const w2VisibilityRetestSummary = "status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject";
 
 const defaults = {
   timeoutMs: 30000,
@@ -614,8 +615,15 @@ async function checkMockJson(args) {
     assert(!String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--password"), "mock JSON client real retest should not include password argv");
     assert(payload.commands?.windowsClientRetestUserEntryCommand === windowsClientRetestUserEntryCommand, "mock JSON should include Windows client real retest root entry");
     assert(payload.commands?.windowsClientRetestAndPostUserEntryCommand === windowsClientRetestAndPostUserEntryCommand, "mock JSON should include Windows client retest-and-post root entry");
+    assert(payload.w2VisibilityRetest?.status === "pending-user-retest", "mock JSON should expose W2 visibility retest status");
+    assert(payload.w2VisibilityRetest?.action === "switch-away-and-back", "mock JSON should expose W2 visibility retest action");
+    assert(payload.w2VisibilityRetest?.next === windowsClientRetestAndPostUserEntryCommand, "mock JSON should point W2 visibility retest at the root retest-and-post entry");
+    assert(payload.w2VisibilityRetest?.summary === w2VisibilityRetestSummary, "mock JSON W2 visibility retest summary mismatch");
+    assertNotIncludes(payload.w2VisibilityRetest?.summary || "", "--password", "mock JSON W2 visibility retest summary should not include password argv");
+    assertNotIncludes(payload.w2VisibilityRetest?.summary || "", "input_event", "mock JSON W2 visibility retest summary should not include input events");
     assert(String(payload.boardSummary || "").includes(`WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`), "mock JSON board summary should include Windows client real retest root entry");
     assert(String(payload.boardSummary || "").includes(`WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`), "mock JSON board summary should include Windows client retest-and-post root entry");
+    assertIncludes(payload.boardSummary, `W2VisibilityRetest=${w2VisibilityRetestSummary}.`, "mock JSON board summary should include W2 visibility retest");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client real retest PowerShell command");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client real retest PowerShell should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client real retest PowerShell should use the discovered Mac port");
@@ -851,6 +859,7 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "WinClientRetest=", "board summary");
     assertIncludes(result.stdout, `WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`, "board summary");
     assertIncludes(result.stdout, `WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`, "board summary");
+    assertIncludes(result.stdout, `W2VisibilityRetest=${w2VisibilityRetestSummary}.`, "board summary");
     assertIncludes(result.stdout, "--promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "WinClientRetestPs=", "board summary");
     assertIncludes(result.stdout, "-PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000", "board summary");
@@ -2670,6 +2679,7 @@ async function checkBoardWinClientRetestPreflightExtraction(args) {
       ], args);
       assert(result.exitCode === 0, `mock WinClientRetestPreflight human output failed\n${result.stdout}\n${result.stderr}`);
       assertIncludes(result.stdout, "WinClientRetestPreflight=ready target=192.168.31.122:43770 build=0180451 diagnostics=passed next=Run-WinClientRetest-And-Post.cmd", "WinClientRetestPreflight human output");
+      assertIncludes(result.stdout, `W2VisibilityRetest=${w2VisibilityRetestSummary}`, "W2 visibility retest human output");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "WinClientRetestPreflight human output should not leak rejected text");
       console.log("[OK] Windows resume status extracts WinClientRetestPreflight from Agent Link Board safely");
     }, boardState);

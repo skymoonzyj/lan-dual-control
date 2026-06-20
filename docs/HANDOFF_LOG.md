@@ -19,6 +19,18 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 可见性复测提示进入 Windows 恢复总览
+开发端：Windows Codex
+本轮目标：把 W2 后台/切出窗口 H.264 冻结修复后的真实复测动作，提升到 Windows 开工第一屏。
+完成内容：`check-windows-resume-status` 新增只读 `w2VisibilityRetest` 对象，并在普通输出和 `--boardSummary` 固定显示 `W2VisibilityRetest=status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。看到这条时，下一步是用户真实运行 `Run-WinClientRetest-And-Post.cmd`，连接后切出/切回控制端窗口观察画面是否继续流动。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯 `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000` 先失败于缺少 `w2VisibilityRetest`；绿灯同命令通过；`node --check` 两项通过；真实只读 `check-windows-resume-status --checkBoard --boardSummary` 已输出 `W2VisibilityRetest=`。
+遗留问题：仍需用户真实切出/切回控制端窗口复测；如果仍冻结，继续看 `visibility-return-h264-recovery`、`recv/key/sps/pps/idr`、`queueMs`、canvas/image surface。
+下一步建议：Mac 侧保持 host 在线；Windows/用户运行 `Run-WinClientRetest-And-Post.cmd` 做真实复测并观察画面是否继续流动。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；需要 Mac host 在线和用户现场复测。不请求密码、不认证、不发 input/inject。
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 后台/切出窗口 H.264 冻结修复
 开发端：Windows Codex
 本轮目标：修复用户真实反馈的“切出 Codex/控制端窗口后视频卡死但声音继续”问题，避免 Windows 本机 WebCodecs 队列在后台恢复后长期卡在等待关键帧。

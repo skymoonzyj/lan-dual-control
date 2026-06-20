@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 可见性复测提示进入 Windows 恢复总览
+- `check-windows-resume-status --checkBoard` 现在会在 JSON `w2VisibilityRetest`、普通输出和 `--boardSummary` 中固定显示 `W2VisibilityRetest=status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。这是 W2 后台/切出窗口修复后的真实验收提示：下一步不是继续改 Mac 或重复旧 H.264 首屏诊断，而是用户用最新 Windows 控制端连接 Mac 后，真实切出/切回控制端窗口确认画面是否继续流动。该摘要只读生成，不请求密码、不认证、不发通讯板、不发送 input/inject。
 ## 2026-06-21 Windows 修复 W2 后台/切出窗口 H.264 冻结，待真实复测确认
 - Windows 控制端已针对 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE` 增加前台恢复策略：页面进入后台/切出窗口后记录 `visibilitychange` 隐藏时间，恢复可见或重新聚焦时，如果 H.264 链路处于等待关键帧、`queue-overflow-wait-keyframe`、队列超阈值或后台时间足够长，会清理本机 WebCodecs/H.264 旧队列，保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`，并通过现有 `display_settings` 请求新的 H.264 关键帧，不改协议、不切 JPEG。现场/导出诊断会留下 `原因 visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。TDD 红灯先失败于缺少 `recoverH264AfterVisibilityReturn`，绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。下一步需要用户真实切出/切回控制端窗口确认画面不会再长期卡住；若仍复现，优先看导出诊断的 `recv/key/sps/pps/idr`、`reason`、`可见恢复`、`queueMs` 和 canvas 状态。无密码/auth/input/inject。
 

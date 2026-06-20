@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 - 当前最高优先级：真实复测 Windows 已修的 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`。Windows 控制端现在会在切出/后台后恢复可见时，针对 H.264 等关键帧、`queue-overflow-wait-keyframe` 或队列超阈值主动清本机旧队列，并保持 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` 请求下一关键帧；诊断会显示 `原因 visibility-return-h264-recovery` 和 `可见恢复 <n> 次`。下一步由用户真实切出/切回控制端窗口确认画面是否继续流动；如果仍冻结，先复制诊断，看 `recv/key/sps/pps/idr` 是否齐、`reason` 是否仍回到 queue overflow、canvas 是否还在绘制，再决定是否需要 Mac 补证据。Mac 侧继续保持 host 在线；无密码/auth/input/inject。
+- Windows 开工第一屏新增 W2 可见性复测提示：恢复总览会直接显示 `W2VisibilityRetest=status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject`。看到这条时，下一步就是运行 `Run-WinClientRetest-And-Post.cmd`，在当前终端隐藏输入 Mac 临时密码，连接后真实切出/切回控制端窗口；不要把密码发通讯板，也不要自动发 input/inject。
 
 - 今日协作优先级：W2 后台冻结最高；W3 音频低延迟/低丢包第二，验收看连续体验接收=播放、丢包接近 0、重同步/补缓冲下降；W1 只保持入口稳定，不再扩展 helper；M2 真实输入安全流程排在 W2/W3 稳定后；M1 远程独占声音只做方案/只读探测，未获用户明确同意不得改系统声音输出；C3 双方真实体验收口需要 Windows/Mac 分别勾选。当前主线仍只做 Windows 控 Mac，不做 Mac 控 Windows/反控/WindowsHost。
 
