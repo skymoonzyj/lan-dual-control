@@ -236,6 +236,7 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assertIncludes(command || "", "check-mac-input-safety-status.mjs", label);
   assertIncludes(command || "", "--host", label);
   assertIncludes(command || "", "--port", label);
+  assertIncludes(command || "", "--checkBoard", label);
   assertIncludes(command || "", "--boardSummary", label);
   assertNotIncludes(command || "", "--promptPassword", label);
   assertNotIncludes(command || "", "--password", label);

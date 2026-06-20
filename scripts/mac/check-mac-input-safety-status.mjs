@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import http from "node:http";
+import https from "node:https";
 
 const defaults = {
   host: "127.0.0.1",
   port: 43770,
+  server: "http://192.168.31.68:17888",
   timeoutMs: 2500,
   json: false,
   boardSummary: false,
+  checkBoard: false,
 };
 
 function helpRequested(argv) {
@@ -23,7 +26,9 @@ does not send input events, and does not enable inject mode.
 Options:
   --host <host>      Mac host discovery host. Default: ${defaults.host}
   --port <port>      Mac host discovery port. Default: ${defaults.port}
+  --server <url>     Agent Link Board URL for --checkBoard. Default: ${defaults.server}
   --timeoutMs <ms>   Discovery timeout. Default: ${defaults.timeoutMs}
+  --checkBoard       Read /api/state.userPresence without posting anything.
   --json             Print one machine-readable JSON object.
   --boardSummary     Print one secret-free Agent Link Board summary line.
   --help, -h         Show this help without probing anything.
@@ -42,8 +47,13 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary") {
+    if (token === "--json" || token === "--boardSummary" || token === "--checkBoard") {
       args[token.slice(2)] = true;
+      continue;
+    }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next;
+      index += 1;
       continue;
     }
     if (token === "--host" && next && !next.startsWith("--")) {
@@ -64,6 +74,7 @@ function parseArgs(argv) {
     throw new Error(`Unknown argument: ${token}`);
   }
   args.host = String(args.host || defaults.host).trim();
+  args.server = String(args.server || defaults.server).trim().replace(/\/+$/, "");
   return args;
 }
 
@@ -75,7 +86,9 @@ function clampInteger(value, min, max, fallback) {
 
 function requestJson(url, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const request = http.get(url, { timeout: timeoutMs }, (response) => {
+    const parsed = typeof url === "string" ? new URL(url) : url;
+    const client = parsed.protocol === "https:" ? https : http;
+    const request = client.get(parsed, { timeout: timeoutMs }, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => {
@@ -262,8 +275,109 @@ function summarizeIds(items) {
   return Array.isArray(items) && items.length > 0 ? items.join(",") : "none";
 }
 
+function boardStateUrl(server) {
+  const url = new URL(server);
+  url.pathname = "/api/state";
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
+function normalizeUserPresence(state, error = "") {
+  if (error) {
+    return {
+      checked: true,
+      status: "unknown",
+      source: "api-state-error",
+      updatedAt: "",
+      blocker: "USER_PRESENCE_UNKNOWN",
+      error,
+    };
+  }
+  const presence = state?.userPresence && typeof state.userPresence === "object" ? state.userPresence : null;
+  const status = normalizedText(presence?.status || presence?.state).toLowerCase();
+  const mappedStatus = {
+    present: "present",
+    awake: "present",
+    away: "away",
+    sleeping: "away",
+  }[status] || "unknown";
+  return {
+    checked: true,
+    status: mappedStatus,
+    source: presence ? "api-state" : "api-state-missing",
+    updatedAt: normalizedText(presence?.updatedAt || presence?.at),
+    label: normalizedText(presence?.label),
+    reason: normalizedText(presence?.reason),
+    blocker: mappedStatus === "away" ? "BLOCKED_BY_USER_AWAY" : mappedStatus === "unknown" ? "USER_PRESENCE_UNKNOWN" : "",
+  };
+}
+
+async function readUserPresence(args) {
+  if (!args.checkBoard) return null;
+  try {
+    const state = await requestJson(boardStateUrl(args.server), args.timeoutMs);
+    return normalizeUserPresence(state);
+  } catch (error) {
+    return normalizeUserPresence(null, error.message);
+  }
+}
+
+function makeMacInputSafetyAction(report) {
+  const presence = report.userPresence;
+  if (presence?.status === "away") {
+    return {
+      id: "no-auth-only",
+      blocker: "BLOCKED_BY_USER_AWAY",
+      description: "User is away; keep real input blocked and continue only no-auth work.",
+    };
+  }
+  if (presence?.status === "unknown") {
+    return {
+      id: "check-user-presence",
+      blocker: "USER_PRESENCE_UNKNOWN",
+      description: "Confirm Agent Link Board userPresence before planning real input.",
+    };
+  }
+  if (report.status === "ready" && presence?.status === "present") {
+    return {
+      id: "explain-before-inject",
+      blocker: "",
+      description: "Explain goal, safety boundary, and duration before asking the user to watch the Mac screen.",
+    };
+  }
+  return {
+    id: report.nextAction,
+    blocker: "",
+    description: report.nextAction,
+  };
+}
+
+function applyUserPresenceGate(report, userPresence) {
+  if (!userPresence?.checked) {
+    report.macInputSafetyAction = makeMacInputSafetyAction(report);
+    return report;
+  }
+  report.userPresence = userPresence;
+  if (userPresence.status === "away" || userPresence.status === "unknown") {
+    const blocker = userPresence.status === "away" ? "user-away" : "user-presence-unknown";
+    if (!report.blockers.includes(blocker)) report.blockers.push(blocker);
+    if (report.status === "ready") {
+      report.ok = false;
+      report.status = "blocked";
+      report.reason = userPresence.status === "away" ? "user-away" : "user-presence-unknown";
+      report.readyForUserWatchedInject = false;
+      report.nextAction = userPresence.status === "away"
+        ? "no-auth-only-BLOCKED_BY_USER_AWAY"
+        : "check-agent-link-user-presence-before-inject";
+    }
+  }
+  report.macInputSafetyAction = makeMacInputSafetyAction(report);
+  return report;
+}
+
 function makeBoardSummary(report) {
-  return [
+  const parts = [
     `MacInputSafetyStatus=${report.status}`,
     `reason=${report.reason}`,
     `host=${report.host?.online ? "online" : "offline"}`,
@@ -273,11 +387,26 @@ function makeBoardSummary(report) {
     `required=${report.gates.requiredFlag}`,
     `eventSet=${report.gates.firstEventSet}`,
     `blockers=${summarizeIds(report.blockers)}`,
-    `warnings=${summarizeIds(report.warnings)}.`,
+    `warnings=${summarizeIds(report.warnings)}`,
+  ];
+  if (report.userPresence?.checked) {
+    parts.push(`UserPresence=${boardToken(report.userPresence.status)}`);
+    parts.push(`source=${boardToken(report.userPresence.source)}`);
+    if (report.userPresence.updatedAt) parts.push(`updatedAt=${boardToken(report.userPresence.updatedAt)}`);
+    if (report.macInputSafetyAction?.id) {
+      const action = report.macInputSafetyAction.blocker
+        ? `${report.macInputSafetyAction.id} blocker=${report.macInputSafetyAction.blocker}`
+        : report.macInputSafetyAction.id;
+      parts.push(`MacInputSafetyAction=${action}`);
+    }
+  }
+  parts.push(
+    ".",
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlan}.`,
     `MacInputLogSmoke=${report.commands.macInputLogSmoke}.`,
     "Safety=no-password,no-auth,no-input-events,no-inject.",
-  ].join(" ");
+  );
+  return parts.join(" ");
 }
 
 function printPlain(report) {
@@ -289,18 +418,25 @@ function printPlain(report) {
   console.log(`- permissions: ${summarizePermissions(report.host?.permissions)}`);
   console.log(`- ready for user-watched inject gate: ${report.readyForUserWatchedInject ? "yes" : "no"}`);
   console.log(`- required gate: ${report.gates.requiredFlag}, first event set: ${report.gates.firstEventSet}`);
+  if (report.userPresence?.checked) {
+    console.log(`- user presence: ${report.userPresence.status} source=${report.userPresence.source || "unknown"}`);
+    console.log(`- input safety action: ${report.macInputSafetyAction?.id || "unknown"}`);
+  }
   console.log(`- next action: ${report.nextAction}`);
   console.log(makeBoardSummary(report));
 }
 
 async function buildReport(args) {
   const url = `http://${args.host}:${args.port}/discovery`;
+  let report;
   try {
     const payload = await requestJson(url, args.timeoutMs);
-    return assess(hostSummaryFromDiscovery(payload, args));
+    report = assess(hostSummaryFromDiscovery(payload, args));
   } catch (error) {
-    return assess({ online: false, host: args.host, port: args.port }, error.message);
+    report = assess({ online: false, host: args.host, port: args.port }, error.message);
   }
+  const userPresence = await readUserPresence(args);
+  return applyUserPresenceGate(report, userPresence);
 }
 
 async function main() {

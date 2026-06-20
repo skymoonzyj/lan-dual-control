@@ -890,7 +890,7 @@ function buildCommands(args) {
     macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
     macRemoteAudioPlanCommand: "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
     macInputSafetyPlanCommand: "node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
-    macInputSafetyStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
+    macInputSafetyStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macManualUxStatusCommand: "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary",
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,

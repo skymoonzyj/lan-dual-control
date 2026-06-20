@@ -172,6 +172,28 @@ async function withFakeMacHost(discoveryPayload, callback) {
   }
 }
 
+async function withFakeAgentLinkBoard(state, callback) {
+  const server = createServer((request, response) => {
+    if (request.url !== "/api/state") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify(state));
+  });
+  await new Promise((resolve, reject) => {
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
 function baseDiscovery(overrides = {}) {
   return {
     platform: "macos",
@@ -252,6 +274,87 @@ async function checkReadyLogMode(args) {
   print("OK", "Log-mode Mac host with permissions is ready for user-watched inject gate");
 }
 
+async function checkBoardUserPresencePresentAllowsExplainedInject(args) {
+  await withFakeMacHost(baseDiscovery(), async ({ host, port }) => {
+    await withFakeAgentLinkBoard({
+      userPresence: {
+        status: "present",
+        label: "user present",
+        reason: "user can approve supervised tasks",
+        updatedAt: "2026-06-20T10:30:00.000Z",
+        updatedBy: "Supervisor",
+      },
+    }, async (serverUrl) => {
+      const result = await runAsync([
+        "--json",
+        "--host",
+        host,
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1000",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+      ], args);
+      const payload = parseJson(result.stdout, "present user input safety JSON");
+      assert(result.status === 0, `present user input safety should exit 0\n${outputOf(result)}`);
+      assert(payload.status === "ready", "present user JSON should stay technically ready");
+      assert(payload.userPresence?.status === "present", `present user JSON should expose userPresence: ${JSON.stringify(payload.userPresence)}`);
+      assert(payload.userPresence?.source === "api-state", "present user JSON should mark api-state source");
+      assert(payload.macInputSafetyAction?.id === "explain-before-inject", `present user JSON action mismatch: ${JSON.stringify(payload.macInputSafetyAction)}`);
+      assertIncludes(payload.boardSummary, "UserPresence=present", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "source=api-state", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "MacInputSafetyAction=explain-before-inject", "present user boardSummary");
+      assertSafeOutput(outputOf(result), "present user input safety JSON");
+    });
+  });
+  print("OK", "Structured userPresence=present allows only an explained user-watched inject plan");
+}
+
+async function checkBoardUserPresenceAwayBlocksInject(args) {
+  await withFakeMacHost(baseDiscovery(), async ({ host, port }) => {
+    await withFakeAgentLinkBoard({
+      userPresence: {
+        status: "away",
+        label: "user away",
+        reason: "user cannot approve supervised tasks",
+        updatedAt: "2026-06-20T10:31:00.000Z",
+        updatedBy: "Supervisor",
+      },
+    }, async (serverUrl) => {
+      const result = await runAsync([
+        "--json",
+        "--host",
+        host,
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1000",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+      ], args);
+      const payload = parseJson(result.stdout, "away user input safety JSON");
+      assert(result.status !== 0, `away user input safety should exit non-zero\n${outputOf(result)}`);
+      assert(payload.status === "blocked", `away user JSON should be blocked, got ${payload.status}`);
+      assert(payload.reason === "user-away", `away user JSON reason mismatch: ${payload.reason}`);
+      assert(payload.readyForUserWatchedInject === false, "away user JSON should not allow user-watched inject path");
+      assert(payload.blockers?.includes("user-away"), `away user JSON should include user-away blocker: ${JSON.stringify(payload.blockers)}`);
+      assert(payload.userPresence?.status === "away", `away user JSON should expose userPresence: ${JSON.stringify(payload.userPresence)}`);
+      assert(payload.macInputSafetyAction?.id === "no-auth-only", `away user JSON action mismatch: ${JSON.stringify(payload.macInputSafetyAction)}`);
+      assertIncludes(payload.macInputSafetyAction?.blocker || "", "BLOCKED_BY_USER_AWAY", "away user action blocker");
+      assertIncludes(payload.boardSummary, "MacInputSafetyStatus=blocked", "away user boardSummary");
+      assertIncludes(payload.boardSummary, "reason=user-away", "away user boardSummary");
+      assertIncludes(payload.boardSummary, "UserPresence=away", "away user boardSummary");
+      assertIncludes(payload.boardSummary, "MacInputSafetyAction=no-auth-only", "away user boardSummary");
+      assertIncludes(payload.boardSummary, "BLOCKED_BY_USER_AWAY", "away user boardSummary");
+      assertSafeOutput(outputOf(result), "away user input safety JSON");
+    });
+  });
+  print("OK", "Structured userPresence=away blocks real-input inject planning");
+}
+
 async function checkPermissionBlocker(args) {
   await withFakeMacHost(baseDiscovery({
     permissions: {
@@ -306,6 +409,8 @@ async function main() {
   checkHelp(args);
   await checkOfflineBlocked(args);
   await checkReadyLogMode(args);
+  await checkBoardUserPresencePresentAllowsExplainedInject(args);
+  await checkBoardUserPresenceAwayBlocksInject(args);
   await checkPermissionBlocker(args);
   await checkInjectActiveFailsClosed(args);
   print("OK", "Mac input safety status self-test passed");

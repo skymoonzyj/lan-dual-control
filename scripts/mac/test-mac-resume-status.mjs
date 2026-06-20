@@ -497,6 +497,7 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assert(/check-mac-input-safety-status\.mjs/.test(command), `${label} should use check-mac-input-safety-status`);
   assert(command.includes("--host"), `${label} should preserve the Mac host`);
   assert(command.includes("--port"), `${label} should preserve the Mac port`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board userPresence`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);

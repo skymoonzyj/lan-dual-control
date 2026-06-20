@@ -296,6 +296,7 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assertIncludes(text, "node scripts/mac/check-mac-input-safety-status.mjs", label);
   assertIncludes(text, "--host", label);
   assertIncludes(text, "--port", label);
+  assertIncludes(text, "--checkBoard", label);
   assertIncludes(text, "--boardSummary", label);
   assertNotIncludes(text, "--promptPassword", label);
   assertNotIncludes(text, "--password", label);

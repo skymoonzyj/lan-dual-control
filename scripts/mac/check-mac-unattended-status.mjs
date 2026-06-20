@@ -921,6 +921,7 @@ function makeMacInputSafetyStatusCommand(args) {
     shellQuote(args.host),
     "--port",
     String(args.port),
+    "--checkBoard",
     "--boardSummary",
   ].join(" ");
 }
