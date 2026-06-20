@@ -832,6 +832,7 @@ function makeReadinessBoardSummary(summary) {
   const wgcSourceResult = summary.results.find((result) => result.label === "Windows WGC H.264 source comparison") || null;
   const media = formatMediaBoardSummary(summary);
   const lanRisk = formatWindowsLanRisk(summary.windowsLanRisks);
+  const firewallHealth = formatWindowsFirewallHealth(summary.windowsFirewallHealth);
   const state = summary.ok ? "passed" : "failed";
   const mode = summary.strict ? "strict" : summary.args.profile;
   const activeCall = summary.board?.currentCall?.active && summary.board.currentCall.needsWindows && summary.board.currentCall.fromMacSide
@@ -851,6 +852,10 @@ function makeReadinessBoardSummary(summary) {
     ? ""
     : " Do not send passwords on Agent Link Board.";
   const runtimeSentence = runtimeText.endsWith(".") ? runtimeText : `${runtimeText}.`;
+  const reverseRuntimeMatch = !runtimeText.includes("reverse=")
+    ? String(runtimeResult?.summary || "").match(/\breverse=[^ ]+/)
+    : null;
+  const reverseRuntime = reverseRuntimeMatch ? ` ${reverseRuntimeMatch[0]}.` : "";
   const reverseGrant = summary.windowsReverseControlGrantCommand && !runtimeText.includes("ReverseGrant=")
     ? ` ReverseGrant=${summary.windowsReverseControlGrantCommand}.`
     : "";
@@ -928,7 +933,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media}; WindowsLanRisk=${lanRisk};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${firewallStatus}${firewallPreview}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media}; WindowsLanRisk=${lanRisk};${activeCall} ${runtimeSentence}${reverseRuntime} WindowsFirewallHealth=${firewallHealth};${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${firewallStatus}${firewallPreview}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -955,6 +960,34 @@ function formatMediaBoardSummary(summary) {
 function formatWindowsLanRisk(risks) {
   const values = Array.isArray(risks) ? risks.filter(Boolean) : [];
   return values.length > 0 ? values.join(",") : "none";
+}
+function deriveWindowsFirewallHealth(results) {
+  const lanResult = Array.isArray(results)
+    ? results.find((result) => result.label === "Windows host LAN/firewall")
+    : null;
+  const health = lanResult?.details?.payload?.firewallHealth;
+  if (health && typeof health === "object") {
+    return {
+      status: String(health.status || "unknown"),
+      reason: String(health.reason || "unknown"),
+      publicProfile: Boolean(health.publicProfile),
+      publicFirewallEnabled: health.publicFirewallEnabled == null ? null : Boolean(health.publicFirewallEnabled),
+      lanReachable: health.lanReachable == null ? null : Boolean(health.lanReachable),
+    };
+  }
+  return {
+    status: "unknown",
+    reason: "not-reported",
+    publicProfile: false,
+    publicFirewallEnabled: null,
+    lanReachable: null,
+  };
+}
+
+function formatWindowsFirewallHealth(health) {
+  if (!health || !health.status) return "unknown reason=not-reported";
+  const reason = health.reason ? ` reason=${health.reason}` : "";
+  return `${health.status}${reason}`;
 }
 
 function deriveWindowsLanRisks(results) {
@@ -1003,10 +1036,48 @@ function filterExpectedWarnings(label, warnings) {
   }
   return warnings;
 }
+function normalizeFirewallResult(result) {
+  let payload = null;
+  try {
+    payload = parseJsonOutput(result.stdout, "Windows host LAN/firewall");
+  } catch (error) {
+    return {
+      ...result,
+      details: {
+        parseError: error.message,
+      },
+    };
+  }
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.map((warning) => `[WARN] ${warning}`)
+    : result.warnings;
+  const errors = Array.isArray(payload.errors) ? payload.errors : result.errors;
+  const health = payload.firewallHealth || null;
+  const summary = health
+    ? `firewallHealth=${health.status || "unknown"} reason=${health.reason || "unknown"}`
+    : result.summary;
+  return {
+    ...result,
+    summary,
+    warnings,
+    errors,
+    details: {
+      payload,
+    },
+  };
+}
+
+function maybeNormalizeStepResult(label, result) {
+  if (label === "Windows host LAN/firewall") {
+    return normalizeFirewallResult(result);
+  }
+  return result;
+}
 
 async function runStep(results, args, label, command, commandArgs, options = {}) {
   print("INFO", `Running ${label}`, args);
-  const result = await runCommand(label, command, commandArgs, options);
+  const rawResult = await runCommand(label, command, commandArgs, options);
+  const result = maybeNormalizeStepResult(label, rawResult);
   results.push(result);
   if (result.ok) {
     print("OK", `${label}: ${result.summary || "passed"}`, args);
@@ -1296,6 +1367,7 @@ async function main() {
       args.host,
       "--port",
       String(args.port),
+      "--json",
       ...(args.requireOpen ? ["--requireOpen"] : []),
     ],
     { timeoutMs: args.timeoutMs },
@@ -1453,6 +1525,7 @@ async function main() {
   const windowsFirewallStatusCommandValue = windowsFirewallStatusCommand(args.port);
   const windowsFirewallPreviewCommandValue = windowsFirewallPreviewCommand(args.port);
   const windowsLanRisks = deriveWindowsLanRisks(results);
+  const windowsFirewallHealth = deriveWindowsFirewallHealth(results);
 
   const summary = {
     ok,
@@ -1506,6 +1579,7 @@ async function main() {
     windowsFirewallStatusCommand: windowsFirewallStatusCommandValue,
     windowsFirewallPreviewCommand: windowsFirewallPreviewCommandValue,
     windowsLanRisks,
+    windowsFirewallHealth,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,

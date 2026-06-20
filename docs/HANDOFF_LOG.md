@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 防火墙健康口径
+开发端：Windows Codex
+本轮目标：避免 Windows 网络位置为 Public 但 Public 防火墙已关闭时，被误判成 Mac 控 Windows 的 LAN 阻塞。
+完成内容：
+- `check-windows-firewall --json` 新增 `firewallHealth`，区分 `nonblocking/public-profile-firewall-disabled`、`warning/public-profile`、`warning/no-firewall-allow`、`ok/unknown/skipped`。
+- `check-windows-host-readiness --boardSummary` 新增 `WindowsFirewallHealth=...`，并从防火墙 JSON 结果读取白名单 warning/error，保留旧的 `WindowsLanRisk=` 与 `reverse=` 摘要兼容。
+- 新增 fixture 回归，覆盖 Public 网络 + Public 防火墙关闭时为非阻塞；不改系统防火墙。
+修改文件：
+- `scripts/windows/check-windows-firewall.mjs`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-firewall-health.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-firewall-health.mjs` 先失败于缺少 `firewallHealth.status=nonblocking`。
+- 绿灯：`node scripts/windows/test-windows-firewall-health.mjs`、`node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`、`node scripts/windows/test-windows-script-help.mjs --script check-windows-firewall.mjs`、`node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs`。
+遗留问题：
+- 该字段只是诊断口径；若以后 Windows 防火墙重新开启且没有允许规则，仍应按 `WindowsFirewallHealth=warning` 排查。
+下一步建议：
+- Mac 端或 Supervisor 看到 `WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled` 时，不再要求用户先改网络位置或防火墙；继续看真实连接、视频、音频、剪贴板和输入授权。
+是否改了协议：否。只改 Windows 诊断 JSON/board summary，不改 WebSocket 协议。
+是否需要另一端配合：不需要立即配合；Mac 端只需消费/展示该只读状态即可。
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac formal 消费 WindowsHostSession

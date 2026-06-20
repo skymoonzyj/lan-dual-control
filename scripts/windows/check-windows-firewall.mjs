@@ -136,6 +136,26 @@ function getProbeTargets(args, lanAddresses) {
     return true;
   });
 }
+function readFirewallFixture() {
+  const raw = process.env.LAN_DUAL_WINDOWS_FIREWALL_FIXTURE;
+  if (!raw) return null;
+  const payload = JSON.parse(raw);
+  const networkState = payload.networkState && typeof payload.networkState === "object"
+    ? payload.networkState
+    : {
+        ok: true,
+        skipped: false,
+        listeners: [],
+        firewallProfiles: [],
+        networkProfiles: [],
+        firewallRules: [],
+      };
+  return {
+    lanAddresses: uniqueByAddress(Array.isArray(payload.lanAddresses) ? payload.lanAddresses : []),
+    probeResults: Array.isArray(payload.probeResults) ? payload.probeResults : [],
+    networkState,
+  };
+}
 
 function probeTcp({ host, port, timeoutMs }) {
   return new Promise((resolve) => {
@@ -404,6 +424,70 @@ function hasBlockingFirewallProfile(networkState) {
     return profile.enabled && String(profile.defaultInboundAction || "").toLowerCase() === "block";
   });
 }
+function publicNetworkProfiles(networkState) {
+  return (networkState.networkProfiles || []).filter((profile) => {
+    return String(profile.networkCategory || "").toLowerCase() === "public";
+  });
+}
+
+function firewallProfileByName(networkState, name) {
+  const target = String(name || "").toLowerCase();
+  return (networkState.firewallProfiles || []).find((profile) => String(profile.name || "").toLowerCase() === target) || null;
+}
+
+function deriveFirewallHealth({ networkState, probeResults }) {
+  if (networkState.skipped) {
+    return {
+      status: "skipped",
+      reason: "firewall-query-skipped",
+    };
+  }
+  if (!networkState.ok) {
+    return {
+      status: "unknown",
+      reason: "firewall-query-failed",
+    };
+  }
+
+  const publicProfiles = publicNetworkProfiles(networkState);
+  const publicFirewall = firewallProfileByName(networkState, "Public");
+  const lanProbes = (probeResults || []).filter((result) => String(result.host || "") !== "127.0.0.1");
+  const lanReachable = lanProbes.length === 0 ? null : lanProbes.some((result) => result.ok);
+  if (publicProfiles.length > 0 && publicFirewall && publicFirewall.enabled === false) {
+    return {
+      status: "nonblocking",
+      reason: "public-profile-firewall-disabled",
+      publicProfile: true,
+      publicFirewallEnabled: false,
+      lanReachable,
+    };
+  }
+  if (publicProfiles.length > 0) {
+    return {
+      status: "warning",
+      reason: "public-profile",
+      publicProfile: true,
+      publicFirewallEnabled: publicFirewall ? Boolean(publicFirewall.enabled) : null,
+      lanReachable,
+    };
+  }
+  if (hasBlockingFirewallProfile(networkState) && (networkState.firewallRules || []).length === 0) {
+    return {
+      status: "warning",
+      reason: "no-firewall-allow",
+      publicProfile: false,
+      publicFirewallEnabled: publicFirewall ? Boolean(publicFirewall.enabled) : null,
+      lanReachable,
+    };
+  }
+  return {
+    status: "ok",
+    reason: "ok",
+    publicProfile: false,
+    publicFirewallEnabled: publicFirewall ? Boolean(publicFirewall.enabled) : null,
+    lanReachable,
+  };
+}
 
 function suggestedRuleCommand(args) {
   const displayName = `${args.ruleName} ${args.port}`;
@@ -420,6 +504,7 @@ function analyze({ args, lanAddresses, probeResults, networkState }) {
   const recommendations = [];
   const listeners = networkState.listeners || [];
   const rules = networkState.firewallRules || [];
+  const firewallHealth = deriveFirewallHealth({ networkState, probeResults });
 
   if (lanAddresses.length === 0) {
     warnings.push("No non-loopback IPv4 LAN address was detected.");
@@ -477,6 +562,7 @@ function analyze({ args, lanAddresses, probeResults, networkState }) {
     warnings,
     errors,
     recommendations,
+    firewallHealth,
   };
 }
 
@@ -487,16 +573,17 @@ async function main() {
   }
 
   const args = parseArgs(process.argv);
-  const lanAddresses = uniqueByAddress(getLanAddresses());
-  const probeTargets = getProbeTargets(args, lanAddresses);
-  const probeResults = [];
+  const fixture = readFirewallFixture();
+  const lanAddresses = fixture ? fixture.lanAddresses : uniqueByAddress(getLanAddresses());
+  const probeTargets = fixture ? [] : getProbeTargets(args, lanAddresses);
+  const probeResults = fixture ? fixture.probeResults : [];
 
   for (const target of probeTargets) {
     const result = await probeTcp({ host: target.host, port: args.port, timeoutMs: args.timeoutMs });
     probeResults.push({ label: target.label, ...result });
   }
 
-  let networkState = queryWindowsNetworkState(args);
+  let networkState = fixture ? fixture.networkState : queryWindowsNetworkState(args);
   let firewallRuleAction = null;
   if (
     !args.skipFirewall &&
@@ -525,6 +612,7 @@ async function main() {
       networkProfiles: networkState.networkProfiles || [],
       firewallRules: networkState.firewallRules || [],
       firewallRuleAction,
+      firewallHealth: summary.firewallHealth,
       warnings: summary.warnings,
       errors: summary.errors,
       recommendations: summary.recommendations,
@@ -552,6 +640,10 @@ async function main() {
       const status = result.ok ? "OK" : "WARN";
       const suffix = result.ok ? `${result.latencyMs.toFixed(1)}ms` : result.error;
       print(status, `TCP probe ${result.label} ${result.host}:${result.port} ${result.ok ? "open" : "closed"} (${suffix})`, args);
+    }
+
+    if (summary.firewallHealth) {
+      print("INFO", `Firewall health: status=${summary.firewallHealth.status} reason=${summary.firewallHealth.reason}`, args);
     }
 
     if (networkState.skipped) {
