@@ -710,7 +710,7 @@ function formatProbeSummary(probe) {
     const pipeline = firstObjectKey(obs.pipelines) || probe.session?.capturePipeline || "unknown";
     const age = obs.timestamp?.ageMaxMs ?? "n/a";
     const h264 = obs.h264?.frames > 0
-      ? `, h264Key=${obs.h264.keyFrames || 0},sps=${obs.h264.spsFrames || 0},pps=${obs.h264.ppsFrames || 0},idr=${obs.h264.idrFrames || 0},keyParam=${obs.h264.keyFramesWithParameterSets || 0}`
+      ? `, ${formatH264ProbeSummary(obs.h264)}`
       : "";
     return `${obs.frameCount || 0} frames, ${obs.fps || 0} fps, maxGap=${obs.maxGapMs ?? "?"}ms, ageMax=${age}ms${h264}, ${codec}/${pipeline}`;
   }
@@ -722,6 +722,28 @@ function formatProbeSummary(probe) {
     return `${obs.frameCount || 0} frames, ${obs.fps || 0} fps, maxGap=${obs.maxGapMs ?? "?"}ms, ageMax=${age}ms, levelMax=${level}, ${codec}/${mode}`;
   }
   return "ok";
+}
+
+function formatH264ProbeSummary(h264) {
+  return [
+    `h264Key=${h264.keyFrames || 0}`,
+    `sps=${h264.spsFrames || 0}`,
+    `pps=${h264.ppsFrames || 0}`,
+    `idr=${h264.idrFrames || 0}`,
+    `keyParam=${h264.keyFramesWithParameterSets || 0}`,
+    formatH264NalTypes("firstKeyNal", h264.firstKeyFrameNalTypes),
+    formatH264NalTypes("firstNal", h264.firstNalTypes),
+  ].filter(Boolean).join(",");
+}
+
+function formatH264NalTypes(label, value) {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  const nalTypes = value
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item >= 0 && item <= 31)
+    .slice(0, 12);
+  if (nalTypes.length === 0) return "";
+  return `${label}=${nalTypes.join(",")}`;
 }
 
 function firstObjectKey(value) {

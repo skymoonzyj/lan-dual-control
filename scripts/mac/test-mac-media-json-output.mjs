@@ -274,8 +274,18 @@ function makeEnvelope(message) {
   });
 }
 
+function makeAnnexBPayload(nalTypes) {
+  const chunks = [];
+  for (const nalType of nalTypes) {
+    chunks.push(Buffer.from([0x00, 0x00, 0x00, 0x01, nalType & 0x1f, 0x88, 0x84, 0x21]));
+  }
+  return Buffer.concat(chunks);
+}
+
 function makeVideoFrame(frameId) {
   const timestampUs = 1_000_000 + frameId * 33_333;
+  const keyFrame = frameId === 1 || frameId % 30 === 0;
+  const payload = keyFrame ? makeAnnexBPayload([7, 8, 5]) : makeAnnexBPayload([1]);
   return {
     type: "video_frame",
     frameId,
@@ -286,11 +296,12 @@ function makeVideoFrame(frameId) {
     height: 720,
     codec: "h264",
     encoding: "annexb-base64",
+    keyFrame,
     capturePipeline: "screencapturekit-h264",
     activeDisplayId: "main",
     displayName: "Main",
-    payload: Buffer.from(`fake-h264-${frameId}`, "utf8").toString("base64"),
-    payloadBytes: Buffer.byteLength(`fake-h264-${frameId}`),
+    payload: payload.toString("base64"),
+    payloadBytes: payload.length,
   };
 }
 
@@ -485,6 +496,8 @@ async function checkFakeHostJsonSuccess(args) {
     assert(payload.summary?.status === "ok", `fake host summary.status should be ok.\n${result.stdout}`);
     assert(payload.summary?.passed === 2 && payload.summary?.failed === 0, "fake host should pass video and audio");
     assert(payload.video?.ok === true && payload.video?.observation?.frameCount >= 4, "video result should pass with frames");
+    assert(payload.video?.observation?.h264?.keyFramesWithParameterSets >= 1, "video result should include H.264 keyframe SPS/PPS/IDR evidence");
+    assert((payload.video?.observation?.h264?.firstKeyFrameNalTypes || []).join(",") === "7,8,5", "video result should include first H.264 keyframe NAL types");
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
     assert(payload.summary?.noInput === true && payload.summary?.noInject === true, "summary should preserve no input/inject");
     assert(payload.resource?.enabled === false, "resource sampling should default to disabled");
@@ -615,6 +628,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("Mac media baseline passed"), "boardSummary should identify Mac media baseline");
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "boardSummary should include media request context");
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
+    assert(lines[0].includes("firstKeyNal=7,8,5"), "boardSummary should include first H.264 keyframe NAL types");
     assert(lines[0].includes("resource=off"), "boardSummary should mark resource sampling off by default");
     assert(lines[0].includes("password was not printed"), "boardSummary should include password safety note");
     assert(lines[0].includes("playTone=false"), "boardSummary should show no test tone by default");
