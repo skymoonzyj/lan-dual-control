@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 H.264 恢复关键帧追实时诊断
+- Windows 控制端在 recovery-in-flight 期间收到恢复关键帧且本机 H.264/WebCodecs 队列已过高时，会沿用原有“丢旧队列、改用当前关键帧”的追实时路径，但原因现在标记为 `recovery-keyframe-jump-live`，不再和普通 `queue-overflow-wait-keyframe` 混在一起。这样下一次真实最小化/切 app/切回复测时，如果关键帧到了且客户端主动跳到最新帧，现场/复制诊断能直接看出；若仍卡，则可区分是没收到关键帧、收到后没绘制，还是已跳 live 但 FPS/arrival 仍低。页面回归新增 `jumpLive=yes`，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W4 音频恢复后 underrun 稳定缓冲
 - Windows 控制端在可见性恢复 / snap-live 后的短跟随窗口内，如果 WebAudio 又出现 underrun，不再立刻回到普通 `80ms` 低水位缓冲，而是使用约 `180ms` 的恢复缓冲并记录 `queue-underrun-recovery-prebuffer`，让刚从后台切回来的音频先稳住再追实时。专项测试覆盖 `recoveryUnderrunRebuildBuffer`，`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --timeoutMs 45000` 通过。不改系统声音输出、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W2 H.264 恢复关键帧进展保护

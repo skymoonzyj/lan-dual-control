@@ -18,6 +18,17 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 H.264 恢复关键帧追实时诊断
+开发端：Windows Codex
+本轮目标：继续收口后台/最小化恢复后的 W2 低 FPS/arrival 残留，让下一次真实复测能看清恢复关键帧是否已经触发追实时。
+完成内容：Windows 控制端在 recovery-in-flight 期间，如果关键帧到达且本机 H.264/WebCodecs 队列已过高，继续使用原有丢旧队列、改用当前关键帧的低延迟路径，但把原因标记为 `recovery-keyframe-jump-live`。这不会改变协议或 Mac host，只让诊断区分普通 queue overflow 和恢复关键帧追实时。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `recoveryKeyFrameJumpedLive=false`；绿灯后同命令通过并输出 `jumpLive=yes`。
+遗留问题：仍需用户真实最小化/切 app/切回复测，观察 `recovery-keyframe-jump-live` 是否出现，以及出现后 FPS/arrival/queue 是否恢复到实时附近。
+下一步建议：双方拉最新；Mac 保持 host 在线；Windows/用户运行 `Run-WinClientRetest-And-Post.cmd`，只上板脱敏 `W2W3Retest=` / `W2H264BoardDiagnosis=`。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 在线和用户真实复测；不需要 Mac 改代码。不请求密码、不认证、不发 input/inject。
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 H.264 恢复关键帧进展保护
 开发端：Windows Codex
 本轮目标：继续收口 W2 后台/最小化恢复循环，避免已收到的恢复关键帧在绘制前又被 queue-overflow reset 清掉。

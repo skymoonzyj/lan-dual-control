@@ -3,7 +3,7 @@
 最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
-- 最新 W2 视频修复已推进到恢复状态机：Windows 控制端现在区分 H.264 恢复“已请求关键帧 / 已收到关键帧未绘制 / 已绘制完成”。下一步仍是用户真实运行 `Run-WinClientRetest-And-Post.cmd`，连接后最小化/切 app/切回；观察 `W2W3Retest h264=` 和复制诊断里是否还出现反复 `needsKeyframe=yes` / `reason=queue-overflow-wait-keyframe`，以及是否出现“恢复关键帧已收到”后长时间不绘制。Mac 侧保持 host 在线即可，除非 Windows 侧 `recv/key/sps/pps/idr` 缺失。
+- 最新 W2 视频修复已推进到恢复状态机和追实时诊断：Windows 控制端现在区分 H.264 恢复“已请求关键帧 / 已收到关键帧未绘制 / 已绘制完成”，并把恢复关键帧触发的丢旧队列标记为 `recovery-keyframe-jump-live`。下一步仍是用户真实运行 `Run-WinClientRetest-And-Post.cmd`，连接后最小化/切 app/切回；观察 `W2W3Retest h264=` 和复制诊断里是否还出现反复 `needsKeyframe=yes` / `reason=queue-overflow-wait-keyframe`，是否出现“恢复关键帧已收到”后长时间不绘制，或 `recovery-keyframe-jump-live` 后 FPS/arrival 仍低。Mac 侧保持 host 在线即可，除非 Windows 侧 `recv/key/sps/pps/idr` 缺失。
 - Windows 开工第一屏最新口径：`check-windows-resume-status --checkBoard --boardSummary` 会直接显示 `W2W4BackgroundRetest=... action=minimize-switch-app-and-return evidence=keyframe-wait-h264-recovery,audio-visibility-recovery watch=video-latency,audio-dropped-resync next=Run-WinClientRetest-And-Post.cmd`。看到这条时，不要只按旧 W2 可见性修复复测；应运行 `Run-WinClientRetest-And-Post.cmd`，连接后真实最小化/切 app/切回，同时观察视频延迟和声音 dropped/resync。密码只在本机隐藏终端输入，不上通讯板，不发 input/inject。
 
 - 当前最高优先级更新：等待双方拉取最新 Windows client 后做一次真实“最小化/切 app/切回”复测。预期视频侧不再出现 8-10 秒级关键帧等待积压；如果仍有卡顿，先看 `W2W3Retest h264=` / 复制诊断里的 `实收 FPS`、`最后收到`、`本机队列`、`本地过期丢帧`、`跳过 delta`、`需要关键帧`、`原因 keyframe-wait-h264-recovery|queue-overflow-wait-keyframe` 和 `h264KeyFrameWaitMs`。音频侧同步看 `现场声音` 的接收/播放/丢、`重同步`、`补缓冲`、`可见恢复` 和最近原因。Mac 侧保持 host 在线即可，除非 Windows 证明确实缺 `recv/key/sps/pps/idr` 或音频源帧。

@@ -9248,6 +9248,17 @@ function resyncH264DecoderQueueForLatency({
   };
 }
 
+function getH264LatencyResyncReason({ isKeyFrame = false } = {}) {
+  if (
+    isKeyFrame &&
+    state.h264RecoveryInFlight === true &&
+    (Number(state.h264RecoveryKeyFrameReceivedAt) || 0) <= 0
+  ) {
+    return "recovery-keyframe-jump-live";
+  }
+  return "queue-overflow-wait-keyframe";
+}
+
 function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
   if (!shouldResyncH264DecoderQueue(now)) {
     return { dropFrame: false, droppedFrames: 0, queueMs: getH264DecoderQueueMetrics(now).oldestAgeMs };
@@ -9256,7 +9267,7 @@ function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "
     isKeyFrame,
     frameId,
     now,
-    reason: "queue-overflow-wait-keyframe",
+    reason: getH264LatencyResyncReason({ isKeyFrame }),
   });
 }
 
@@ -9707,8 +9718,9 @@ async function renderH264VideoFrame(frame) {
       return;
     }
     if (isKeyFrame) {
+      const keyFrameNow = performance.now();
       state.h264DecoderNeedsKeyFrame = false;
-      recordH264RecoveryKeyFrameReceived();
+      recordH264RecoveryKeyFrameReceived(keyFrameNow);
       clearH264KeyFrameWaitTimers();
     }
     const decoder = await ensureH264Decoder(frame, { currentFrameIsKeyFrame: isKeyFrame });
