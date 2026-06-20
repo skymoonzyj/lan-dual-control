@@ -4,6 +4,7 @@ const defaults = {
   action: "grant",
   durationMs: 30000,
   timeoutMs: 5000,
+  server: "http://192.168.31.68:17888",
 };
 
 function printHelp() {
@@ -19,6 +20,8 @@ Options:
   --action <name>        One of: status, grant, revoke. Default: ${defaults.action}
   --durationMs <ms>      Grant duration, clamped by host to 5s-120s. Default: ${defaults.durationMs}
   --timeoutMs <ms>       HTTP timeout. Default: ${defaults.timeoutMs}
+  --server <url>         Agent Link Board base URL for --checkBoard. Default: ${defaults.server}
+  --checkBoard           Read /api/state.userPresence before opening a grant
   --json                 Print machine-readable JSON
   --boardSummary         Print one safe line for Agent Link Board
   --help, -h             Show this help without contacting a host
@@ -27,18 +30,21 @@ Description:
   Opens or inspects the Windows host local one-time reverse-control grant. The
   host management endpoint only accepts loopback requests, so this helper is a
   Windows-side convenience for letting a Mac client retry reverse_control_request
-  without switching the host into long-lived accept-lab mode. It does not use a
-  password, send input, or execute inject.
+  without switching the host into long-lived accept-lab mode. With --checkBoard,
+  it first reads Agent Link Board userPresence; userPresence=away blocks grant
+  creation and exits non-zero. It does not use a password, send input, or
+  execute inject.
 
 Examples:
   node scripts/windows/allow-windows-reverse-control.mjs
   node scripts/windows/allow-windows-reverse-control.mjs --status
+  node scripts/windows/allow-windows-reverse-control.mjs --checkBoard --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --revoke --boardSummary
 `);
 }
 
 function parseArgs(argv) {
-  const args = { ...defaults, json: false, boardSummary: false, help: false };
+  const args = { ...defaults, json: false, boardSummary: false, checkBoard: false, help: false };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -52,6 +58,10 @@ function parseArgs(argv) {
     }
     if (token === "--boardSummary") {
       args.boardSummary = true;
+      continue;
+    }
+    if (token === "--checkBoard") {
+      args.checkBoard = true;
       continue;
     }
     if (token === "--status") {
@@ -91,11 +101,18 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
   args.action = normalizeAction(args.action);
   args.port = Math.max(1, Math.min(65535, Number(args.port) || defaults.port));
   args.durationMs = Math.max(1000, Number(args.durationMs) || defaults.durationMs);
+  args.server = normalizeServer(args.server);
+  args.userPresence = emptyUserPresence("not-checked", args.action);
   return args;
 }
 
@@ -108,6 +125,17 @@ function normalizeAction(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (["status", "grant", "revoke"].includes(normalized)) return normalized;
   throw new Error(`Unknown action: ${value}`);
+}
+
+function normalizeServer(value) {
+  const text = String(value || defaults.server).trim();
+  if (!text) return defaults.server;
+  return text.replace(/\/+$/g, "");
+}
+
+function boardStateUrl(server) {
+  const base = normalizeServer(server);
+  return base.endsWith("/api/state") ? base : `${base}/api/state`;
 }
 
 function targetBase(args) {
@@ -153,18 +181,93 @@ function compactText(value, maxLength = 80) {
   return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
 }
 
+function normalizedText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function emptyUserPresence(source = "none", action = "grant") {
+  return {
+    found: false,
+    source,
+    status: "unknown",
+    label: "",
+    updatedAt: "",
+    updatedBy: "",
+    action: userPresenceAction("unknown", action),
+    blocker: "",
+    summary: `status=unknown,source=${source},at=none`,
+  };
+}
+
+const userPresenceSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码\s*[:=]|密钥|口令|令牌/i;
+
+function safeIsoTimestamp(value) {
+  const text = normalizedText(value);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text) && Number.isFinite(Date.parse(text));
+}
+
+function safeUserPresenceText(value, maxLength = 120) {
+  const text = normalizedText(value).replace(/[.]+$/g, "");
+  if (!text || userPresenceSecretPattern.test(text)) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function normalizeUserPresenceStatus(value) {
+  const text = normalizedText(value).toLowerCase();
+  if (["present", "awake", "user-present", "user_awake", "用户在场", "在场"].includes(text)) return "present";
+  if (["away", "sleeping", "sleep", "user-away", "user_sleeping", "用户不在", "不在", "休息"].includes(text)) return "away";
+  return "unknown";
+}
+
+function userPresenceAction(status, action = "grant") {
+  if (status === "present") return action === "grant" ? "explain-before-grant" : "explain-before-auth";
+  if (status === "away") return "no-auth-only";
+  return "unknown";
+}
+
+function normalizeBoardUserPresence(state, source = "api-state", action = "grant") {
+  const presence = state?.userPresence;
+  if (!presence || typeof presence !== "object") return emptyUserPresence(source, action);
+  const status = normalizeUserPresenceStatus(presence.status || presence.state);
+  const updatedAt = safeIsoTimestamp(presence.updatedAt) ? presence.updatedAt : "";
+  const result = {
+    found: true,
+    source,
+    status,
+    label: safeUserPresenceText(presence.label, 80),
+    updatedAt,
+    updatedBy: safeUserPresenceText(presence.updatedBy, 80),
+    action: userPresenceAction(status, action),
+    blocker: status === "away" ? "BLOCKED_BY_USER_AWAY" : "",
+  };
+  result.summary = [
+    `status=${result.status}`,
+    `source=${result.source}`,
+    result.updatedAt ? `at=${result.updatedAt}` : "at=none",
+    result.label ? `label=${result.label}` : "",
+    result.updatedBy ? `by=${result.updatedBy}` : "",
+  ].filter(Boolean).join(",");
+  return result;
+}
+
+function appendUserPresenceParts(parts, userPresence) {
+  if (!userPresence?.found) return;
+  parts.push(`UserPresence=${userPresence.status} source=${userPresence.source}${userPresence.updatedAt ? ` updatedAt=${userPresence.updatedAt}` : ""}`);
+  parts.push(`UserPresenceAction=${userPresence.action}${userPresence.blocker ? ` blocker=${userPresence.blocker}` : ""}`);
+}
+
 function makeBoardSummary(result) {
   const target = `${result.target.host}:${result.target.port}`;
   if (!result.ok) {
-    return [
+    const parts = [
       "Windows reverse grant:",
       `failed action=${result.action}`,
       `target=${target}`,
-      `reason=${compactText(result.error?.message || result.error?.code || "unknown", 48)}`,
-      "no-password",
-      "no-input",
-      "no-inject",
-    ].join(" ");
+      `reason=${compactText(result.error?.code || result.error?.message || "unknown", 48)}`,
+    ];
+    appendUserPresenceParts(parts, result.userPresence);
+    parts.push("no-password", "no-input", "no-inject");
+    return parts.join(" ");
   }
 
   const grant = result.reverseControlGrant || {};
@@ -188,6 +291,7 @@ function makeBoardSummary(result) {
   } else {
     parts.push("lastRequest=none");
   }
+  appendUserPresenceParts(parts, result.userPresence);
   parts.push(`target=${target}`, "no-password", "no-input", "no-inject");
   return parts.join(" ");
 }
@@ -202,6 +306,7 @@ function makeResult(args, payload, statusCode) {
       endpoint: endpointForAction(args),
     },
     statusCode,
+    userPresence: args.userPresence || emptyUserPresence("not-checked", args.action),
     reverseControlMode: payload?.reverseControlMode ?? "",
     reverseControlPolicy: payload?.reverseControlPolicy ?? {},
     reverseControlGrant: payload?.reverseControlGrant ?? {},
@@ -220,6 +325,7 @@ function makeErrorResult(args, error, statusCode = 0) {
       endpoint: endpointForAction(args),
     },
     statusCode,
+    userPresence: args.userPresence || emptyUserPresence("not-checked", args.action),
     error: {
       code: error.code || "",
       message: error.message || String(error),
@@ -227,6 +333,52 @@ function makeErrorResult(args, error, statusCode = 0) {
   };
   result.boardSummary = makeBoardSummary(result);
   return result;
+}
+
+function makeBlockedUserPresenceResult(args) {
+  const error = Object.assign(new Error("BLOCKED_BY_USER_AWAY"), { code: "BLOCKED_BY_USER_AWAY" });
+  return makeErrorResult(args, error, 0);
+}
+
+async function requestBoardState(args) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), args.timeoutMs);
+  try {
+    const response = await fetch(boardStateUrl(args.server), {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      throw Object.assign(new Error(`Agent Link Board returned non-JSON response: ${compactText(text, 120)}`), {
+        code: "BOARD_JSON",
+        statusCode: response.status,
+      });
+    }
+    if (!response.ok) {
+      throw Object.assign(new Error(`Agent Link Board HTTP ${response.status}`), {
+        code: `BOARD_HTTP_${response.status}`,
+        statusCode: response.status,
+      });
+    }
+    return payload;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function applyBoardGate(args) {
+  if (!args.checkBoard) return null;
+  const state = await requestBoardState(args);
+  args.userPresence = normalizeBoardUserPresence(state, "api-state", args.action);
+  if (args.action === "grant" && args.userPresence.status === "away") {
+    return makeBlockedUserPresenceResult(args);
+  }
+  return null;
 }
 
 async function requestJson(args) {
@@ -266,6 +418,9 @@ function printHuman(result) {
   const target = `${result.target.host}:${result.target.port}`;
   if (!result.ok) {
     console.error(`[FAIL] Windows host reverse-control helper failed for ${target}: ${result.error?.message || "unknown error"}`);
+    if (result.userPresence?.blocker) {
+      console.error(`[INFO] UserPresence=${result.userPresence.summary}; action=${result.userPresence.action}; blocker=${result.userPresence.blocker}`);
+    }
     console.error("[INFO] Start Windows host first, then retry from the Windows machine. This helper does not use a password or send input.");
     return;
   }
@@ -277,6 +432,9 @@ function printHuman(result) {
     : "no temporary grant";
   console.log(`[OK] Reverse-control ${result.action} completed on ${target}`);
   console.log(`[INFO] Mode: ${result.reverseControlMode || "unknown"}; supported=${supportedToken(result.reverseControlPolicy)}; ${grantState}`);
+  if (result.userPresence?.found) {
+    console.log(`[INFO] UserPresence=${result.userPresence.summary}; action=${result.userPresence.action}`);
+  }
   if (lastRequest.active) {
     console.log(`[INFO] Recent request: ${compactText(lastRequest.requester || "peer", 32)} / ${compactText(lastRequest.status || "active", 48)} / age ${formatSeconds(lastRequest.ageMs)}`);
   }
@@ -295,7 +453,11 @@ async function main() {
 
   let result = null;
   try {
-    result = await requestJson(args);
+    result = await applyBoardGate(args);
+    if (!result) {
+      result = await requestJson(args);
+    }
+    if (!result.ok) process.exitCode = 1;
   } catch (error) {
     const statusCode = error.statusCode || (error.name === "AbortError" ? 408 : 0);
     result = makeErrorResult(args, error.name === "AbortError"

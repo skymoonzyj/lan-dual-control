@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 ## 2026-06-20 现场校正
 
+- Windows 一次性反控授权现在优先用带 userPresence 门禁的入口：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -CheckBoard -BoardSummary`，Node 等价为 `node scripts/windows/allow-windows-reverse-control.mjs --checkBoard --boardSummary`。`UserPresence=away` 时会输出 `BLOCKED_BY_USER_AWAY` 并且不会打开临时授权；`UserPresence=present` 时才继续允许 30 秒一次性授权。Mac 端需要反控 Windows 时，仍先说明目标、安全边界和预计耗时，再让 Windows 本机执行这条命令。
 - Windows 开工第一屏现在优先读取 Agent Link Board `/api/state.userPresence`：`present` 会在 `check-windows-resume-status --checkBoard --boardSummary` 中显示 `UserPresence=present` 和 `UserPresenceAction=explain-before-auth`，表示可安排授权/输入密码/现场审核任务但必须先说明目标、用户要做什么、安全边界和预计耗时；`away` 会显示 `UserPresenceAction=no-auth-only blocker=BLOCKED_BY_USER_AWAY`，只做无授权任务。不要再从历史“休息/睡觉/USER_SLEEPING”消息推断当前用户状态；结构化 `userPresence` 优先。
 
 - Windows 手工体验第一屏现在也读取 `/api/state.userPresence`：`node scripts/windows/check-windows-manual-ux-status.mjs --boardSummary` 或 PowerShell 入口 `scripts/windows/check-windows-manual-ux-status.ps1 -BoardSummary` 会显示 `UserPresence=present|away` 和 `UserPresenceAction=`。`present` 时可以先说明目标、安全边界和预计耗时，再进入手工体验；`away` 时会显示 `BLOCKED_BY_USER_AWAY`，即使 Mac manual UX 已 ready，也不要请求密码、系统授权、真实 input/inject 或现场音视频确认。

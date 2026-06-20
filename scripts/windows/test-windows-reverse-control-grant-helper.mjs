@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -91,6 +92,27 @@ async function getFreePort(host) {
       server.close(() => resolvePort(port));
     });
   });
+}
+
+async function startFakeBoard(host, state) {
+  const port = await getFreePort(host);
+  const server = http.createServer((request, response) => {
+    if (request.url === "/api/state") {
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify(state));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({ ok: false, code: "NOT_FOUND" }));
+  });
+  await withTimeout(new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, host, resolveListen);
+  }), 5000, "listen fake Agent Link Board");
+  return {
+    url: `http://${host}:${port}`,
+    close: () => new Promise((resolveClose) => server.close(resolveClose)),
+  };
 }
 
 function runHelper(args, timeoutMs) {
@@ -288,6 +310,93 @@ async function verifyGrantStatusAndRevoke(args) {
   print("OK", "Grant helper reads status, opens one-time grant, prints board summary, and revokes through Node and PowerShell");
 }
 
+async function verifyUserPresenceGrantGate(args) {
+  const host = await startHost(args);
+  const awayBoard = await startFakeBoard(args.host, {
+    userPresence: {
+      status: "away",
+      state: "away",
+      label: "用户不在",
+      note: "secret-value should never appear",
+      updatedAt: "2026-06-20T10:00:00.000Z",
+    },
+  });
+  const presentBoard = await startFakeBoard(args.host, {
+    userPresence: {
+      status: "present",
+      state: "present",
+      label: "用户在场",
+      note: "secret-value should never appear",
+      updatedAt: "2026-06-20T10:01:00.000Z",
+    },
+  });
+  try {
+    const base = ["--host", host.host, "--port", String(host.port), "--timeoutMs", "3000"];
+
+    const blocked = await runHelper([
+      ...base,
+      "--grant",
+      "--server", awayBoard.url,
+      "--checkBoard",
+      "--boardSummary",
+    ], args.timeoutMs);
+    assert.equal(blocked.timedOut, false, "away userPresence grant boardSummary timed out");
+    assert.notEqual(blocked.exitCode, 0, "away userPresence grant should exit non-zero");
+    assert.match(blocked.stdout, /Windows reverse grant:/);
+    assert.match(blocked.stdout, /failed action=grant/);
+    assert.match(blocked.stdout, /UserPresence=away/);
+    assert.match(blocked.stdout, /UserPresenceAction=no-auth-only/);
+    assert.match(blocked.stdout, /BLOCKED_BY_USER_AWAY/);
+    assert.match(blocked.stdout, /no-password/);
+    assert.match(blocked.stdout, /no-input/);
+    assert.match(blocked.stdout, /no-inject/);
+    assert.doesNotMatch(blocked.stdout + blocked.stderr, /secret-value|demo-password|token|Error:|at /i);
+
+    const afterBlocked = await waitForDiscovery(host.host, host.port, args.timeoutMs);
+    assert.equal(afterBlocked.capabilities.reverseControlGrant.active, false);
+
+    const psBlocked = await runPowerShell([
+      "-HostName", host.host,
+      "-Port", String(host.port),
+      "-Grant",
+      "-Server", awayBoard.url,
+      "-CheckBoard",
+      "-BoardSummary",
+      "-TimeoutMs", "3000",
+    ], args.timeoutMs);
+    assert.equal(psBlocked.timedOut, false, "PowerShell away userPresence grant timed out");
+    assert.notEqual(psBlocked.exitCode, 0, "PowerShell away userPresence grant should exit non-zero");
+    assert.match(psBlocked.stdout, /UserPresence=away/);
+    assert.match(psBlocked.stdout, /UserPresenceAction=no-auth-only/);
+    assert.match(psBlocked.stdout, /BLOCKED_BY_USER_AWAY/);
+    assert.doesNotMatch(psBlocked.stdout + psBlocked.stderr, /secret-value|demo-password|token|Error:|at /i);
+
+    const allowed = await runHelper([
+      ...base,
+      "--grant",
+      "--server", presentBoard.url,
+      "--checkBoard",
+      "--boardSummary",
+    ], args.timeoutMs);
+    assert.equal(allowed.timedOut, false, "present userPresence grant boardSummary timed out");
+    assert.equal(allowed.exitCode, 0, `present userPresence grant failed\nstdout:\n${allowed.stdout}\nstderr:\n${allowed.stderr}`);
+    assert.match(allowed.stdout, /Windows reverse grant:/);
+    assert.match(allowed.stdout, /granted/);
+    assert.match(allowed.stdout, /grant=temporary-grant/);
+    assert.match(allowed.stdout, /UserPresence=present/);
+    assert.match(allowed.stdout, /UserPresenceAction=explain-before-grant/);
+    assert.doesNotMatch(allowed.stdout + allowed.stderr, /secret-value|demo-password|token|Error:|at /i);
+
+    const afterAllowed = await waitForDiscovery(host.host, host.port, args.timeoutMs);
+    assert.equal(afterAllowed.capabilities.reverseControlGrant.active, true);
+  } finally {
+    await presentBoard.close();
+    await awayBoard.close();
+    await host.service.close();
+  }
+  print("OK", "UserPresence gates reverse-control grants without leaking board notes");
+}
+
 async function verifyOfflineBoardSummary(args) {
   const port = await getFreePort(args.host);
   const result = await runHelper([
@@ -350,6 +459,7 @@ async function main() {
   }
 
   await verifyGrantStatusAndRevoke(args);
+  await verifyUserPresenceGrantGate(args);
   await verifyOfflineBoardSummary(args);
   await verifyPowerShellHelp(args);
   print("OK", "Windows reverse-control grant helper tests passed");

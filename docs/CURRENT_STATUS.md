@@ -4,6 +4,8 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 反控临时授权 userPresence gate
+- `allow-windows-reverse-control` 现在支持 `--checkBoard --server <Agent Link Board>`：打开一次性反控授权前会只读读取 `/api/state.userPresence`。`present` 时继续允许本机 loopback 打开约 30 秒一次性授权，并在 JSON/普通输出/`--boardSummary` 显示 `UserPresence=present` / `UserPresenceAction=explain-before-grant`；`away` 时不调用 `/reverse-control/grant`，非零退出并输出 `BLOCKED_BY_USER_AWAY` / `UserPresenceAction=no-auth-only`。PowerShell 入口同步支持 `-CheckBoard -Server <url>`。默认不加 `--checkBoard` 的旧本机授权行为保持兼容；本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-20 Windows manual UX 消费 userPresence
 - `check-windows-manual-ux-status --boardSummary` 现在也优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=<present|away> source=api-state updatedAt=<...>` / `UserPresenceAction=<explain-before-auth|no-auth-only>`。`present` 表示手工体验可进入需要用户配合的说明流程；`away` 会把第一屏降为 waiting，并额外显示 `BLOCKED_BY_USER_AWAY` / `warnings=user-away`，只做无授权协调。旧历史消息里的“休息/睡觉/USER_SLEEPING/USER_AWAKE”不能覆盖结构化 `userPresence`；字段缺失时保持 unknown。本轮不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 

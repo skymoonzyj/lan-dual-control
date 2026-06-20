@@ -58,15 +58,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -Wasapi
 ```
 
-一键反控接收策略默认是安全 `deny`：认证后的反控请求会返回 `LAN008`，提示需要用户确认，控制方向不会自动切换；同时状态里会短时记录最近一次被拒绝的请求。Windows 桌面版“本机被控”面板可点“临时允许反控”，它只从 Windows 本机回环地址调用 `/reverse-control/grant`，打开约 30 秒的一次性授权窗口；下一次 Mac 反控请求通过后授权会自动消耗，超时未用也会失效。如果 Mac 已经先请求过，面板会显示“刚收到请求”，此时点击临时允许后让 Mac 端重试即可。命令行备用入口是 `allow-windows-reverse-control.ps1` / `allow-windows-reverse-control.mjs`，可查看状态、打开一次性授权或撤销授权，并输出适合 Agent Link Board 的无密单行摘要；`start-windows-host --status --boardSummary` 和 `check-windows-host-readiness --checkBoard --boardSummary` 也会在可用时同时带 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、Node fallback，以及兼容旧入口的 `ReverseGrant=` / `ReverseGrantPs=`，方便现场直接复制。需要可信局域网实验短测长期自动同意时，必须显式传 `--reverseControlMode accept` / `-ReverseControlMode accept`；需要完全关闭反控能力声明时，用 `disabled`。启动计划、`--status --json` 和 `--status --boardSummary` 都会显示当前策略、临时授权和最近请求状态；一键体检的 runtime 摘要也会保留 `reverse=temporary-grant` 或 `reverse=pending-request`，避免只看 readiness 时误以为仍是普通 `deny-confirm`。
+一键反控接收策略默认是安全 `deny`：认证后的反控请求会返回 `LAN008`，提示需要用户确认，控制方向不会自动切换；同时状态里会短时记录最近一次被拒绝的请求。Windows 桌面版“本机被控”面板可点“临时允许反控”，它只从 Windows 本机回环地址调用 `/reverse-control/grant`，打开约 30 秒的一次性授权窗口；下一次 Mac 反控请求通过后授权会自动消耗，超时未用也会失效。如果 Mac 已经先请求过，面板会显示“刚收到请求”，此时点击临时允许后让 Mac 端重试即可。命令行备用入口是 `allow-windows-reverse-control.ps1` / `allow-windows-reverse-control.mjs`，可查看状态、打开一次性授权或撤销授权，并输出适合 Agent Link Board 的无密单行摘要；首选带 `-CheckBoard` / `--checkBoard`，会在打开授权前只读 `/api/state.userPresence`，用户不在时输出 `BLOCKED_BY_USER_AWAY` 且不打开授权；`start-windows-host --status --boardSummary` 和 `check-windows-host-readiness --checkBoard --boardSummary` 也会在可用时同时带 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、Node fallback，以及兼容旧入口的 `ReverseGrant=` / `ReverseGrantPs=`，方便现场直接复制。需要可信局域网实验短测长期自动同意时，必须显式传 `--reverseControlMode accept` / `-ReverseControlMode accept`；需要完全关闭反控能力声明时，用 `disabled`。启动计划、`--status --json` 和 `--status --boardSummary` 都会显示当前策略、临时授权和最近请求状态；一键体检的 runtime 摘要也会保留 `reverse=temporary-grant` 或 `reverse=pending-request`，避免只看 readiness 时误以为仍是普通 `deny-confirm`。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --promptPassword --requirePassword --reverseControlMode deny
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -ReverseControlMode accept
-pwsh -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.ps1 -BoardSummary
+pwsh -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.ps1 -CheckBoard -BoardSummary
 pwsh -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.ps1 -Status -Json
 pwsh -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.ps1 -Revoke -BoardSummary
-node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --durationMs 30000 --boardSummary
+node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --durationMs 30000 --checkBoard --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --status --json
 node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --revoke
 ```

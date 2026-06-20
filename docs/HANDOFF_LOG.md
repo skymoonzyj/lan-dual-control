@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 反控临时授权 userPresence gate
+开发端：Windows Codex
+本轮目标：让 Windows 本机一次性反控授权在用户离开时 fail-closed，避免 Mac 端误触发需要现场确认的反控授权流程。
+完成内容：
+- `allow-windows-reverse-control.mjs` 新增 `--checkBoard --server <url>`，打开 grant 前只读 `/api/state.userPresence`。
+- `present` 时输出 `UserPresence=present` / `UserPresenceAction=explain-before-grant` 并继续打开一次性授权；`away` 时不调用 `/reverse-control/grant`，输出 `BLOCKED_BY_USER_AWAY` 和 `UserPresenceAction=no-auth-only`，非零退出。
+- PowerShell wrapper 新增 `-CheckBoard -Server <url>`，帮助和 README 同步首选带门禁的授权命令。
+修改文件：
+- `scripts/windows/allow-windows-reverse-control.mjs`
+- `scripts/windows/allow-windows-reverse-control.ps1`
+- `scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-reverse-control-grant-helper.mjs --timeoutMs 45000` 先失败于 helper 不支持通讯板 gate，away 场景没有输出 `Windows reverse grant:`。
+- 绿灯：`node --check scripts/windows/allow-windows-reverse-control.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- 绿灯：`node scripts/windows/test-windows-reverse-control-grant-helper.mjs --timeoutMs 45000`
+遗留问题：真实反控闭环仍需用户在场、Mac 先请求反控、Windows 本机说明后开一次性授权，再让 Mac 重试；本轮只加 userPresence 门禁和回归。
+下一步建议：后续 Mac 端提示 `WindowsOpenOneTimeReverseGrant` 时，优先使用带 `-CheckBoard` / `--checkBoard` 的命令；`away` 时只做无授权协调。
+是否改了协议：否；只读消费 Agent Link Board 既有 `/api/state.userPresence`，不改 WebSocket/HTTP 远控协议。
+是否需要另一端配合：不需要立即配合；真实反控验收时需要 Mac 端发起请求、用户在场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 C2 Windows manual UX userPresence 补强
 开发端：Windows Codex
 本轮目标：让 Windows 手工体验第一屏也以 Agent Link Board `/api/state.userPresence` 为准，避免用户离开时仍提示进入需要现场配合的体验流程。
@@ -1907,6 +1936,7 @@
 - 开工第一屏继续优先跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacRemoteAudioPlan=` 时按只读方案理解，不要当成已经改了 Mac 声音输出。
 是否改了协议：否。
 是否需要另一端配合：短期不需要；真正 remote-only audio 落地时需要 Mac 端和用户明确确认。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 恢复总览消费 MacInputSafetyPlan
