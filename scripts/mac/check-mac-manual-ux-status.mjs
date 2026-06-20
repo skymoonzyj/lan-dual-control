@@ -685,6 +685,14 @@ function refreshOperatorAction(report) {
   return report.operatorAction;
 }
 
+function makeManualUxMissingSignal(blockers) {
+  if (!blockers.includes("manual-ux-standby-not-detected")) return null;
+  return {
+    id: "user-awake-or-manual-ux-standby",
+    request: "Need USER_AWAKE or ManualUxStandby; then 重跑状态 with --sendStatus --sendMessage --boardSummary; no-password,no-input-inject",
+  };
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const eventSources = boardEventSources(state);
@@ -764,6 +772,7 @@ function makeReport(state, server) {
     warnings,
     nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination, userPresence),
   };
+  report.manualUxMissingSignal = makeManualUxMissingSignal(blockers);
   refreshOperatorAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
@@ -848,6 +857,10 @@ function makeBoardSummary(report) {
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
   if (report.commands?.manualUxReconfirmCommand) parts.push(`ManualUxReconfirmCommand=${report.commands.manualUxReconfirmCommand}`);
   if (report.commands?.manualUxAfterGateCommand) parts.push(`ManualUxAfterGate=${report.commands.manualUxAfterGateCommand}`);
+  if (report.manualUxMissingSignal) {
+    parts.push(`ManualUxMissingSignal=${report.manualUxMissingSignal.id}`);
+    parts.push(`ManualUxStandbyRequest=${report.manualUxMissingSignal.request}`);
+  }
   if (report.manualUxCall?.state) {
     parts.push(`ManualUxCall=${report.manualUxCall.state}`);
     if (Number.isFinite(report.manualUxCall.ageMs)) {
@@ -878,6 +891,9 @@ function printHuman(report) {
   console.log(`[INFO] Signals: ${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(", ") || "none"}`);
   if (report.blockers.length > 0) console.log(`[INFO] Blockers: ${report.blockers.join(", ")}`);
   if (report.warnings.length > 0) console.log(`[INFO] Warnings: ${report.warnings.join(", ")}`);
+  if (report.manualUxMissingSignal) {
+    console.log(`[INFO] Missing signal: ${report.manualUxMissingSignal.id} - ${report.manualUxMissingSignal.request}`);
+  }
   console.log(`[INFO] Operator action: ${report.operatorAction.id} - ${report.operatorAction.description}`);
   console.log("[INFO] Safety: 不请求密码；不发送用户认证请求；不发送 input；不回旧 formal E2E 复跑。");
   for (const action of report.nextActions) {

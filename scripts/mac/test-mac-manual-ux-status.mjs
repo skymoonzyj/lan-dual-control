@@ -748,6 +748,16 @@ function assertManualUxAfterGateCommand(payload, label) {
   assertSecretSafe(command, label);
 }
 
+function assertManualUxMissingSignal(payload, label) {
+  assert(payload.manualUxMissingSignal?.id === "user-awake-or-manual-ux-standby", `${label} missing signal mismatch: ${JSON.stringify(payload.manualUxMissingSignal)}`);
+  assertIncludes(payload.manualUxMissingSignal?.request || "", "USER_AWAKE", `${label} missing signal request`);
+  assertIncludes(payload.manualUxMissingSignal?.request || "", "ManualUxStandby", `${label} missing signal request`);
+  assertIncludes(payload.manualUxMissingSignal?.request || "", "重跑状态", `${label} missing signal request`);
+  assertIncludes(payload.boardSummary || "", "ManualUxMissingSignal=user-awake-or-manual-ux-standby", `${label} boardSummary`);
+  assertIncludes(payload.boardSummary || "", "ManualUxStandbyRequest=", `${label} boardSummary`);
+  assertSecretSafe(JSON.stringify(payload.manualUxMissingSignal), `${label} missing signal`);
+}
+
 async function checkHelp(args) {
   const result = await run(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0. stderr=${result.stderr}`);
@@ -784,6 +794,8 @@ async function checkReadyJson(args) {
     assertIncludes(payload.boardSummary, `ManualUxChecklist=${defaultChecklist}`, "ready JSON boardSummary");
     assertIncludes(payload.boardSummary, "ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断", "ready JSON boardSummary");
     assertOperatorAction(payload, "start-manual-ux-test", "ready JSON");
+    assert(payload.manualUxMissingSignal == null, `ready JSON should not expose missing signal: ${JSON.stringify(payload.manualUxMissingSignal)}`);
+    assertNotIncludes(payload.boardSummary, "ManualUxMissingSignal=", "ready JSON boardSummary");
     assertSecretSafe(JSON.stringify(payload), "ready JSON");
   });
   console.log("[OK] Mac manual UX status detects ready PostPass board state");
@@ -897,6 +909,7 @@ async function checkRequireReadyFailure(args) {
     assert(payload.blockers?.includes("manual-ux-standby-not-detected"), "waiting JSON should include blocker");
     assertIncludes(payload.boardSummary, "MacManualUx=status=waiting", "waiting JSON boardSummary");
     assertOperatorAction(payload, "wait-manual-ux-standby", "waiting JSON");
+    assertManualUxMissingSignal(payload, "waiting JSON");
     assertSecretSafe(JSON.stringify(payload), "waiting JSON");
   });
   console.log("[OK] Mac manual UX status requireReady fails closed before standby signal");
@@ -935,6 +948,8 @@ async function checkUserAwakeCallProducesManualUxCallPlan(args) {
     assertIncludes(payload.boardSummary, "ManualUxCallCommand=", "USER_AWAKE boardSummary");
     assertNotIncludes(payload.boardSummary, "blockers=manual-ux-standby-not-detected", "USER_AWAKE boardSummary");
     assertOperatorAction(payload, "send-manual-ux-call", "USER_AWAKE currentCall JSON");
+    assert(payload.manualUxMissingSignal == null, `USER_AWAKE currentCall should not expose missing signal: ${JSON.stringify(payload.manualUxMissingSignal)}`);
+    assertNotIncludes(payload.boardSummary, "ManualUxMissingSignal=", "USER_AWAKE boardSummary");
     assertSecretSafe(JSON.stringify(payload), "USER_AWAKE currentCall JSON");
   });
   console.log("[OK] Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan");
