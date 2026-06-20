@@ -19,6 +19,18 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2 Windows 真连复测密码提示统一
+开发端：Windows Codex
+本轮目标：修复现场第二步/底层探针仍显示英文 `Mac host password:`，导致用户不知道密码该输入到哪里。
+完成内容：`probe-mac-host --promptPassword` 现在先打印中文隐藏密码说明，并把等待标签改为“当前终端输入 Mac 临时密码（输入不显示，回车继续）: ”；`test-mac-formal-e2e-preflight` 新增 probe runner 非交互提示回归和源码断言，formal/browser/probe 三个 Windows 控 Mac 密码入口保持同一口径。
+修改文件：scripts/windows/probe-mac-host.mjs；scripts/windows/test-mac-formal-e2e-preflight.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `test-mac-formal-e2e-preflight --timeoutMs 45000` 先失败于 `probe runner prompt label leaked unexpected text: promptHidden("Mac host password: ")`；绿灯同命令通过，确认 probe runner 会先输出中文提示再在非交互终端拒绝。
+遗留问题：仍需用户实际运行 `WinClientRetest=` 做真连 H.264 复测；这轮只修密码输入位置提示。
+下一步建议：用户看到终端中文隐藏输入提示时，在同一个黑色终端输入 Mac 临时密码并回车；复测结束后把 `W2W3Retest=` 上板。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端只需保持 host 在线。不在通讯板发送密码，不发 input/inject。
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W2 Windows H.264 接收 NAL 证据补强
 开发端：Windows Codex
 本轮目标：让 Windows 真连复测能说明收到侧到底有没有拿到 key/SPS/PPS/IDR，和 Mac firstKeyNal/firstNal 发送侧证据对照。

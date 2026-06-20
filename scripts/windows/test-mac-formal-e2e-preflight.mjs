@@ -11,6 +11,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const runnerScript = resolve(scriptDir, "check-mac-formal-e2e.mjs");
 const browserRunnerScript = resolve(scriptDir, "test-windows-client-browser.mjs");
+const probeRunnerScript = resolve(scriptDir, "probe-mac-host.mjs");
 
 const defaults = {
   timeoutMs: 30000,
@@ -175,8 +176,16 @@ function runRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
 }
 
 function runBrowserRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
+  return runNodeScript(browserRunnerScript, args, env, timeoutMs);
+}
+
+function runProbeRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
+  return runNodeScript(probeRunnerScript, args, env, timeoutMs);
+}
+
+function runNodeScript(scriptPath, args, env, timeoutMs) {
   return new Promise((resolveRun) => {
-    const child = spawn(process.execPath, [browserRunnerScript, ...args], {
+    const child = spawn(process.execPath, [scriptPath, ...args], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -747,11 +756,27 @@ async function testBrowserPromptExplainsPasswordWait(args) {
   assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "browser password prompt hint");
   print("OK", "Browser runner explains password wait before interactive prompt");
 }
+async function testProbePromptExplainsPasswordWait(args) {
+  const result = await runProbeRunner([
+    "--host", "127.0.0.1",
+    "--port", "9",
+    "--promptPassword",
+    "--requirePassword",
+  ], args);
+  assert(result.exitCode !== 0, "probe prompt should fail in a non-interactive test terminal");
+  assertIncludes(result.stdout, "等待隐藏密码输入", "probe password prompt hint");
+  assertIncludes(result.stdout, "当前终端窗口", "probe password prompt hint");
+  assertIncludes(result.stdout, "按 Enter", "probe password prompt hint");
+  assertIncludes(result.stdout, "不是卡住", "probe password prompt hint");
+  assertIncludes(result.stdout + result.stderr, "--promptPassword requires an interactive terminal", "probe password prompt hint");
+  print("OK", "Probe runner explains password wait before interactive prompt");
+}
 
 function testPromptLabelsUseChineseTerminalGuidance() {
   for (const [label, scriptPath] of [
     ["formal runner", runnerScript],
     ["browser runner", browserRunnerScript],
+    ["probe runner", probeRunnerScript],
   ]) {
     const source = readFileSync(scriptPath, "utf8");
     assertNotIncludes(source, 'promptHidden("Mac host password: ")', `${label} prompt label`);
@@ -862,6 +887,7 @@ async function main() {
   await testMockRequiresPasswordAfterPreflight(args);
   await testFormalPromptExplainsPasswordWait(args);
   await testBrowserPromptExplainsPasswordWait(args);
+  await testProbePromptExplainsPasswordWait(args);
   await testFormalStepTimeoutKillsHungProbe(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");

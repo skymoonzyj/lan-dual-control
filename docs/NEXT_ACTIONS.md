@@ -4,6 +4,8 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
+- W2 真连复测密码提示最新口径：formal runner、browser runner 和底层 `probe-mac-host --promptPassword` 都会先用中文说明“在当前终端窗口输入 Mac 端当前临时密码，输入不显示，按 Enter 继续，不是卡住，不要输到网页或通讯板”，等待标签统一为 `当前终端输入 Mac 临时密码（输入不显示，回车继续）:`。如果用户看到这个提示，就直接在同一个黑色终端里输入；如果是网页登录，则密码填页面左侧“连接密码”框。不要把密码发通讯板，不发 input/inject。
+
 ## 2026-06-20 现场校正
 - W2-H264 接收 NAL 证据最新口径：`test-windows-client-browser --boardSummary` 的 `W2W3Retest=` 中，短 `h264=` 字段现在会追加 `recv=<n> key=<n> sps=<n> pps=<n> idr=<n> lastNal=<types>`。下一次用户真连后，把它和 Mac `MacHostMedia` / `observe-mac-media` 的 `firstKeyNal`、`firstNal` 对照：Mac 有 `firstKeyNal=7/8/5` 且 Windows 有 `sps/pps/idr` 但 `decoded=0`，优先查 Windows WebCodecs configure/decode/flush/队列；Mac 有但 Windows 没有，才回到传输窗口、重启流或 payload 解析路径。不发密码，不发 input/inject。
 - W2-H264 真连复测摘要最新口径：`test-windows-client-browser --boardSummary` 的 `W2W3Retest=` 现在除了 `video=` / `audio=`，还会带短 `h264=` 字段，例如 `status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe`。下一次用户真连后优先看 `surface=` 和 `h264=`：`decoded>0`/canvas 有尺寸说明已出画面；`needsKeyframe=yes` 且 `skippedDelta` 增长说明还在等关键帧；`queueMs`/`staleDrops`/`reason` 高说明 Windows 本机队列或恢复循环仍是重点。不发密码，不发 input/inject。

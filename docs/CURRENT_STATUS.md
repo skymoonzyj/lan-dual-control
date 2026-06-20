@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows 真连复测密码提示统一
+- 底层 `probe-mac-host --promptPassword` 现在和 formal runner、browser runner 一样，先打印“等待隐藏密码输入：请直接在当前终端窗口输入 Mac 端当前临时密码；输入时不会显示字符，按 Enter 继续；这是正常等待，不是卡住；不要输到网页或通讯板。”，实际等待标签改为“当前终端输入 Mac 临时密码（输入不显示，回车继续）: ”。这修复现场第二步/探针阶段仍显示英文 `Mac host password:` 导致用户不知道输到哪里的 UX 问题；测试新增 probe runner 非交互提示回归和源码断言。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-21 W2 Windows H.264 接收 NAL 证据补强
 - Windows 控制端现在会在收到每个 H.264 payload 后记录收到侧 NAL 证据：`h264ReceivedFrames`、`h264ReceivedKeyFrames`、`h264ReceivedSps`、`h264ReceivedPps`、`h264ReceivedIdr`、`h264LastNalTypes` 和 `h264LastKeyFrameId`。页面“现场视频”会显示 `H.264收到 <n>`、`关键帧 <n>`、`SPS/PPS/IDR a/b/c` 和 `NAL <types>`；`test-windows-client-browser --boardSummary` 的 `W2W3Retest h264=` 会追加 `recv/key/sps/pps/idr/lastNal`。这用于和 Mac M6/M7 的 `firstKeyNal/firstNal` 发送侧证据对照：若 Windows 已收到 `sps/pps/idr` 但 `decoded=0`，优先查 WebCodecs configure/decode/队列；若 Mac 侧有 key NAL 而 Windows 侧没有，则再查传输/重启窗口。不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-21 M5 Mac H.264 keyframe 证据上板
