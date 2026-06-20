@@ -293,8 +293,16 @@ function isUserAwakeManualUxCall(text) {
 function isUserSleepingText(text) {
   const source = compactText(text);
   if (!source) return false;
+  if (isExplicitUserSleepingDirectiveText(source)) return true;
   if (isUserPresenceReferenceText(source)) return false;
   return /\bUSER_SLEEPING\b|\bBLOCKED_BY_USER_SLEEP\b|用户仍是\s*USER_SLEEPING|用户睡眠|夜间[^。；;\n]{0,40}无授权任务/i.test(source);
+}
+
+function isExplicitUserSleepingDirectiveText(text) {
+  const source = compactText(text);
+  if (/\bBLOCKED_BY_USER_SLEEP\b/i.test(source)) return true;
+  if (!/\bUSER_SLEEPING\b/i.test(source)) return false;
+  return /用户仍是\s*USER_SLEEPING|不能发起|不能[^。；;\n]{0,30}推进|撤销|清理|按风险处理|休息模式纠偏/i.test(source);
 }
 
 function isUserAwakeText(text) {
