@@ -261,6 +261,36 @@ function assertWindowsSecureAuthPathCommand(command, label, expectedPort) {
   assertNotIncludes(command, "token=", label);
 }
 
+function assertWindowsHostStatusCommand(command, label, expectedPort) {
+  assertIncludes(command, "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command, "--status", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertWindowsHostReadinessCommand(command, label, expectedPort) {
+  assertIncludes(command, "node scripts/windows/check-windows-host-readiness.mjs", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--checkBoard", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -493,6 +523,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsSecureAuthPath", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsSecureAuthStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsHostStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsHostReadiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.formalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.manualChecklistSummary", `${script} ${flag}`);
@@ -1162,7 +1194,27 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
       payload.commands?.macInputSafetyPlan || "",
       "discover failure Mac input safety plan command",
     );
+    assertWindowsHostStatusCommand(
+      payload.commands?.windowsHostStatus || "",
+      "discover failure Windows host status command",
+      String(unusedPort),
+    );
+    assertWindowsHostReadinessCommand(
+      payload.commands?.windowsHostReadiness || "",
+      "discover failure Windows host readiness command",
+      String(unusedPort),
+    );
     assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "discover failure board summary");
+    assertWindowsHostStatusCommand(
+      (payload.boardSummary || "").split("WindowsHostStatus=")[1]?.split(". ")[0] || "",
+      "discover failure board summary Windows host status command",
+      String(unusedPort),
+    );
+    assertWindowsHostReadinessCommand(
+      (payload.boardSummary || "").split("WindowsHostReadiness=")[1]?.split(". ")[0] || "",
+      "discover failure board summary Windows host readiness command",
+      String(unusedPort),
+    );
     assertIncludes(payload.boardSummary || "", "warnings=windows-host", "discover failure board summary");
     assertNotIncludes(payload.boardSummary || "", "blockers=none warnings=none", "discover failure board summary");
     assertMacScriptHelpCommand(

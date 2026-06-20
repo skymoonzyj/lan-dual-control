@@ -144,6 +144,12 @@ Machine-readable JSON fields:
   macUnattendedFreshness         Optional freshness summary forwarded from the
                                   nested formal checklist. It is advisory and
                                   never changes readiness by itself.
+  commands.windowsHostStatus     Secret-free Windows-side local host status
+                                  command for Windows Codex to run when Mac
+                                  discovery finds no Windows host.
+  commands.windowsHostReadiness  Secret-free Windows-side local readiness
+                                  command for Windows Codex to run before
+                                  sharing host/IP state.
   commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command to inspect the one-time reverse-
@@ -735,6 +741,30 @@ function makeWindowsReverseGrantCommand(args, action = "grant") {
   return makeWindowsReverseGrantPowerShellCommand(args, action);
 }
 
+function makeWindowsHostStatusCommand(args) {
+  return [
+    "node scripts/windows/start-windows-host.mjs",
+    "--status",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(args.port || defaults.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeWindowsHostReadinessCommand(args) {
+  return [
+    "node scripts/windows/check-windows-host-readiness.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(args.port || defaults.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeWindowsSecureAuthStartPowerShellCommand(args) {
   return [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass",
@@ -1004,6 +1034,8 @@ function makeBoardSummary(report) {
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
       `MacRemoteAudioPlan=${report.commands?.macRemoteAudioPlan || makeMacRemoteAudioPlanCommand()}.`,
       `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
+      `WindowsHostStatus=${report.commands?.windowsHostStatus || makeWindowsHostStatusCommand(report.args)}.`,
+      `WindowsHostReadiness=${report.commands?.windowsHostReadiness || makeWindowsHostReadinessCommand(report.args)}.`,
       ...macUnattendedParts,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
@@ -1021,6 +1053,8 @@ function makeBoardSummary(report) {
     `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `MacRemoteAudioPlan=${report.commands?.macRemoteAudioPlan || makeMacRemoteAudioPlanCommand()}.`,
     `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
+    `WindowsHostStatus=${report.commands?.windowsHostStatus || makeWindowsHostStatusCommand(report.args)}.`,
+    `WindowsHostReadiness=${report.commands?.windowsHostReadiness || makeWindowsHostReadinessCommand(report.args)}.`,
     ...macUnattendedParts,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
@@ -1151,6 +1185,8 @@ function makeReport(args, preflight) {
       macRemoteAudioPlan: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlan: makeMacInputSafetyPlanCommand(),
       macUnattendedSendStatus: makeMacUnattendedSendStatusCommand(args),
+      windowsHostStatus: makeWindowsHostStatusCommand(args),
+      windowsHostReadiness: makeWindowsHostReadinessCommand(args),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
       windowsReverseGrantStatusPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "status"),
