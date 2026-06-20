@@ -220,6 +220,10 @@ async function checkBrowserDiscover(args) {
     assertIncludes(summaryLine, "build browser-discover-build", "browser discover boardSummary");
     assertIncludes(summaryLine, "uiDiag=", "browser discover boardSummary");
     assertIncludes(summaryLine, "build runtime-test", "browser discover boardSummary");
+    assertIncludes(summaryLine, "W2W3Retest=", "browser discover boardSummary");
+    assertIncludes(summaryLine, "video=实收 20.1 FPS", "browser discover boardSummary");
+    assertIncludes(summaryLine, "audio=队列 120 ms", "browser discover boardSummary");
+    assertIncludes(summaryLine, "queue-overflow-trim-future", "browser discover boardSummary");
     assertNotIncludes(summaryLine, "; diag=", "browser discover boardSummary");
     assertNotIncludes(summaryLine, " password=", "browser discover boardSummary");
     const output = `${result.stdout}\n${result.stderr}`;

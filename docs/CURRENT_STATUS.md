@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2/W3 Windows client boardSummary 复测矩阵
+- `test-windows-client-browser --boardSummary` 现在会把页面已有“现场视频 / 现场声音”提炼成脱敏 `W2W3Retest=` 短字段，例如 `video=实收 20.1 FPS · 请求 60 Hz · 协商 60 Hz ...` 与 `audio=队列 120 ms · 缓冲 80/70/450/120 ms ... 原因 queue-overflow-trim-future`。真实连接时同一摘要还会继续带 `h264Errors=<n>`、surface、FPS 和声音状态；`diagnosticsOnly`/discover 回归只用本地模拟页面验证字段格式，不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-21 W3 Windows WebAudio 高水位只修剪未来队列
 - Mac 侧 60Hz H.264+PCM 基线显示音频供流稳定后，Windows 控制端把 WebAudio 高水位治理从“停止全部已排队 source”改成“只停止尚未开始播放的未来 source”，当前正在播放的片段会保留；随后 `audioNextPlayTime` 接到当前片段结束时间或 120ms 重同步预缓冲之后，现场诊断原因改为 `queue-overflow-trim-future`。页面自测红灯先证明旧逻辑会把正在播放的 0.10s 片段也停掉，绿灯确认只停止两个未来 0.12s source、`overflowDropped=2`、`resync=1`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 

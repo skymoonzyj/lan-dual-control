@@ -19,6 +19,19 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 Windows client boardSummary 复测矩阵
+开发端：Windows Codex
+本轮目标：让 Blocker B 的真实 60Hz/H.264 复测结果能一行脱敏上板，减少从长日志里人工拼视频/音频字段。
+完成内容：`test-windows-client-browser --boardSummary` 新增 `W2W3Retest=`，从页面导出的“现场视频 / 现场声音”提炼 `video=...` 与 `audio=...`；真实连接快照会继续带 `h264Errors`、surface、FPS 与声音状态。
+修改文件：scripts/windows/test-windows-client-browser.mjs；scripts/windows/test-windows-client-browser-discover.mjs；apps/windows-client/README.md；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 discover diagnostics boardSummary 缺少 `W2W3Retest=`；绿灯 node --check 两个脚本、test-windows-client-browser-discover、test-windows-client-browser --diagnosticsOnly --boardSummary。
+遗留问题：这只是让真实复测结果更容易同步；仍需用户输入 Mac 当前临时密码后做真实 60Hz/H.264 页面复测。
+下一步建议：真实复测后优先把 `W2W3Retest=` 一行发通讯板；若仍卡，按 video/audio 两段判断是 WebCodecs/主线程、本地 WebAudio 队列，还是 Mac/网络供流抖动。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 保持在线并在真实复测前确认 60Hz/H.264/PCM 基线；不在通讯板发送密码。
+
+## 2026-06-21 Windows Codex
+
 日期：2026-06-21 W3 Windows WebAudio 高水位只修剪未来队列
 开发端：Windows Codex
 本轮目标：在 Mac 端 60Hz/PCM 供流稳定的证据下，减少 Windows 本地 WebAudio 高水位治理造成的断音。

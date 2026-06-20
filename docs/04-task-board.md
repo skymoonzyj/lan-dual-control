@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W2/W3 Windows client boardSummary 复测矩阵：`test-windows-client-browser --boardSummary` 会把页面“现场视频 / 现场声音”提炼成脱敏 `W2W3Retest=video=... audio=...`，真实连接时同一摘要继续带 surface / `h264Errors` / FPS / 声音状态；discover diagnostics 回归先红于缺少 `W2W3Retest=`，再绿于包含 `video=实收 20.1 FPS`、`audio=队列 120 ms` 和 `queue-overflow-trim-future`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 控制端消费 Agent Link presence endpoint fallback：Mac 提醒/值守文本里的 `presence endpoint/API/接口 404` 或不可用会显示为“presence 接口未启用”，同段带 `state.userPresence` 为准时进入证据“仍以 state.userPresence 为准”；页面自测先红于两个提示都为空，再绿于 `test-windows-client-browser --diagnosticsOnly`。只读解析，不运行联络板命令、不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 控制端消费 `MacScriptHelpStatus=` 稳定标签：`ok` 显示为“Mac 脚本 help 自检已通过”证据，`failed` 显示为“Mac 脚本 help 自检失败”风险；页面自测先红于 ok/failed 没有可见摘要，再绿于 `test-windows-client-browser --diagnosticsOnly`。只读解析，不运行 Mac 脚本、不改协议、不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 控制端 UserPresence away 可见化：Mac 提醒/值守文本里的 `UserPresence=away`、`UserPresenceAction=no-auth-only` 和 `BLOCKED_BY_USER_AWAY` 会被翻译成“用户不在 / 只做无授权任务”，同步进入 Mac 提醒区、值守摘要和复制/导出诊断；页面自测先红于缺少提示，再绿于 `test-windows-client-browser --diagnosticsOnly`。只读解析，不改协议、不认证、不请求或发送密码、不发 input/inject。

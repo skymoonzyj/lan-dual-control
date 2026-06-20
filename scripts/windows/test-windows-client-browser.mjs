@@ -272,6 +272,24 @@ function compactBoardSummaryText(value, maxLength = 180) {
     .replace(/(--(?:password|token|secret))\s+\S+/gi, "$1 <hidden>");
 }
 
+function stripLiveExportPrefix(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^-\s*现场(?:视频|声音)(?:统计)?：\s*/, "")
+    .replace(/^开启\s*·\s*/, "")
+    .trim();
+}
+
+function makeW2W3RetestSummary(summary) {
+  const parts = [];
+  const video = stripLiveExportPrefix(summary.liveVideo || "");
+  const audio = stripLiveExportPrefix(summary.liveAudio || "");
+  if (video) parts.push(`video=${compactBoardSummaryText(video, 180)}`);
+  if (audio) parts.push(`audio=${compactBoardSummaryText(audio, 180)}`);
+  if (summary.h264Errors !== "") parts.push(`h264Errors=${summary.h264Errors}`);
+  return parts.length ? `W2W3Retest=${parts.join(", ")}` : "";
+}
+
 function makeBoardSummary(summary) {
   const checks = Array.from(summary.checks || []);
   const checkText = checks.length ? checks.join(",") : "none";
@@ -287,6 +305,8 @@ function makeBoardSummary(summary) {
   if (!summary.discoveryDiagnostics && !summary.uiDiagnostics && summary.diagnostics) {
     details.push(`diag=${compactBoardSummaryText(summary.diagnostics, 140)}`);
   }
+  const w2w3Retest = makeW2W3RetestSummary(summary);
+  if (w2w3Retest) details.push(w2w3Retest);
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
   if (summary.surface) details.push(`surface=${summary.surface}`);
@@ -352,6 +372,9 @@ function windowsClientSnapshotExpression() {
     const status = text("#statusText");
     const remote = text("#remoteStatusText");
     const audio = text("#audioText");
+    const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
+    const exportLines = exportText.split(/\r?\n/);
+    const exportLine = (prefix) => exportLines.find((line) => line.startsWith(prefix)) || "";
     const logs = [...document.querySelectorAll("#eventLog li")]
       .slice(0, 10)
       .map((item) => item.innerText.replace(/\\s+/g, " "));
@@ -366,6 +389,8 @@ function windowsClientSnapshotExpression() {
       h264DecoderErrors: window.state?.h264DecoderErrorCount ?? 0,
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
+      liveVideo: exportLine("- 现场视频：") || exportLine("- 现场视频统计："),
+      liveAudio: exportLine("- 现场声音：") || exportLine("- 现场声音统计："),
       canvasVisible: canvas?.classList.contains("is-visible") || false,
       canvasWidth: canvas?.width || 0,
       canvasHeight: canvas?.height || 0,
@@ -6580,6 +6605,8 @@ async function verifyReconnectControls(session) {
           exportChecks,
           macReachabilityLine: exportText.split("\\n").find((line) => line.startsWith("- Mac 值守：")) || "",
           macAlertDetailLine: exportText.split("\\n").find((line) => line.startsWith("- Mac 提醒详情：")) || "",
+          liveVideoLine: exportText.split("\\n").find((line) => line.startsWith("- 现场视频：")) || "",
+          liveAudioLine: exportText.split("\\n").find((line) => line.startsWith("- 现场声音：")) || "",
           copiedTextHasLocalHostStatus: copiedText.includes("- 本机被控：桌面壳托管运行中"),
           copiedTextMasksLocalHostOutput: !copiedText.includes("should-not-export"),
           calls,
@@ -7072,6 +7099,8 @@ async function run() {
     fps: "",
     audio: "",
     surface: "",
+    liveVideo: "",
+    liveAudio: "",
     h264Errors: "",
     error: "",
   };
@@ -7200,6 +7229,8 @@ async function run() {
       `Keyboard mapping: Ctrl+C -> ${keyboardMappingCheck.copy.modifiers.join("+")} / ${keyboardMappingCheck.copy.shortcutAction}; custom=${keyboardMappingCheck.custom.modifiers.join("+")}`,
     );
     const reconnectControlsCheck = await verifyReconnectControls(session);
+    summary.liveVideo = reconnectControlsCheck.liveVideoLine || summary.liveVideo;
+    summary.liveAudio = reconnectControlsCheck.liveAudioLine || summary.liveAudio;
     summary.checks.push("reconnect");
     print(
       "OK",
@@ -7316,6 +7347,9 @@ async function run() {
     summary.diagnostics = snapshot.diagnostics;
     summary.uiDiagnostics = snapshot.diagnostics;
     summary.fps = snapshot.metricFps;
+    summary.audio = snapshot.audio || summary.audio;
+    summary.liveVideo = snapshot.liveVideo || summary.liveVideo;
+    summary.liveAudio = snapshot.liveAudio || summary.liveAudio;
     summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
     summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
     summary.checks.push("connection");
@@ -7373,6 +7407,7 @@ async function run() {
         check: async (value) => value.audio.includes("播放") ? value : null,
       });
       summary.audio = audioSnapshot.audio;
+      summary.liveAudio = audioSnapshot.liveAudio || summary.liveAudio;
       summary.checks.push("audio");
       print("OK", `Audio: ${audioSnapshot.audio}`);
     }
