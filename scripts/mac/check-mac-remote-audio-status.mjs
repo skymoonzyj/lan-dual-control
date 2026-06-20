@@ -6,9 +6,11 @@ import https from "node:https";
 const defaults = {
   host: "127.0.0.1",
   port: 43770,
+  server: "http://192.168.31.68:17888",
   timeoutMs: 2500,
   json: false,
   boardSummary: false,
+  sendStatus: false,
 };
 
 function helpRequested(argv) {
@@ -26,7 +28,9 @@ passwords, does not authenticate, does not send input, and does not inject.
 Options:
   --host <host>      Mac host discovery host. Default: ${defaults.host}
   --port <port>      Mac host discovery port. Default: ${defaults.port}
+  --server <url>     Agent Link Board URL for --sendStatus. Default: ${defaults.server}
   --timeoutMs <ms>   Discovery/volume-read timeout. Default: ${defaults.timeoutMs}
+  --sendStatus       Post the current secret-free summary to Agent Link Board.
   --json             Print one machine-readable JSON object.
   --boardSummary     Print one secret-free Agent Link Board summary line.
   --help, -h         Show this help without probing anything.
@@ -45,8 +49,13 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary") {
+    if (token === "--json" || token === "--boardSummary" || token === "--sendStatus") {
       args[token.slice(2)] = true;
+      continue;
+    }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next;
+      index += 1;
       continue;
     }
     if (token === "--host" && next && !next.startsWith("--")) {
@@ -67,6 +76,7 @@ function parseArgs(argv) {
     throw new Error(`Unknown argument: ${token}`);
   }
   args.host = normalizedText(args.host || defaults.host);
+  args.server = normalizedText(args.server || defaults.server).replace(/\/+$/, "");
   return args;
 }
 
@@ -107,6 +117,42 @@ function requestJson(url, timeoutMs) {
     });
     request.on("timeout", () => request.destroy(new Error(`timeout after ${timeoutMs}ms`)));
     request.on("error", reject);
+  });
+}
+
+function postJson(url, payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const parsed = typeof url === "string" ? new URL(url) : url;
+    const body = JSON.stringify(payload);
+    const client = parsed.protocol === "https:" ? https : http;
+    const request = client.request(parsed, {
+      method: "POST",
+      timeout: timeoutMs,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    }, (response) => {
+      let responseBody = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+      response.on("end", () => {
+        if ((response.statusCode || 0) < 200 || (response.statusCode || 0) >= 300) {
+          reject(new Error(`HTTP ${response.statusCode || 0}`));
+          return;
+        }
+        try {
+          resolve(responseBody ? JSON.parse(responseBody) : { ok: true });
+        } catch {
+          resolve({ ok: true });
+        }
+      });
+    });
+    request.on("timeout", () => request.destroy(new Error(`timeout after ${timeoutMs}ms`)));
+    request.on("error", reject);
+    request.end(body);
   });
 }
 
@@ -319,6 +365,20 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
+function boardStatusUrl(server) {
+  const url = new URL(server);
+  url.pathname = "/api/status";
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
+function boardStatusForReport(report) {
+  if (report.status === "local-playback-active") return "blocked-local-output";
+  if (report.status === "local-output-muted") return "candidate-manual-muted";
+  return safeToken(report.status);
+}
+
 function printPlain(report) {
   console.log("Mac remote audio status");
   console.log(`- status: ${report.status}`);
@@ -350,6 +410,21 @@ async function buildReport(args) {
   return report;
 }
 
+async function sendStatus(args, report) {
+  try {
+    await postJson(boardStatusUrl(args.server), {
+      device: "Mac Remote Audio",
+      role: "Mac 端",
+      status: boardStatusForReport(report),
+      note: report.boardSummary || makeBoardSummary(report),
+    }, args.timeoutMs);
+    report.postStatus = { ok: true };
+  } catch (error) {
+    report.postStatus = { ok: false, error: error.message };
+  }
+  return report.postStatus;
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -361,6 +436,9 @@ async function main() {
     return;
   }
   const report = await buildReport(args);
+  if (args.sendStatus) {
+    await sendStatus(args, report);
+  }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
@@ -368,7 +446,7 @@ async function main() {
   } else {
     printPlain(report);
   }
-  process.exitCode = report.status === "local-output-muted" ? 0 : 1;
+  process.exitCode = report.status === "local-output-muted" && (!args.sendStatus || report.postStatus?.ok) ? 0 : 1;
 }
 
 main().catch((error) => {

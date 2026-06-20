@@ -163,6 +163,37 @@ async function withFakeMacHost(discoveryPayload, callback) {
   }
 }
 
+async function withFakeAgentLinkBoard(callback) {
+  const posts = [];
+  const server = createServer((request, response) => {
+    if (request.url === "/api/status" && request.method === "POST") {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        posts.push({ path: request.url, body: JSON.parse(body || "{}") });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+    response.writeHead(404).end("not found");
+  });
+  await new Promise((resolve, reject) => {
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    await callback(`http://127.0.0.1:${port}`, posts);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
 function baseDiscovery(overrides = {}) {
   return {
     platform: "macos",
@@ -199,6 +230,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0\n${outputOf(result)}`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--boardSummary", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
     assertIncludes(result.stdout, "no volume changes", `${script} ${flag}`);
     assertSafeOutput(outputOf(result), `${script} ${flag}`);
@@ -260,6 +292,36 @@ async function checkUnknownVolumeBlocksClaim(args) {
   print("OK", "Unknown local output state blocks remote-only claims");
 }
 
+async function checkSendStatusPostsSafeBoardSummary(args) {
+  await withFakeAgentLinkBoard(async (server, posts) => {
+    await withFakeMacHost(baseDiscovery(), async ({ host, port }) => {
+      await withFakeOsascript("output volume:42, input volume:50, alert volume:100, output muted:false", async (env) => {
+        const result = await runAsync([
+          "--host", host,
+          "--port", String(port),
+          "--timeoutMs", "1000",
+          "--server", server,
+          "--sendStatus",
+          "--boardSummary",
+        ], args, env);
+        assert(result.status !== 0, `sendStatus audible should keep non-zero blocker exit\n${outputOf(result)}`);
+        assert(posts.length === 1, `sendStatus should post one status: ${JSON.stringify(posts)}`);
+        const post = posts[0];
+        assert(post.path === "/api/status", `sendStatus should post /api/status: ${JSON.stringify(posts)}`);
+        assert(post.body.device === "Mac Remote Audio", `device mismatch: ${JSON.stringify(post.body)}`);
+        assert(post.body.role === "Mac 端", `role mismatch: ${JSON.stringify(post.body)}`);
+        assert(post.body.status === "blocked-local-output", `status mismatch: ${JSON.stringify(post.body)}`);
+        assertIncludes(post.body.note || "", "MacRemoteAudioStatus=status=local-playback-active", "sendStatus note");
+        assertIncludes(post.body.note || "", "localOutput=audible", "sendStatus note");
+        assertIncludes(post.body.note || "", "Safety=read-only,no-volume-change,no-password,no-input,no-inject", "sendStatus note");
+        assertIncludes(result.stdout, "MacRemoteAudioStatus=status=local-playback-active", "sendStatus stdout");
+        assertSafeOutput(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus remote audio");
+      });
+    });
+  });
+  print("OK", "Mac remote audio status can post a safe Agent Link status");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -274,6 +336,7 @@ async function main() {
   await checkAudibleLocalOutput(args);
   await checkMutedLocalOutput(args);
   await checkUnknownVolumeBlocksClaim(args);
+  await checkSendStatusPostsSafeBoardSummary(args);
   print("OK", "Mac remote audio status self-test passed");
 }
 

@@ -3,9 +3,11 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
-
 ## 2026-06-20 W2 Windows H.264 恢复暂停追溯诊断
 - Windows 控制端现在会在短时间多次 H.264/JPEG fallback-recovery 后保留 `h264FallbackRecoveryPauseCount`，现场诊断、复制/导出诊断会显示 `恢复暂停 <n> 次`，当前暂停期间另显示 `暂停剩余 <秒>s`。这样用户晚几秒复制诊断时，仍能知道控制端曾因反复恢复循环主动暂停 H.264 自动恢复、保持 JPEG 保画面。页面自测先红于缺少 `恢复暂停 1 次`，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject。
+
+## 2026-06-20 M1 Mac Remote Audio sendStatus
+- `check-mac-remote-audio-status` 新增 `--sendStatus --server <Agent Link Board>`：完成只读 `/discovery` 和本机 `get volume settings` 后，会把当前 `MacRemoteAudioStatus=` 摘要发布到 Agent Link Board 的 `Mac Remote Audio` 状态。`local-playback-active` 上板为 `blocked-local-output`，`local-output-muted` 上板为 `candidate-manual-muted`；无论哪种都只说明当前远端独占声音门禁状态，不代表 remote-only 已启用。脚本仍不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject。
 
 ## 2026-06-20 C3 Agent Link Board presence API
 - `scripts/codex-link-server.mjs` 现在保留 state 文件里的 `userPresence` 和 `pinnedTasks`，避免联络板服务重启后把“用户在场/不在场”和置顶任务清掉；新增 `POST /api/presence`，只接受 `present/away` 及常见中英文同义词，写入结构化 `state.userPresence` 并追加 `presence` 事件。`scripts/codex-link-client.mjs` 新增 `presence --status present|away --updatedBy <agent> --reason <text>`，可从命令行同步用户是否在场。该入口只同步协作状态，不代表可以跳过提示音、目标说明、安全边界或预计耗时；不认证、不请求或发送密码、不发 input/inject。

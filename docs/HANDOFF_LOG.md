@@ -41,6 +41,31 @@
 是否改了协议：否。
 是否需要另一端配合：暂不需要；后续真机观感测试需要用户在场。
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 M1 Mac Remote Audio sendStatus
+开发端：Mac Codex
+本轮目标：让 Mac Remote Audio 的只读门禁状态能主动刷新到 Agent Link Board，避免旧 `Mac Remote Audio` 摘要误导远端独占声音流程。
+完成内容：
+- `check-mac-remote-audio-status` 新增 `--server <url>` 和 `--sendStatus`，向 `/api/status` 发布 `device="Mac Remote Audio"`、`role="Mac 端"`、状态和当前 `MacRemoteAudioStatus=` boardSummary。
+- `local-playback-active` 映射为 `blocked-local-output`；`local-output-muted` 映射为 `candidate-manual-muted`，继续要求音频 smoke 和恢复路径。
+- `--help` 和自测覆盖 `--sendStatus`，假通讯板校验 POST body 不含密码、auth、input/inject 或系统音量修改命令。
+修改文件：
+- `scripts/mac/check-mac-remote-audio-status.mjs`
+- `scripts/mac/test-mac-remote-audio-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-remote-audio-status.mjs --timeoutMs 10000` 先失败于 `--help` 缺少 `--sendStatus`。
+- 绿灯：`node scripts/mac/test-mac-remote-audio-status.mjs --timeoutMs 10000` 通过，并确认 audible 本机输出会发布 `blocked-local-output` 到假 `/api/status`。
+遗留问题：这只是状态刷新能力，不会静音 Mac、不切输出设备、不证明 remote-only；真实远端独占声音仍需用户明确同意、音频 smoke 和恢复路径。
+下一步建议：开工第一屏或本机音量状态变化后，Mac 端可运行 `check-mac-remote-audio-status --sendStatus --boardSummary` 刷新通讯板。
+是否改了协议：否；只新增 Mac 侧脚本上板参数。
+是否需要另一端配合：暂不需要；Windows 已能消费 `MacRemoteAudioStatus=`。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W2 Windows H.264 fallback/recovery 循环诊断
