@@ -49,6 +49,170 @@ function makeRuntimeInfo(startedAtMs, buildId) {
   };
 }
 
+function sanitizeRemoteAddress(address = "") {
+  const value = String(address || "").trim();
+  if (value.startsWith("::ffff:")) return value.slice("::ffff:".length);
+  return value || "unknown";
+}
+
+function sanitizeSessionForDiagnostics(session = {}) {
+  return {
+    width: Number(session.width) || 0,
+    height: Number(session.height) || 0,
+    fps: Number(session.fps) || 0,
+    requestedFps: Number(session.requestedFps) || 0,
+    maxScreenFps: Number(session.maxScreenFps) || 0,
+    maxBandwidthKbps: Number(session.maxBandwidthKbps) || 0,
+    qualityPreset: String(session.qualityPreset || ""),
+    videoCodec: String(session.videoCodec || ""),
+    videoEncoding: String(session.videoEncoding || ""),
+    videoTransport: String(session.videoTransport || ""),
+    codecString: String(session.codecString || ""),
+    h264Encoder: String(session.h264Encoder || ""),
+    audioCodec: String(session.audioCodec || ""),
+    audioEncoding: String(session.audioEncoding || ""),
+    audioMode: String(session.audioMode || ""),
+    audioEnabled: Boolean(session.audioEnabled),
+    sampleRate: Number(session.sampleRate) || 0,
+    channels: Number(session.channels) || 0,
+    activeDisplayId: String(session.activeDisplayId || ""),
+    displayName: String(session.displayName || ""),
+    hostMode: String(session.hostMode || ""),
+    capturePipeline: String(session.capturePipeline || ""),
+    requestedScreenMode: String(session.requestedScreenMode || ""),
+    wgcFallbackReason: String(session.wgcFallbackReason || ""),
+  };
+}
+
+function makeSessionDiagnostics(limit = 10) {
+  const sessions = [];
+  let totalConnections = 0;
+
+  const nowIso = () => new Date().toISOString();
+  const publicSession = (record) => ({
+    id: record.id,
+    remoteAddress: record.remoteAddress,
+    connectedAt: record.connectedAt,
+    updatedAt: record.updatedAt,
+    closedAt: record.closedAt || "",
+    stage: record.stage,
+    helloAt: record.helloAt || "",
+    authenticatedAt: record.authenticatedAt || "",
+    authFailedAt: record.authFailedAt || "",
+    sessionAt: record.sessionAt || "",
+    firstVideoFrameAt: record.firstVideoFrameAt || "",
+    lastVideoFrameAt: record.lastVideoFrameAt || "",
+    firstAudioFrameAt: record.firstAudioFrameAt || "",
+    lastAudioFrameAt: record.lastAudioFrameAt || "",
+    authenticated: Boolean(record.authenticated),
+    failedAuthAttempts: Number(record.failedAuthAttempts) || 0,
+    videoFramesSent: Number(record.videoFramesSent) || 0,
+    audioFramesSent: Number(record.audioFramesSent) || 0,
+    closeReason: record.closeReason || "",
+    session: record.session || null,
+  });
+
+  function touch(record, fields = {}) {
+    if (!record) return null;
+    Object.assign(record, fields, { updatedAt: nowIso() });
+    return record;
+  }
+
+  return {
+    start(remoteAddress = "") {
+      totalConnections += 1;
+      const connectedAt = nowIso();
+      const record = {
+        id: `win-session-${totalConnections}`,
+        remoteAddress: sanitizeRemoteAddress(remoteAddress),
+        connectedAt,
+        updatedAt: connectedAt,
+        closedAt: "",
+        stage: "connected",
+        authenticated: false,
+        failedAuthAttempts: 0,
+        videoFramesSent: 0,
+        audioFramesSent: 0,
+        closeReason: "",
+        session: null,
+      };
+      sessions.unshift(record);
+      if (sessions.length > limit) sessions.length = limit;
+      return record;
+    },
+    markHello(record) {
+      touch(record, {
+        stage: record?.closedAt ? record.stage : "hello",
+        helloAt: record?.helloAt || nowIso(),
+      });
+    },
+    markAuth(record, ok, failedAuthAttempts = 0) {
+      touch(record, ok
+        ? {
+          stage: record?.closedAt ? record.stage : "authenticated",
+          authenticated: true,
+          authenticatedAt: record?.authenticatedAt || nowIso(),
+          failedAuthAttempts: 0,
+        }
+        : {
+          stage: record?.closedAt ? record.stage : "auth-failed",
+          authenticated: false,
+          authFailedAt: nowIso(),
+          failedAuthAttempts,
+        });
+    },
+    markSession(record, session) {
+      if (!record) return;
+      const nextStage = record.closedAt
+        ? record.stage
+        : record.stage === "streaming"
+          ? "streaming"
+          : "session";
+      touch(record, {
+        stage: nextStage,
+        sessionAt: record.sessionAt || nowIso(),
+        session: sanitizeSessionForDiagnostics(session),
+      });
+    },
+    markVideoFrame(record) {
+      if (!record || record.closedAt) return;
+      const timestamp = nowIso();
+      touch(record, {
+        stage: "streaming",
+        firstVideoFrameAt: record.firstVideoFrameAt || timestamp,
+        lastVideoFrameAt: timestamp,
+        videoFramesSent: (Number(record.videoFramesSent) || 0) + 1,
+      });
+    },
+    markAudioFrame(record) {
+      if (!record || record.closedAt) return;
+      const timestamp = nowIso();
+      touch(record, {
+        firstAudioFrameAt: record.firstAudioFrameAt || timestamp,
+        lastAudioFrameAt: timestamp,
+        audioFramesSent: (Number(record.audioFramesSent) || 0) + 1,
+      });
+    },
+    close(record, reason = "closed") {
+      if (!record || record.closedAt) return;
+      touch(record, {
+        stage: "closed",
+        closedAt: nowIso(),
+        closeReason: String(reason || "closed"),
+      });
+    },
+    snapshot() {
+      const recentSessions = sessions.map(publicSession);
+      return {
+        totalConnections,
+        activeConnections: sessions.filter((record) => !record.closedAt).length,
+        latestSession: recentSessions[0] || null,
+        recentSessions,
+      };
+    },
+  };
+}
+
 function makeMessageId(prefix = "winhost") {
   const random = Math.random().toString(16).slice(2, 8);
   return `${prefix}-${Date.now().toString(16)}-${random}`;
@@ -490,6 +654,8 @@ function createClient(socket, context) {
   let audioTimer = null;
   let authenticated = false;
   let failedAuthAttempts = 0;
+  const diagnostics = context.sessionDiagnostics;
+  const diagnosticSession = context.clientDiagnostics;
   const reverseControlMode = normalizeReverseControlMode(context.reverseControlMode);
   const reverseControlPolicy = makeReverseControlCapabilities(reverseControlMode);
   const reverseControlState = {
@@ -504,6 +670,10 @@ function createClient(socket, context) {
     socket.write(encodeTextFrame(JSON.stringify(makeEnvelope(message))));
   }
 
+  function closeDiagnostics(reason) {
+    diagnostics?.close(diagnosticSession, reason);
+  }
+
   function sendVideoFrame(message, nextSession) {
     const envelope = makeEnvelope(message);
     const binaryEnvelope = makeBinaryVideoEnvelope({
@@ -512,9 +682,11 @@ function createClient(socket, context) {
     });
     if (binaryEnvelope) {
       socket.write(encodeBinaryFrame(binaryEnvelope));
+      diagnostics?.markVideoFrame(diagnosticSession);
       return;
     }
     socket.write(encodeTextFrame(JSON.stringify(envelope)));
+    diagnostics?.markVideoFrame(diagnosticSession);
   }
 
   function stopVideoFrames() {
@@ -602,12 +774,14 @@ function createClient(socket, context) {
       const frame = context.audio.makeFrame(nextSession);
       if (frame) {
         send(frame);
+        diagnostics?.markAudioFrame(diagnosticSession);
       }
     }, intervalMs);
   }
 
   async function handleMessage(message) {
     if (message.type === "hello") {
+      diagnostics?.markHello(diagnosticSession);
       const clipboardCapabilities = context.clipboard.getCapabilities();
       send({
         type: "hello_ack",
@@ -640,6 +814,7 @@ function createClient(socket, context) {
       } else {
         failedAuthAttempts += 1;
       }
+      diagnostics?.markAuth(diagnosticSession, ok, failedAuthAttempts);
       const attemptsRemaining = Math.max(0, maxAuthAttempts - failedAuthAttempts);
       const shouldClose = !ok && attemptsRemaining === 0;
       send({
@@ -667,6 +842,7 @@ function createClient(socket, context) {
       const screen = withVideoTransport(context.screen.negotiate(message), message);
       const audio = context.audio.negotiate(message);
       session = makeSessionAnswer(message, screen, audio, context.clipboard);
+      diagnostics?.markSession(diagnosticSession, session);
       send(session);
       if (message.wantVideo !== false) {
         startVideoFrames(session);
@@ -684,6 +860,7 @@ function createClient(socket, context) {
           audioEnabled: Boolean(message.audio),
           audioVolume: Number(message.audioVolume) || session.audioVolume || 80,
         };
+        diagnostics?.markSession(diagnosticSession, session);
         startVideoFrames(session);
         if (session.audioEnabled) {
           startAudioFrames(session);
@@ -734,6 +911,7 @@ function createClient(socket, context) {
           audioCodec: message.enabled ? (message.codec ?? session.audioCodec ?? "opus") : "none",
           audioEncoding: message.enabled ? (message.encoding ?? session.audioEncoding) : "none",
         };
+        diagnostics?.markSession(diagnosticSession, session);
       }
       if (message.enabled && !message.muted) {
         startAudioFrames(session ?? { audioEnabled: true, audioCodec: message.codec ?? "opus" });
@@ -847,6 +1025,7 @@ function createClient(socket, context) {
       if (frame.type === "close") {
         stopVideoFrames();
         stopAudioFrames();
+        closeDiagnostics("client-close-frame");
         socket.end();
         return;
       }
@@ -867,10 +1046,16 @@ function createClient(socket, context) {
     });
   });
 
-  socket.on("close", stopVideoFrames);
-  socket.on("close", stopAudioFrames);
-  socket.on("error", stopVideoFrames);
-  socket.on("error", stopAudioFrames);
+  socket.on("close", () => {
+    stopVideoFrames();
+    stopAudioFrames();
+    closeDiagnostics("socket-close");
+  });
+  socket.on("error", () => {
+    stopVideoFrames();
+    stopAudioFrames();
+    closeDiagnostics("socket-error");
+  });
 }
 
 export function createWindowsHostServer({
@@ -890,6 +1075,7 @@ export function createWindowsHostServer({
   const normalizedReverseControlMode = normalizeReverseControlMode(reverseControlMode);
   const reverseControlPolicy = makeReverseControlCapabilities(normalizedReverseControlMode);
   const reverseControlGrant = makeReverseControlGrantManager();
+  const sessionDiagnostics = makeSessionDiagnostics();
 
   const server = createServer((request, response) => {
     const corsHeaders = {
@@ -943,6 +1129,17 @@ export function createWindowsHostServer({
         },
         lastSeenAt: new Date().toISOString(),
       }));
+      return;
+    }
+
+    if (pathname === "/diagnostics") {
+      sendJson(response, 200, {
+        ok: true,
+        type: "lan_dual_windows_host_diagnostics",
+        runtime: runtime(),
+        safety: "no-password,no-raw-auth,no-input-inject",
+        sessionDiagnostics: sessionDiagnostics.snapshot(),
+      }, corsHeaders);
       return;
     }
 
@@ -1020,6 +1217,7 @@ export function createWindowsHostServer({
     ].join("\r\n"));
 
     logger.info(`收到控制端连接：${request.socket.remoteAddress ?? "unknown"}`);
+    const clientDiagnostics = sessionDiagnostics.start(request.socket.remoteAddress ?? "unknown");
     createClient(socket, {
       password,
       logger,
@@ -1030,6 +1228,8 @@ export function createWindowsHostServer({
       runtime,
       reverseControlMode: normalizedReverseControlMode,
       reverseControlGrant,
+      sessionDiagnostics,
+      clientDiagnostics,
     });
   });
 

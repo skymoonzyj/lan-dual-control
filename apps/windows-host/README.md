@@ -17,6 +17,7 @@
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表；`/discovery` 和 `hello_ack` 会带可选 `runtime` 诊断，显示当前进程 PID、启动时间、运行时长和 build id，方便确认没有连到旧进程。
 - `/discovery.capabilities.reverseControlMode` 和 `hello_ack.capabilities.reverseControlMode` 会声明当前反控策略：默认 `deny`，可选 `accept` 或 `disabled`；`reverseControlPolicy` 会说明是否需要确认、是否为实验自动同意；`/discovery.capabilities.reverseControlGrant` 会显示 Windows 本机是否已打开一次性临时授权窗口，也会用 `lastRequest` 暂存最近一次反控请求的 requestId、来源、时间和安全状态，不保存请求正文或密码。
 - `/discovery.capabilities.videoTransports` 会声明当前 Windows host 支持 `json`、`binary-jpeg` 和 `binary-h264`；`session_answer` / `display_settings_ack` 会回传实际 `videoTransport`，方便 Mac client 和自检脚本确认是否启用了二进制视频路径。
+- `/diagnostics` 是只读会话诊断端点，返回最近 WebSocket 会话的连接阶段、认证是否通过、协商分辨率/刷新率/编码/传输、视频/音频帧计数和关闭时间；它不保存连接密码、不输出原始 `auth_request`，适合 Mac browser smoke 超时时判断 Windows host 是否已经收到会话和首帧。`start-windows-host --status --boardSummary` 会把它压缩成 `WindowsHostSession=...` 无密摘要。
 
 ## 运行
 

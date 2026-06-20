@@ -671,6 +671,24 @@ function windowsHostBuildStatusSummary(status = {}) {
   return `WindowsHostBuildStatus=${buildStatus.status} runtimeBuild=${buildStatus.runtimeBuild} currentBuild=${buildStatus.currentBuild} hostRuntimeChanges=${buildStatus.hostRuntimeChanges}${restart}`;
 }
 
+function latestWindowsHostSession(diagnostics = {}) {
+  return diagnostics?.sessionDiagnostics?.latestSession
+    || diagnostics?.sessionDiagnostics?.recentSessions?.[0]
+    || null;
+}
+
+function windowsHostSessionSummary(status = {}) {
+  if (!status.windowsHostDiagnostics) return "WindowsHostSession=diagnostics-unavailable";
+  const session = latestWindowsHostSession(status.windowsHostDiagnostics);
+  if (!session) return "WindowsHostSession=none";
+  const auth = session.authenticated ? "ok" : Number(session.failedAuthAttempts) > 0 ? "failed" : "pending";
+  const negotiated = session.session
+    ? ` session=${Number(session.session.width) || 0}x${Number(session.session.height) || 0}@${Number(session.session.fps) || 0}Hz`
+    : "";
+  const closed = session.closedAt ? " closed=true" : " closed=false";
+  return `WindowsHostSession=stage:${session.stage || "unknown"} auth=${auth} videoFrames=${Number(session.videoFramesSent) || 0} audioFrames=${Number(session.audioFramesSent) || 0}${negotiated}${closed}`;
+}
+
 function windowsHostStartAction(args = {}) {
   return {
     status: "needs-local-password-prompt",
@@ -874,7 +892,9 @@ function makeBoardSummary(status) {
   const userEntryText = userEntry ? ` ${userEntry}.` : "";
   const buildStatus = windowsHostBuildStatusSummary(status);
   const buildStatusText = buildStatus ? ` ${buildStatus}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"};${buildStatusText} screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  const sessionStatus = status.windowsHostSessionSummary || windowsHostSessionSummary(status);
+  const sessionStatusText = sessionStatus ? ` ${sessionStatus}.` : "";
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"};${buildStatusText}${sessionStatusText} screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall}${userEntryText} WindowsSecureAuthPath=${status.windowsSecureAuthPath}.${firewallStatus}${firewallPreview} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -930,6 +950,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
       host: probeHost,
       port: args.port,
       url: `http://${probeHost}:${args.port}/discovery`,
+      diagnosticsUrl: `http://${probeHost}:${args.port}/diagnostics`,
     },
     currentBuildId: args.buildId,
     device: null,
@@ -938,6 +959,9 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     lanAddresses: getLanAddresses(),
     buildDiff: null,
     windowsHostBuildStatus: null,
+    windowsHostDiagnostics: null,
+    windowsHostDiagnosticsError: "",
+    windowsHostSessionSummary: "",
     macClientReadinessCommands: [],
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
     windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommand(),
@@ -982,7 +1006,16 @@ async function getStatus(args) {
 
   try {
     const discovery = await requestJson(status.probe.url, Math.min(args.timeoutMs, 3000));
-    return applyDiscoveryStatus(status, discovery, args);
+    applyDiscoveryStatus(status, discovery, args);
+    try {
+      status.windowsHostDiagnostics = await requestJson(status.probe.diagnosticsUrl, Math.min(args.timeoutMs, 3000));
+    } catch (diagnosticsError) {
+      status.windowsHostDiagnosticsError = diagnosticsError.message;
+      status.warnings.push(`Windows host diagnostics unavailable: ${compactText(diagnosticsError.message)}`);
+    }
+    status.windowsHostSessionSummary = windowsHostSessionSummary(status);
+    status.boardSummary = makeBoardSummary(status);
+    return status;
   } catch (error) {
     status.error = {
       message: error.message,
@@ -1047,6 +1080,7 @@ async function printStatus(args) {
     console.log(`[INFO] Input: ${discoveryInputSummary(discoveryLike)}`);
     console.log(`[INFO] Reverse control: ${reverseControlSummary(status.capabilities?.reverseControl)}`);
     console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discoveryLike)}`);
+    console.log(`[INFO] Session diagnostics: ${status.windowsHostSessionSummary || windowsHostSessionSummary(status)}`);
     for (const warning of status.warnings.filter((line) => !line.startsWith("Running Windows host build "))) {
       console.log(`[WARN] ${warning}`);
     }
@@ -1282,7 +1316,7 @@ function requestJson(url, timeoutMs) {
         try {
           resolveRequest(JSON.parse(body));
         } catch {
-          rejectRequest(new Error("discovery returned invalid JSON"));
+          rejectRequest(new Error("endpoint returned invalid JSON"));
         }
       });
     });

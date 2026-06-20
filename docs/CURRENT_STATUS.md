@@ -4,6 +4,10 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows host 会话诊断
+- Windows host 新增只读 `/diagnostics` JSON 端点：记录最近 WebSocket 会话的 `connected/hello/authenticated/session/streaming/closed` 阶段、认证是否通过、协商分辨率/刷新率/编码/传输、视频/音频帧计数和关闭时间；不保存连接密码、不回显 `auth_request` 原始消息、不发送 input/inject。
+- `start-windows-host --status --boardSummary` 在线时现在会读 `/diagnostics` 并输出 `WindowsHostSession=stage:<...> auth=<...> videoFrames=<n> audioFrames=<n> session=<WxH@Hz> closed=<true|false>`。Mac browser smoke 超时时，若这里已经是 `stage:streaming` 且 `videoFrames>0`，说明 Windows host 已完成认证、会话和首帧，下一步应查 Mac client/browser 等待条件或浏览器日志；若停在 `hello/auth-failed/session`，再按对应层排查。
+
 ## 2026-06-20 Windows host 构建状态摘要
 - `start-windows-host --status --boardSummary` 在线时现在会输出 `WindowsHostBuildStatus=`：`metadata-stale` 表示运行中 host 的 build metadata 旧但 Windows host 运行源码未变，`hostRuntimeChanges=0`，Mac 端不应把它当作连接阻塞；`restart-required` 表示 Windows host 运行源码已变化，需要 Windows 用户本机用 `Start-Windows-Host.cmd` 重启并输入临时密码；`unknown` 表示本地 git 无法检查旧 build。该字段同步保留 `runtimeBuild`、`currentBuild` 和 `hostRuntimeChanges`，不启动 host、不认证、不请求或发送密码、不发 input/inject。
 

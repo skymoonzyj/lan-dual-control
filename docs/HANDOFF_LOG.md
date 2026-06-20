@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows host 会话诊断
+开发端：Windows Codex
+本轮目标：给 Mac browser smoke 超时增加 Windows 侧无密证据，判断是否已完成认证、会话和首帧。
+完成内容：
+- Windows host 新增只读 `/diagnostics`，记录最近会话的 connected/hello/authenticated/session/streaming/closed 阶段、协商会话参数和视频/音频帧计数。
+- `start-windows-host --status --boardSummary` 在线摘要新增 `WindowsHostSession=stage:<...> auth=<...> videoFrames=<n> audioFrames=<n> session=<WxH@Hz> closed=<...>`。
+- 新增 `test-windows-host-diagnostics`，覆盖 `/diagnostics` secret-free、会话进度记录、`--status --boardSummary` 暴露 streaming 会话。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-diagnostics.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-host-diagnostics.mjs` 先失败于 `/diagnostics should return JSON`，再失败于缺少 `WindowsHostSession=stage:streaming`。
+- 绿灯：同一测试通过，确认诊断不含连接密码或原始 auth 消息。
+遗留问题：
+- 真实 Windows host 需要重启到新 build 后才会暴露 `/diagnostics`；当前运行中的旧 host 只会继续提供旧 `/discovery` 能力。
+下一步建议：
+- Mac 端 smoke 超时时先看 Windows `WindowsHostSession=`；若已到 `stage:streaming videoFrames>0`，优先查 Mac browser smoke 等待条件和浏览器日志。
+是否改了协议：否。新增只读 HTTP 诊断端点，不改 WebSocket 消息。
+是否需要另一端配合：需要 Mac 端在下次 smoke 超时后对照 `WindowsHostSession=` 判定卡在哪一层。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows host 构建状态摘要
 开发端：Windows Codex
 本轮目标：让 Mac/Windows 联调能区分 Windows host 运行时 metadata 旧和真正需要重启。
