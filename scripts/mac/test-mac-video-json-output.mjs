@@ -384,6 +384,9 @@ async function assertJsonSuccess(timeoutMs) {
     if (Number(payload.observation.h264.keyFramesWithParameterSets) < 1) {
       throw new Error(`JSON success should count H.264 keyframes with parameter sets.\n${result.stdout}`);
     }
+    if (Number(payload.observation.h264.keyFramesWithoutParameterSets) !== 0) {
+      throw new Error(`JSON success should count H.264 keyframes missing parameter sets.\n${result.stdout}`);
+    }
     if (payload.observation.h264.firstKeyFrameHasParameterSets !== true) {
       throw new Error(`JSON success should mark first H.264 keyframe parameter sets.\n${result.stdout}`);
     }

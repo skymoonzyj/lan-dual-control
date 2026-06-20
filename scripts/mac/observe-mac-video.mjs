@@ -735,6 +735,7 @@ function makeH264Observation(h264) {
     ppsFrames: h264.ppsFrames,
     idrFrames: h264.idrFrames,
     keyFramesWithParameterSets: h264.keyFramesWithParameterSets,
+    keyFramesWithoutParameterSets: Math.max(0, h264.keyFrames - h264.keyFramesWithParameterSets),
     firstNalTypes: h264.firstNalTypes,
     firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
     firstKeyFrameHasParameterSets: h264.firstKeyFrameHasParameterSets === true,

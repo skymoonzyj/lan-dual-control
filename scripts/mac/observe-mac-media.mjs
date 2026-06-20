@@ -728,6 +728,9 @@ function formatH264ProbeSummary(h264) {
   const frames = h264.frames || 0;
   const keyFrames = h264.keyFrames || 0;
   const deltaFrames = Number.isFinite(Number(h264.deltaFrames)) ? Number(h264.deltaFrames) : Math.max(0, frames - keyFrames);
+  const keyParamMiss = Number.isFinite(Number(h264.keyFramesWithoutParameterSets))
+    ? Number(h264.keyFramesWithoutParameterSets)
+    : Math.max(0, keyFrames - (h264.keyFramesWithParameterSets || 0));
   return [
     `h264Frames=${frames}`,
     `h264Key=${keyFrames}`,
@@ -736,6 +739,7 @@ function formatH264ProbeSummary(h264) {
     `pps=${h264.ppsFrames || 0}`,
     `idr=${h264.idrFrames || 0}`,
     `keyParam=${h264.keyFramesWithParameterSets || 0}`,
+    `keyParamMiss=${keyParamMiss}`,
     formatH264KeyParam("firstKeyParam", h264.firstKeyFrameHasParameterSets),
     formatH264KeyParam("lastKeyParam", h264.lastKeyFrameHasParameterSets),
     formatH264NalTypes("firstKeyNal", h264.firstKeyFrameNalTypes),

@@ -1159,7 +1159,9 @@ function formatMediaH264BoardSummary(details) {
   const ppsFrames = Number(h264.ppsFrames);
   const idrFrames = Number(h264.idrFrames);
   const keyParam = Number(h264.keyFramesWithParameterSets);
-  if (![frames, keyFrames, deltaFrames, spsFrames, ppsFrames, idrFrames, keyParam].every(Number.isFinite)) return "";
+  const keyParamMissRaw = Number(h264.keyFramesWithoutParameterSets);
+  const keyParamMiss = Number.isFinite(keyParamMissRaw) ? keyParamMissRaw : Math.max(0, keyFrames - keyParam);
+  if (![frames, keyFrames, deltaFrames, spsFrames, ppsFrames, idrFrames, keyParam, keyParamMiss].every(Number.isFinite)) return "";
   return [
     `h264Frames=${frames}`,
     `h264Key=${keyFrames}`,
@@ -1168,6 +1170,7 @@ function formatMediaH264BoardSummary(details) {
     `pps=${ppsFrames}`,
     `idr=${idrFrames}`,
     `keyParam=${keyParam}`,
+    `keyParamMiss=${keyParamMiss}`,
     formatH264KeyParamBoardSummary("firstKeyParam", h264.firstKeyFrameHasParameterSets),
     formatH264KeyParamBoardSummary("lastKeyParam", h264.lastKeyFrameHasParameterSets),
     formatH264NalTypesBoardSummary("firstKeyNal", h264.firstKeyFrameNalTypes),
