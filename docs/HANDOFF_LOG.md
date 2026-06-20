@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Agent Link CLI JSON 状态输出
+开发端：Mac Codex
+本轮目标：修复 `codex-link-client state --json` 仍输出人类文本的问题，让双方脚本可直接机器读取通讯板状态。
+完成内容：
+- `scripts/codex-link-client.mjs state --json` 现在输出 `/api/state` 原始 JSON；默认 `state` 仍保留原人类可读文本。
+- 新增 `scripts/test-codex-link-client.mjs`，用本机假 Agent Link Board 覆盖 `state --json` 纯 JSON 和默认文本输出不回退。
+修改文件：
+- `scripts/codex-link-client.mjs`
+- `scripts/test-codex-link-client.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/test-codex-link-client.mjs --timeoutMs 10000` 先失败于 `state --json did not print valid JSON: Unexpected token 'u', "updatedAt:"...`
+- 绿灯：`node scripts/test-codex-link-client.mjs --timeoutMs 10000`
+- 真实通讯板：`node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 state --json` 可被 `JSON.parse` 直接解析。
+遗留问题：
+- 暂无；`watch --once` 仍保持原文本事件流，不在本轮改动。
+下一步建议：
+- 双端脚本需要结构化读取通讯板时优先用 `state --json`，人工查看仍用默认 `state`。
+是否改了协议：否，只改 CLI 输出格式开关。
+是否需要另一端配合：不需要；Windows 端拉取后可直接使用。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 控 Mac 入口自动发现 Mac host

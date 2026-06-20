@@ -3,6 +3,10 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
+## 2026-06-20 协作 CLI
+- `node scripts/codex-link-client.mjs --server <Agent Link Board> state --json` 现在会输出可直接 `JSON.parse` 的 `/api/state` 原始 JSON；默认 `state` 仍输出人类可读文本，`watch --once` 事件流不变。新增 `scripts/test-codex-link-client.mjs` 覆盖假通讯板 JSON/text 两条路径；该改动只读通讯板，不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-20 Windows 收口
 - Windows 手工体验第一屏现在也会消费 `MacManualUx=` timeout/reconfirm 和 `MacClientManualChecklist=`：`check-windows-manual-ux-status --boardSummary` 会把超时旧 call 显示为 `WindowsManualUx=status=reconfirm`、`Next=AskMacReconfirmManualUxCall`，并输出安全的 `MacManualUxReconfirm=` 与 Mac client 页面手工清单；`--requireReady` 在该状态下非零退出，避免把过期窗口误当作可开始测试。解析拒绝 password/token/secret、`input_event`、`inject` 或自动发送伪造候选；Windows 不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 - Windows 手工体验第一屏现在有 PowerShell 7 包装入口：`scripts/windows/check-windows-manual-ux-status.ps1 -BoardSummary` 等价于 Node 只读检查，`-RequireReady -Json` 会在 waiting/reconfirm 状态非零退出；帮助覆盖 `-Help` / `-h`，包装脚本只透传 `-Server/-TimeoutMs/-BoardSummary/-Json/-RequireReady`，不认证、不请求或发送密码、不发 input/inject。

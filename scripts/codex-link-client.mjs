@@ -15,7 +15,7 @@ try {
   } else if (command === "watch") {
     await watch(args);
   } else if (command === "state") {
-    printState(await get(args, "/api/state"));
+    printState(await get(args, "/api/state"), args);
   } else if (command === "status") {
     await post(args, "/api/status", {
       device: args.device || args.from || "Codex",
@@ -113,7 +113,12 @@ async function request(options, method, path, body) {
   }
 }
 
-function printState(state) {
+function printState(state, options = {}) {
+  if (options.json) {
+    console.log(JSON.stringify(state, null, 2));
+    return;
+  }
+
   console.log(`updatedAt: ${state.updatedAt || ""}`);
   console.log("");
   console.log("currentCall:");
@@ -183,7 +188,7 @@ function sleep(ms) {
 function printHelp() {
   console.log(`Usage:
   node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
-  node scripts/codex-link-client.mjs --server http://host:17888 state
+  node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
   node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"
   node scripts/codex-link-client.mjs --server http://host:17888 call --from "Windows Codex" --need "Mac Codex" --goal "test" --ask "please verify"
