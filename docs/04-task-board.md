@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W3 Windows 音频缓冲状态实时可见化：页面声音状态行追加 `补缓冲`、`稳缓冲` 和 `重同步` 计数，帮助不复制诊断也能看到 WebAudio 队列自救状态；页面自测先红于 `bufferHealthStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W3 Windows 音频状态实时可见化：Windows 控制端页面声音状态行追加最近最大音频到达间隔和音频卡顿次数，复制/导出诊断继续保留完整平均/最大/卡顿明细；页面自测先红于 `arrivalGapStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W3 Windows 音频到达间隔诊断：Windows 控制端最近 2 秒记录 `audioFrameTimes`，复制/导出诊断“现场声音”输出 `平均间隔`、`最大间隔`、`音频卡顿` 和 `最大音频卡顿`，用于区分 Mac/网络供流抖动与本地 WebAudio 队列问题；页面自测先红于缺少到达间隔诊断，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。
 - [x] W2 Windows H.264 恢复暂停追溯诊断：短时间多次 H.264/JPEG fallback-recovery 后，Windows 控制端保留 `h264FallbackRecoveryPauseCount`，现场诊断/复制诊断显示 `恢复暂停 <n> 次`，暂停窗口内显示 `暂停剩余 <秒>s`；页面自测先红于缺少暂停次数，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 W3 Windows 音频缓冲状态实时可见化
+- Windows 控制端页面声音状态行现在会在本地 WebAudio 自救发生时直接显示 `补缓冲 <n>`、`稳缓冲 <n>` 和 `重同步 <n>`；最近最大音频到达间隔和音频卡顿仍继续显示。这样用户不复制诊断也能初步区分“音频帧到达抖动”和“本地播放队列正在补缓冲/重同步”。本轮页面自测先红于 `bufferHealthStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
+
 ## 2026-06-20 W3 Windows 音频状态实时可见化
 - Windows 控制端页面声音状态行现在会把最近 2 秒音频帧到达统计直接显示出来：样本足够时追加 `最大间隔 <ms> ms`，出现 >=120ms 长间隔时追加 `音频卡顿 <n>`。这样用户不复制诊断也能在远控窗口里直接看到声音供流是否有明显抖动；复制/导出诊断仍保留更完整的平均间隔、最大间隔、音频卡顿和最大音频卡顿。本轮页面自测先红于 `arrivalGapStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 

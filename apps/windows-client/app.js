@@ -3270,6 +3270,17 @@ function formatAudioArrivalStatusText() {
   return ` · ${parts.join(" · ")}`;
 }
 
+function formatAudioBufferHealthStatusText() {
+  const parts = [];
+  const resyncCount = Number(state.audioResyncCount) || 0;
+  const underrunCount = Number(state.audioUnderrunCount) || 0;
+  const stablePrebufferCount = Number(state.audioStablePrebufferCount) || 0;
+  if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
+  if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
+  if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
 function renderAudioStatusFromFrame(frame, options = {}) {
   if (!shouldRenderAudioStatus(options)) return false;
   state.audioLastStatusUpdateAt = performance.now();
@@ -3283,8 +3294,9 @@ function renderAudioStatusFromFrame(frame, options = {}) {
       ? " · 等待播放"
       : "";
   const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
+  const bufferHealthText = formatAudioBufferHealthStatusText();
   const arrivalText = formatAudioArrivalStatusText();
-  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}${arrivalText}`;
+  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}${bufferHealthText}${arrivalText}`;
   syncFloatingControlStatus();
 
   if (state.audioFrames === 1 || state.audioFrames % 20 === 0) {

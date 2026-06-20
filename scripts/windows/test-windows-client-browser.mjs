@@ -6574,6 +6574,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const arrivalGapStatusVisible =
           arrivalGapStatusText.includes("最大间隔 220 ms") &&
           arrivalGapStatusText.includes("音频卡顿 2");
+        const bufferHealthStatusVisible =
+          arrivalGapStatusText.includes("补缓冲 2") &&
+          arrivalGapStatusText.includes("稳缓冲 1");
         const adaptivePrebuffered =
           adaptiveUnderrunPlayed &&
           adaptiveUnderrunStart >= 10.315 &&
@@ -6612,7 +6615,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && flushedOldQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -6624,6 +6627,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           arrivalGapExportText,
           arrivalGapStatusVisible,
           arrivalGapStatusText,
+          bufferHealthStatusVisible,
           adaptiveUnderrunStart,
           adaptiveUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,

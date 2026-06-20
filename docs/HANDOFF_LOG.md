@@ -16,6 +16,19 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W3 Windows 音频缓冲状态实时可见化
+开发端：Windows Codex
+本轮目标：让 Windows 控制端页面声音状态行实时显示本地 WebAudio 队列自救状态。
+完成内容：页面声音状态行追加补缓冲、稳缓冲和重同步计数；保留最大间隔/音频卡顿显示；页面自测补红绿断言。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 bufferHealthStatusVisible=false；绿灯 node --check app/test 与 test-windows-client-browser --diagnosticsOnly 通过。
+遗留问题：只增强页面可见性，不改变 Mac 采集、网络传输、WebAudio 播放策略或 remote-only 声音路径。
+下一步建议：真实听感测试时先看页面声音行的最大间隔/音频卡顿/补缓冲/稳缓冲/重同步，再决定查供流端还是播放队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实听感仍需要用户现场确认。
+
 
 ## 2026-06-20 Windows Codex
 
