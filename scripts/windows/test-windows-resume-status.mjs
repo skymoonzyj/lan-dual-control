@@ -10,6 +10,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const script = "scripts/windows/check-windows-resume-status.mjs";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
+const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
 
 const defaults = {
   timeoutMs: 30000,
@@ -612,7 +613,9 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--boardSummary"), "mock JSON client real retest should be board-safe");
     assert(!String(payload.commands?.windowsClientRetestBoardSummaryCommand || "").includes("--password"), "mock JSON client real retest should not include password argv");
     assert(payload.commands?.windowsClientRetestUserEntryCommand === windowsClientRetestUserEntryCommand, "mock JSON should include Windows client real retest root entry");
+    assert(payload.commands?.windowsClientRetestAndPostUserEntryCommand === windowsClientRetestAndPostUserEntryCommand, "mock JSON should include Windows client retest-and-post root entry");
     assert(String(payload.boardSummary || "").includes(`WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`), "mock JSON board summary should include Windows client real retest root entry");
+    assert(String(payload.boardSummary || "").includes(`WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`), "mock JSON board summary should include Windows client retest-and-post root entry");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client real retest PowerShell command");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client real retest PowerShell should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client real retest PowerShell should use the discovered Mac port");
@@ -847,6 +850,7 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "WinClientRetest=", "board summary");
     assertIncludes(result.stdout, `WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`, "board summary");
+    assertIncludes(result.stdout, `WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`, "board summary");
     assertIncludes(result.stdout, "--promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "WinClientRetestPs=", "board summary");
     assertIncludes(result.stdout, "-PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000", "board summary");
@@ -973,6 +977,61 @@ async function checkWindowsClientRetestRootEntry(args) {
   assertIncludes(result.stdout, "-RequireH264", `${windowsClientRetestUserEntryCommand} -Help`);
   assertNotIncludes(result.stdout + result.stderr, "Mac host password:", `${windowsClientRetestUserEntryCommand} -Help should not prompt for password`);
   assertNotIncludes(result.stdout + result.stderr, "test-password", `${windowsClientRetestUserEntryCommand} -Help`);
+  const andPostEntryPath = resolve(repoRoot, windowsClientRetestAndPostUserEntryCommand);
+  let andPostContent = "";
+  try {
+    andPostContent = await readFile(andPostEntryPath, "utf8");
+  } catch (error) {
+    assert(false, `missing Windows client retest-and-post root entry ${windowsClientRetestAndPostUserEntryCommand}: ${error.message}`);
+  }
+
+  assertIncludes(andPostContent, "run-winclient-retest-and-post.mjs", windowsClientRetestAndPostUserEntryCommand);
+  assertIncludes(andPostContent, "%*", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "--password", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "LAN_DUAL_PASSWORD", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "test-password", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "secret", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "token", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "input_event", windowsClientRetestAndPostUserEntryCommand);
+  assertNotIncludes(andPostContent, "inject", windowsClientRetestAndPostUserEntryCommand);
+
+  const andPostHelp = await new Promise((resolveRun) => {
+    const child = spawn("cmd.exe", ["/d", "/c", windowsClientRetestAndPostUserEntryCommand, "-Help"], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, error, stdout, stderr });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, stdout, stderr });
+    });
+  });
+
+  assert(andPostHelp.exitCode === 0, `${windowsClientRetestAndPostUserEntryCommand} -Help failed\n${andPostHelp.stdout}\n${andPostHelp.stderr}`);
+  assertIncludes(andPostHelp.stdout, "Run-WinClientRetest.cmd", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+  assertIncludes(andPostHelp.stdout, "post-w2w3-retest-board.mjs", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
+  assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "Mac host password:", `${windowsClientRetestAndPostUserEntryCommand} -Help should not prompt for password`);
+  assertNotIncludes(andPostHelp.stdout + andPostHelp.stderr, "test-password", `${windowsClientRetestAndPostUserEntryCommand} -Help`);
   console.log("[OK] Windows client real retest root entry is board-safe and help-only safe");
 }
 

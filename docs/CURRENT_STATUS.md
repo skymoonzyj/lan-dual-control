@@ -7,6 +7,9 @@
 ## 2026-06-21 M1 Mac remote audio status consent/restore gate
 - `check-mac-remote-audio-status --boardSummary` 的 `MacRemoteAudioStatus=` 现在直接追加 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，不再只有 plan 摘要携带这两个门禁。无论当前是 `local-playback-active` blocker，还是 `local-output-muted` 候选，都表示任何静音、切输出设备或 remote-only 产品开关前必须先说明影响、取得用户明确同意，并确认如何恢复后再执行。脚本仍只读，不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject。
 
+## 2026-06-21 W2/W3 一键复测并脱敏上板入口
+- 新增根目录 `Run-WinClientRetest-And-Post.cmd` 和 `scripts/windows/run-winclient-retest-and-post.mjs`：它复用 `Run-WinClientRetest.cmd` 的真实 Windows 控 Mac 复测参数，在本机隐藏密码提示完成后只抽取最后一条 `W2W3Retest=...` 脱敏证据，再调用 `post-w2w3-retest-board` 自动发布 `W2W3Retest=` 和只读 `W2H264BoardDiagnosis=`。复测失败或没有 `W2W3Retest=` 时不会上板；`check-windows-resume-status` JSON/普通输出/boardSummary 新增 `windowsClientRetestAndPostUserEntryCommand` / `WinClientRetestAndPostEntry=Run-WinClientRetest-And-Post.cmd`。不改协议、不认证、不把密码写入参数或通讯板、不发真实输入事件。
+
 ## 2026-06-21 W2/W3 复测结果 stdin 上板入口
 - `scripts/windows/post-w2w3-retest-board.mjs` 新增显式 `--stdin`：Windows 用户真实运行 `Run-WinClientRetest.cmd` 后，可把保存或复制出来的终端输出通过管道传给助手，例如 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send`。该入口只在用户明确传 `--stdin` 时读取标准输入，默认仍不挂起；读取后继续复用原有危险标记检查、`W2W3Retest=` 提取、默认 dry-run 和 `--send` 后追加 `W2H264BoardDiagnosis=` 的流程。不请求密码、不认证、不发真实输入事件，不把密码/token/系统账号写上通讯板。
 

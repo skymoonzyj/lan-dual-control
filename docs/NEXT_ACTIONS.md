@@ -4,8 +4,7 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
-- W2/W3 复测后上板最短路径：运行 `Run-WinClientRetest.cmd` 并在本机终端输入 Mac 临时密码后，复制终端输出中的 `W2W3Retest=...` 一行，执行 `node scripts/windows/post-w2w3-retest-board.mjs --send --text "<粘贴 W2W3Retest=...>"`。它会先脱敏检查，再自动把 `W2W3Retest=` 和随后的 `W2H264BoardDiagnosis=` 发到通讯板。输出很长时可先保存到本地文本，再用 `--file <path>`；也可用显式管道 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send`，让助手从标准输入读取整段输出并提取最后一条真实 `W2W3Retest=`。不要把密码、token、系统账号或原始输入事件放进去。
-
+- W2/W3 当前最短路径：优先运行 `Run-WinClientRetest-And-Post.cmd`。它会先执行真实 Windows 控 Mac 复测，在本机黑色终端隐藏输入 Mac 临时密码；复测成功且输出 `W2W3Retest=...` 后，会自动做脱敏检查、发 `W2W3Retest=`，并追加只读 `W2H264BoardDiagnosis=`。如果只想先看结果不发板，继续用 `Run-WinClientRetest.cmd`；如果已经有一行或整段复测输出，可用 `node scripts/windows/post-w2w3-retest-board.mjs --send --text "<粘贴 W2W3Retest=...>"`，或 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send`。不要把密码、token、系统账号或原始输入事件放进通讯板。
 - W2/W3 真实复测最短入口：Windows 用户在仓库根目录双击或运行 `Run-WinClientRetest.cmd`。看到中文隐藏密码提示后，在同一个黑色终端输入 Mac 当前临时密码并回车；输入不显示是正常的。它默认发现 Mac host、要求 H.264、输出脱敏 `W2W3Retest=video=... audio=... h264=...`，随后把这一行发通讯板，再跑 `node scripts/windows/diagnose-w2-h264-board.mjs --server http://192.168.31.68:17888 --boardSummary` 做对照诊断。需要指定目标时可追加 `-DiscoverNoLocalSubnets -HostName <Mac LAN IP> -Port 43770`。不要把密码发通讯板，不发 input/inject。
 
 - W2-H264 Mac 证据合并口径：`diagnose-w2-h264-board` 会合并多条 Mac 侧摘要；如果最新 Mac Codex 状态只重复 `h264Key/sps/pps/idr/keyParam`，仍会从较早完整 `MacHostMedia=` 里保留 `h264Frames/h264Delta/keyGap/keyTail/firstKeyNal/lastKeyNal`。看到 `macStream=frames:<n>` 时可继续等真实 `W2W3Retest=`；只有 `waiting-for-mac-nal-evidence` 或 `macStream=na` 且板上没有完整媒体基线时，才让 Mac 端重新跑 `MacHostMedia`。

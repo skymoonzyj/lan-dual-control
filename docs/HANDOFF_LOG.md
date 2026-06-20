@@ -58,6 +58,17 @@
 
 ## 2026-06-21 Windows Codex
 
+日期：2026-06-21 W2/W3 一键复测并脱敏上板入口
+开发端：Windows Codex
+本轮目标：把“真实复测 -> 复制 W2W3Retest -> 运行上板助手”缩成一个用户可直接运行的入口。
+完成内容：新增 `Run-WinClientRetest-And-Post.cmd` 和 `scripts/windows/run-winclient-retest-and-post.mjs`；复用真实 Windows 控 Mac 复测参数，成功后只抽取 `W2W3Retest=` 脱敏行并调用 `post-w2w3-retest-board` 发布复测结果和只读 H.264 诊断。`check-windows-resume-status` JSON/普通输出/boardSummary 新增 `WinClientRetestAndPostEntry=Run-WinClientRetest-And-Post.cmd`。
+修改文件：Run-WinClientRetest-And-Post.cmd；scripts/windows/run-winclient-retest-and-post.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `run-winclient-retest-and-post.mjs` 不存在；绿灯 `node --check` 三项、`test-run-winclient-retest-and-post`、`test-windows-resume-status`、`test-windows-resume-status-powershell` 通过。专项覆盖 help、成功发送 retest+diagnosis、复测失败不上板、缺 `W2W3Retest=` 不上板。
+遗留问题：真实 W2/W3 复测仍需要用户在 Windows 本机终端输入 Mac 当前临时密码；本入口只减少复测后的上板摩擦，不代替用户授权。
+下一步建议：用户在场时优先运行 `Run-WinClientRetest-And-Post.cmd`；若自动上板后 `W2H264BoardDiagnosis` 仍指向 Windows 解码路径，再继续查 WebCodecs configure/decode/队列。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 端保持 host 在线和媒体证据即可。不要把密码发通讯板，不发真实输入事件。
+
 日期：2026-06-21 W2/W3 复测结果脱敏上板助手
 开发端：Windows Codex
 本轮目标：减少用户真实跑完 `Run-WinClientRetest.cmd` 后手工复制、上板、再跑诊断的步骤。

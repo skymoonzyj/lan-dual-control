@@ -9,6 +9,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const wrapperScript = "scripts/windows/check-windows-resume-status.ps1";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
+const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
 
 const defaults = {
   timeoutMs: 30000,
@@ -500,7 +501,9 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--clientPort 5200", "mock JSON alternate client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--debugPort 9340", "mock JSON alternate client diagnostics command");
     assertIncludes(payload.commands?.windowsClientRetestUserEntryCommand, windowsClientRetestUserEntryCommand, "mock JSON real retest root entry");
+    assertIncludes(payload.commands?.windowsClientRetestAndPostUserEntryCommand, windowsClientRetestAndPostUserEntryCommand, "mock JSON real retest-and-post root entry");
     assertIncludes(payload.boardSummary, `WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`, "mock JSON board summary real retest root entry");
+    assertIncludes(payload.boardSummary, `WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`, "mock JSON board summary real retest-and-post root entry");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "test-windows-client-browser.ps1", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DiagnosticsOnly", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-BoardSummary", "mock JSON client diagnostics PowerShell command");
@@ -666,6 +669,7 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell board summary");
     assertIncludes(output, "WinClientRetest=", "PowerShell board summary");
     assertIncludes(output, `WinClientRetestEntry=${windowsClientRetestUserEntryCommand}`, "PowerShell board summary");
+    assertIncludes(output, `WinClientRetestAndPostEntry=${windowsClientRetestAndPostUserEntryCommand}`, "PowerShell board summary");
     assertIncludes(output, "--promptPassword --requirePassword --requireH264 --boardSummary --timeoutMs 45000", "PowerShell board summary");
     assertIncludes(output, "WinClientRetestPs=", "PowerShell board summary");
     assertIncludes(output, "-PromptPassword -RequirePassword -RequireH264 -BoardSummary -TimeoutMs 45000", "PowerShell board summary");
