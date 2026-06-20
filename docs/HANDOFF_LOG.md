@@ -16,6 +16,20 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W3 Windows 音频断流可见性
+开发端：Windows Codex
+本轮目标：让 Windows 控制端在音频帧停止到达时直接提示断流，而不是只显示最后一次“接收中”。
+完成内容：页面记录 `audioLastFrameAt`；声音开启且已接收过音频帧后，超过 2.5 秒未收到新帧时，页面声音状态行显示 `音频断流` 和 `最后收到 <秒>s 前`；复制/导出诊断“现场声音”追加同样字段；页面自测覆盖页面状态和导出文本。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `audioStallVisible=false` / `stallRendered=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 端可见性，不改变 Mac 采集、网络传输、WebAudio 播放策略或 remote-only 声音路径。
+下一步建议：真实听感复测时，如果出现 `音频断流`，先查 Mac 是否继续发送 audio frame 和局域网是否瞬断；如果没有断流但补缓冲/稳缓冲/重同步增长，再查 Windows 本地播放队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实听感仍需要用户现场确认。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 M1 Mac Remote Audio first-screen sendStatus command

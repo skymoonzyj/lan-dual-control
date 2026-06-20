@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 W3 Windows 音频断流可见性
+- Windows 控制端现在会记录最后一个音频帧到达时间；声音开启且已经收到过音频后，如果超过 2.5 秒没有新音频帧，页面声音状态行会显示 `音频断流` 和 `最后收到 <秒>s 前`，复制/导出诊断“现场声音”也会追加同样字段。这样用户看到画面还在但声音没了时，可以直接区分“远端/网络没有继续送音频帧”和“本地 WebAudio 队列正在补缓冲/重同步”。页面自测先红于 `audioStallVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
+
 ## 2026-06-20 W3 Windows 音频缓冲状态实时可见化
 - Windows 控制端页面声音状态行现在会在本地 WebAudio 自救发生时直接显示 `补缓冲 <n>`、`稳缓冲 <n>` 和 `重同步 <n>`；最近最大音频到达间隔和音频卡顿仍继续显示。这样用户不复制诊断也能初步区分“音频帧到达抖动”和“本地播放队列正在补缓冲/重同步”。本轮页面自测先红于 `bufferHealthStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 

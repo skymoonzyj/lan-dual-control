@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频断流可见性：页面声音状态行和复制/导出诊断显示 `音频断流` / `最后收到 <秒>s 前`；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频缓冲状态实时可见化：页面声音状态行显示补缓冲/稳缓冲/重同步；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频状态实时可见化：页面声音状态行显示最近最大音频到达间隔和音频卡顿次数；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | W3 Windows 音频到达间隔诊断：现场声音/复制诊断新增 `平均间隔`、`最大间隔`、`音频卡顿` 和 `最大音频卡顿`，帮助区分远端供流抖动和本地播放队列问题；页面自测红绿灯通过。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量/输出设备。 |

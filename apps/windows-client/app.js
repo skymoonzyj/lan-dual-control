@@ -162,6 +162,8 @@ const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const audioStutterGapThresholdMs = 120;
+const audioStreamStallThresholdMs = 2500;
+const audioStreamStallPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -569,6 +571,7 @@ const state = {
   h264FallbackRecoveryTimestamps: [],
   audioFrames: 0,
   audioFrameTimes: [],
+  audioLastFrameAt: 0,
   audioLevel: 0,
   audioContext: null,
   audioGain: null,
@@ -2515,6 +2518,10 @@ function formatFloatingAudioStatus() {
   if (state.audioDroppedFrames > 0) {
     parts.push(`丢 ${state.audioDroppedFrames}`);
   }
+  const stallStatus = getAudioStreamStallStatus();
+  if (stallStatus.stalled) {
+    parts.unshift(`音频断流 ${stallStatus.ageSeconds}s`);
+  }
   return `声音：${parts.join(" · ")}`;
 }
 
@@ -2985,6 +2992,7 @@ function recordVideoFrameTime() {
 
 function recordAudioFrameTime() {
   const now = performance.now();
+  state.audioLastFrameAt = now;
   if (!Array.isArray(state.audioFrameTimes)) state.audioFrameTimes = [];
   state.audioFrameTimes.push(now);
   const cutoff = now - 2000;
@@ -3040,6 +3048,7 @@ function resetAudioPlayback() {
   state.audioLastDropReason = "";
   state.audioLastBufferReason = "";
   state.audioLastError = "";
+  state.audioLastFrameAt = 0;
   state.audioLastStatusUpdateAt = 0;
   state.audioLastRenderedDroppedFrames = 0;
   syncFloatingControlStatus();
@@ -3279,6 +3288,45 @@ function formatAudioBufferHealthStatusText() {
   if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);
   return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
+function getAudioStreamStallStatus(now = performance.now()) {
+  const frameCount = Number(state.audioFrames) || 0;
+  const lastFrameAt = Number(state.audioLastFrameAt) || 0;
+  if (!elements.audioToggle.checked || frameCount <= 0 || !Number.isFinite(lastFrameAt) || lastFrameAt <= 0) {
+    return { stalled: false, ageMs: 0, ageSeconds: 0, frameCount };
+  }
+  const ageMs = Math.max(0, now - lastFrameAt);
+  if (ageMs < audioStreamStallThresholdMs) {
+    return { stalled: false, ageMs, ageSeconds: 0, frameCount };
+  }
+  return {
+    stalled: true,
+    ageMs,
+    ageSeconds: Math.max(1, Math.round(ageMs / 1000)),
+    frameCount,
+  };
+}
+
+
+function renderAudioStreamStallStatus(now = performance.now()) {
+  const stallStatus = getAudioStreamStallStatus(now);
+  if (!stallStatus.stalled) return false;
+  const volume = Number(elements.audioVolumeRange.value) || 0;
+  const playedCount = Number(state.audioPlayedFrames) || 0;
+  const droppedCount = Number(state.audioDroppedFrames) || 0;
+  const parts = [
+    "音频断流",
+    `最后收到 ${stallStatus.ageSeconds}s 前`,
+    `音量 ${volume}%`,
+    `接收 ${stallStatus.frameCount} 帧`,
+  ];
+  if (playedCount > 0) parts.push(`播放 ${playedCount}`);
+  if (droppedCount > 0) parts.push(`丢 ${droppedCount}`);
+  elements.audioText.textContent = `声音：${parts.join(" · ")}${formatAudioBufferHealthStatusText()}${formatAudioArrivalStatusText()}`;
+  state.audioLastStatusUpdateAt = now;
+  syncFloatingControlStatus();
+  return true;
 }
 
 function renderAudioStatusFromFrame(frame, options = {}) {
@@ -4718,7 +4766,7 @@ function getAudioQueueMs() {
   return Math.max(0, Math.round((nextPlayTime - currentTime) * 1000));
 }
 
-function getAudioPerformanceExportStatus() {
+function getAudioPerformanceExportStatus(now = performance.now()) {
   const enabled = elements.audioToggle.checked;
   const frameCount = Number(state.audioFrames) || 0;
   const playedCount = Number(state.audioPlayedFrames) || 0;
@@ -4731,6 +4779,11 @@ function getAudioPerformanceExportStatus() {
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getAudioFrameGapStats();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
+  const stallStatus = getAudioStreamStallStatus(now);
+  if (stallStatus.stalled) {
+    parts.push("音频断流");
+    parts.push(`最后收到 ${stallStatus.ageSeconds}s 前`);
+  }
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
     parts.push(`最大间隔 ${maxGapMs} ms`);
@@ -9315,6 +9368,7 @@ document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 
 tickClock();
 setInterval(tickClock, 1000);
+setInterval(renderAudioStreamStallStatus, audioStreamStallPollMs);
 setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
 setInterval(expirePendingOutgoingFileResult, remoteFileTransferSweepIntervalMs);
 applyPreferences();
