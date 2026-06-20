@@ -19,6 +19,32 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac client WebAudio 队列保护
+开发端：Mac Codex
+本轮目标：让 Mac 控 Windows 页面在远端 PCM 音频突发时不要继续堆播放旧音源，并把队列/重同步证据暴露给现场诊断。
+完成内容：
+- Mac client WebAudio 播放增加 80ms 低水位预缓冲和 450ms 高水位队列保护。
+- 高水位触发时停止旧的已排队 source，重置到最新帧，累计丢弃帧、重同步次数和 `queue-overflow-flush-old` 原因。
+- 顶部音频状态、播放状态、会话诊断和复制/导出诊断现在会显示 `队列 <ms>`、`重同步 <n>`、丢弃帧数和最近重同步原因。
+- `test-mac-client-browser` 新增 `--expectAudioQueueGuard`，在已认证页面里注入合成 PCM burst，稳定覆盖 WebAudio 队列保护，不依赖真实 Windows WASAPI。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --expectAudioQueueGuard --progressIntervalMs 0 --timeoutMs 45000` 先失败于缺少音频队列/`queue-overflow-flush-old` 诊断。
+- 绿灯：同一命令通过，输出 `队列 420 ms · 重同步 1 · queue-overflow-flush-old`。
+遗留问题：
+- Agent Link Board active call 仍是 Windows host readiness，需要 Windows 端刷新 Windows host/status；本轮没有覆盖该 call。
+下一步建议：
+- 后续真机 Mac 控 Windows 声音断续时，优先复制 Mac client 诊断，看音频队列毫秒、重同步次数、丢弃帧和最近原因，再决定是 Windows WASAPI 源、网络还是播放端队列问题。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 代码修改；真实 Windows 声音听感验收仍需要 Windows host 可发现并运行。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac Heartbeat 摘要抗截断排序
 开发端：Mac Codex
 本轮目标：避免最新 `Mac Heartbeat` 上板 note 被 Agent Link Board 截断时，Mac 控 Windows 的关键入口落在后段不可见。

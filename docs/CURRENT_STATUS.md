@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Mac client WebAudio queue guard
+- Mac 控 Windows 页面播放 `pcm-f32le-base64` 时现在有 80ms 低水位预缓冲和 450ms 高水位队列保护；音频突发堆积时会停止旧的已排队 source，重置到最新帧，并在顶部状态、播放状态、会话诊断和复制/导出诊断中显示 `队列 <ms>`、`重同步 <n>`、`queue-overflow-flush-old`、丢弃帧数。新增 `test-mac-client-browser --expectAudioQueueGuard`：认证后向页面注入合成 PCM burst，稳定覆盖 WebAudio 队列保护，不依赖真实 Windows WASAPI。本轮不改协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-20 Mac Heartbeat summary truncation
 - `check-mac-heartbeat --boardSummary` 现在把 Mac client 页面/诊断、Windows discovery/call、formal checklist/smoke、prompt-password smoke、本地 browser self-test 和 `MacScriptHelp=` 提前到摘要前段，避免 Agent Link Board 状态 note 截断时只剩长的 host/LaunchAgent 命令而看不到 Mac 控 Windows 关键入口。命令内容和安全边界不变：默认 heartbeat 仍只读，不连接 Windows、不认证、不请求或发送密码、不发 call/input/inject；`MacClientDiscoverWindowsCall=` 仍只是显式复制入口。
 

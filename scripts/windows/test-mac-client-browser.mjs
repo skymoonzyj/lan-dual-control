@@ -33,6 +33,9 @@ const defaults = {
   expectAudioFrame: false,
   expectAudioPayload: false,
   expectAudioPlayback: false,
+  expectAudioQueueGuard: false,
+  injectSyntheticAudioBurst: false,
+  syntheticAudioBurstFrames: 36,
   requireAudio: false,
   expectReconnect: false,
   maxInitialVideoMs: 0,
@@ -106,6 +109,7 @@ Options:
   --expectAudioFrame               Require at least one audio_frame.
   --expectAudioPayload             Require audio payload; implies --expectAudioFrame.
   --expectAudioPlayback            Require playback count; implies payload/frame.
+  --expectAudioQueueGuard          Inject a PCM burst and require Mac client queue/resync diagnostics.
   --requireAudio                   Start temporary host with WASAPI audio and require playback.
   --audioMode <mode>               Temporary host audio mode, for example wasapi.
   --maxAudioFrameMs <ms>           Maximum first audio frame time. Default: off
@@ -230,6 +234,16 @@ function parseArgs(argv) {
       args.expectAudioPlayback = true;
       continue;
     }
+    if (key === "expectAudioQueueGuard") {
+      args.expectAudioQueueGuard = true;
+      args.injectSyntheticAudioBurst = true;
+      args.expectAudioPlayback = true;
+      continue;
+    }
+    if (key === "injectSyntheticAudioBurst") {
+      args.injectSyntheticAudioBurst = true;
+      continue;
+    }
     if (key === "requireAudio") {
       args.requireAudio = true;
       args.expectAudioPlayback = true;
@@ -296,6 +310,10 @@ function parseArgs(argv) {
   args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
   args.maxAudioFrameMs = Number(args.maxAudioFrameMs);
   args.maxAudioPlaybackMs = Number(args.maxAudioPlaybackMs);
+  args.syntheticAudioBurstFrames = Number(args.syntheticAudioBurstFrames);
+  if (!Number.isFinite(args.syntheticAudioBurstFrames) || args.syntheticAudioBurstFrames <= 0) {
+    args.syntheticAudioBurstFrames = defaults.syntheticAudioBurstFrames;
+  }
   args.observeVideoMs = Number(args.observeVideoMs);
   args.minObservedVideoFrames = Number(args.minObservedVideoFrames);
   args.minObservedVideoFps = Number(args.minObservedVideoFps);
@@ -462,6 +480,58 @@ function snapshotProgressDetails(snapshot, extra = "") {
   }
   if (extra) parts.push(compactProgressText(extra));
   return parts.join(" · ") || "snapshot=pending";
+}
+
+function makeSyntheticPcmPayloadBase64({ frameCount = 960, channels = 2 } = {}) {
+  const bytes = Buffer.alloc(frameCount * channels * 4);
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    const sample = Math.sin((frame / frameCount) * Math.PI * 2) * 0.04;
+    for (let channel = 0; channel < channels; channel += 1) {
+      bytes.writeFloatLE(sample, ((frame * channels) + channel) * 4);
+    }
+  }
+  return { payload: bytes.toString("base64"), payloadBytes: bytes.byteLength, frameCount, channels };
+}
+
+async function injectSyntheticAudioBurst(session, args) {
+  const frameCount = 960;
+  const channels = 2;
+  const sampleRate = 48000;
+  const burstFrames = Math.max(1, Math.round(Number(args.syntheticAudioBurstFrames) || defaults.syntheticAudioBurstFrames));
+  const pcm = makeSyntheticPcmPayloadBase64({ frameCount, channels });
+  const result = await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      const payload = ${JSON.stringify(pcm.payload)};
+      const burstFrames = ${burstFrames};
+      const frameCount = ${frameCount};
+      const channels = ${channels};
+      const sampleRate = ${sampleRate};
+      const payloadBytes = ${pcm.payloadBytes};
+      for (let index = 0; index < burstFrames; index += 1) {
+        const message = {
+          type: "audio_frame",
+          codec: "pcm-f32le",
+          encoding: "pcm-f32le-base64",
+          audioMode: "synthetic-test-pcm",
+          sampleRate,
+          channels,
+          frameCount,
+          frames: frameCount,
+          payloadBytes,
+          payload,
+          level: 0.04,
+          timestamp: new Date(Date.now() - Math.max(0, (burstFrames - index) * 20)).toISOString(),
+        };
+        socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
+      }
+      return { burstFrames, payloadBytes };
+    })()`,
+  );
+  print("OK", `Synthetic audio burst injected: ${result.burstFrames} frames / ${result.payloadBytes} B payload`);
+  return result;
 }
 
 async function waitForPageSnapshot({ args, session, label, timeoutMs, check, onSnapshot, summarize }) {
@@ -1381,7 +1451,10 @@ function buildSnapshotExpression() {
         return Math.round(performance.now() - timings.connectClickedAt);
       })(),
       lastAudioFrame: (() => {
-        const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "audio_frame");
+        const audioFrames = [...(window.__lanDualReceivedMessages || [])]
+          .filter((message) => message.type === "audio_frame");
+        const frame = [...audioFrames].reverse().find((message) => message.payload || message.data || message.samples || message.audioData)
+          || audioFrames.at(-1);
         if (!frame) return null;
         const payload = frame.payload || frame.data || frame.samples || frame.audioData || "";
         return {
@@ -3008,7 +3081,8 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
-    for (const expected of ["连接已认证", "视频已出帧", "音频未开启", "剪贴板", "input_ack待测", "诊断可复制"]) {
+    const expectedAudioChecklist = args.enableAudio ? "音频等待" : "音频未开启";
+    for (const expected of ["连接已认证", "视频已出帧", expectedAudioChecklist, "剪贴板", "input_ack待测", "诊断可复制"]) {
       if (!videoSnapshot.manualChecklist.includes(expected)) {
         throw new Error(`Mac client manual checklist missing ${expected}: ${videoSnapshot.manualChecklist}`);
       }
@@ -3420,6 +3494,10 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       );
     }
 
+    if (args.injectSyntheticAudioBurst) {
+      await injectSyntheticAudioBurst(session, args);
+    }
+
     if (args.expectAudioFrame) {
       const audioFrameSnapshot = await waitForPageSnapshot({
         args,
@@ -3492,6 +3570,27 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           audioFlowMetric: audioSnapshot.audioFlowMetric,
           lastAudioFrameAgeMs: audioSnapshot.lastAudioFrameAgeMs,
         })}`);
+      }
+      if (args.expectAudioQueueGuard) {
+        const combinedAudioDiagnostics = [
+          audioSnapshot.audio,
+          audioSnapshot.audioPlayback,
+          audioSnapshot.audioFlowMetric,
+        ].join(" ");
+        if (!combinedAudioDiagnostics.includes("队列")) {
+          throw new Error(`Mac client audio queue diagnostics missing: ${JSON.stringify({
+            audio: audioSnapshot.audio,
+            audioPlayback: audioSnapshot.audioPlayback,
+            audioFlowMetric: audioSnapshot.audioFlowMetric,
+          })}`);
+        }
+        if (!combinedAudioDiagnostics.includes("queue-overflow-flush-old")) {
+          throw new Error(`Mac client audio queue overflow reason missing: ${JSON.stringify({
+            audio: audioSnapshot.audio,
+            audioPlayback: audioSnapshot.audioPlayback,
+            audioFlowMetric: audioSnapshot.audioFlowMetric,
+          })}`);
+        }
       }
       const ageText = hasAudioFrameAge ? ` · frameAge=${audioSnapshot.lastAudioFrameAgeMs}ms` : "";
       print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);

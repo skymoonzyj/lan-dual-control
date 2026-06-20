@@ -21,7 +21,7 @@
 - 可读取 Mac 本机文本剪贴板；用户显式开启后可监听文本变化并自动发送到 Windows host。
 - 手动选择文件并按 `clipboard_file_*` 分块发送到 Windows host。
 - 文件发送按钮仅在已连接且已选文件、且 Windows host 未明确报告文件剪贴板不可用时可用，发送中和等待对端确认时会禁用；发送中会显示已发/总量、平均速度和预计剩余时间，复制/导出诊断也会带出当前文件发送状态；如果对端明确报告文件剪贴板不可用，页面会本地拦截文件/压缩包发送，不发出 `clipboard_file_offer`、分块或完成消息，并提示检查 Windows 文件剪贴板能力；如果对端返回失败结果（例如 `LAN011`），或 45 秒内没有返回 `clipboard_file_result`，页面会保留文件选择、显示失败/超时原因，并把按钮切换为“重新发送”。
-- 可手动开启远端声音，播放 `pcm-f32le-base64` PCM `audio_frame`，mock 音频帧只显示状态；关闭再重新开启音频会立即清理旧状态并等待新音频帧。
+- 可手动开启远端声音，播放 `pcm-f32le-base64` PCM `audio_frame`，mock 音频帧只显示状态；播放端会用 80ms 低水位预缓冲和 450ms 高水位队列保护，突发堆积时丢旧队列并在诊断里显示 `queue-overflow-flush-old`；关闭再重新开启音频会立即清理旧状态并等待新音频帧。
 - 显示会话诊断：首帧耗时、视频持续 FPS/最大帧间隔、音频首帧/播放计数、自动重连次数、手工清单、Windows host 可选 runtime/build 信息，以及对端一键反控策略（默认拒绝/实验自动同意/未启用）；手工清单会把连接、视频、音频、剪贴板、`input_ack` 和复制诊断状态合成一行，方便真机验收时直接看下一项是否待测、等待回执或需重试。当 Windows host 暴露一次性临时反控授权或最近被拒绝请求时，也会提示“Windows 已临时允许一次”或“Windows 已收到请求”。页面提供受保护的“请求反控/重试反控”按钮：只在已连接、已认证且 Windows 声明支持反控接收时可点；默认 `deny-confirm` 下会收到 `LAN008` 并提示 Windows 用户临时允许后重试，同时显示并可一键复制 Windows 本机回环 PowerShell 推荐授权命令 `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <Windows host port> -Grant -DurationMs 30000 -BoardSummary`，也可一键复制 Node 备用命令 `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <Windows host port> --grant --durationMs 30000 --boardSummary`；临时授权窗口内重试会显示“Windows 已同意 / 临时授权已使用”，并隐藏授权命令。该按钮只发送 `reverse_control_request` 并等待 `reverse_control_response`，不会发送输入事件。
 - 显示 `input_ack`、视频帧和连接日志，并可一键导出或复制当前连接状态、手工清单、密码安全状态、画质、重连倒计时/原因、远端 runtime、音视频/剪贴板摘要、文件发送建议和最近事件记录；导出/复制文本不包含连接密码，文件发送失败、确认超时、等待确认或对端文件剪贴板不可用时会提示点击“重新发送”或让 Windows 端检查连接、文件剪贴板能力、权限和磁盘空间。
 
@@ -150,7 +150,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 音频入口本机联调已验证：打开“播放远端声音”后，Windows host mock 音频帧会开始接收并更新状态；Windows 端可运行 `scripts/windows/test-mac-client-browser.mjs --requireAudio` 临时启用 WASAPI loopback，断言页面收到 `pcm-f32le-base64` 并出现播放计数。
 
-Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频请求和 audio_frame 接收，脚本会打印首条音频帧耗时，并在对端提供 `audio_frame.timestamp` 时断言顶部音频状态和播放状态显示“到达 <ms>”或“时钟偏差”；音频开关关闭/重新开启后顶部状态会从“未开启”回到“未接收”。加 `--maxAudioFrameMs <毫秒>` 可把首条音频帧耗时变成强校验。在 Windows 本机临时启动 WASAPI host 验收时，可加 `--audioMode wasapi --expectAudioPayload --expectAudioPlayback --maxAudioPlaybackMs <毫秒>`；连接已运行的真实 Windows WASAPI host 时，可加 `--useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，要求收到带 PCM payload 的音频帧并确认页面播放计数递增。
+Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频请求和 audio_frame 接收，脚本会打印首条音频帧耗时，并在对端提供 `audio_frame.timestamp` 时断言顶部音频状态和播放状态显示“到达 <ms>”或“时钟偏差”；音频开关关闭/重新开启后顶部状态会从“未开启”回到“未接收”。加 `--expectAudioQueueGuard` 会在认证后的页面里注入合成 PCM burst，要求音频状态/播放状态/会话诊断显示队列毫秒、重同步次数和 `queue-overflow-flush-old`，用于本机稳定覆盖 WebAudio 队列保护。加 `--maxAudioFrameMs <毫秒>` 可把首条音频帧耗时变成强校验。在 Windows 本机临时启动 WASAPI host 验收时，可加 `--audioMode wasapi --expectAudioPayload --expectAudioPlayback --maxAudioPlaybackMs <毫秒>`；连接已运行的真实 Windows WASAPI host 时，可加 `--useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，要求收到带 PCM payload 的音频帧并确认页面播放计数递增。
 
 Mac 侧正式真连浏览器冒烟优先用包装器，而不是直接手写 Windows 页面自检命令：
 

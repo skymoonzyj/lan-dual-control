@@ -64,6 +64,10 @@ const elements = {
   clearLogButton: document.querySelector("#clearLogButton"),
 };
 
+const audioStartLeadSeconds = 0.015;
+const audioLowWaterSeconds = 0.08;
+const audioHighWaterSeconds = 0.45;
+
 const state = {
   socket: null,
   connected: false,
@@ -80,8 +84,12 @@ const state = {
   audioContext: null,
   audioGain: null,
   audioNextPlayTime: 0,
+  audioQueuedSources: new Set(),
+  audioQueueMs: 0,
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
+  audioResyncCount: 0,
+  audioLastDropReason: "",
   audioLastError: "",
   lastAudioFrameAgeMs: null,
   connectionStartedAt: 0,
@@ -981,9 +989,13 @@ function renderSessionDiagnostics() {
   if (state.audioFrames > 0) {
     const firstAudioText = state.firstAudioFrameMs > 0 ? `首帧 ${formatMs(state.firstAudioFrameMs)} · ` : "";
     const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
+    const queueText = state.audioPlayedFrames > 0 || state.audioQueueMs > 0 ? ` · 队列 ${state.audioQueueMs} ms` : "";
+    const resyncText = state.audioResyncCount > 0
+      ? ` · 重同步 ${state.audioResyncCount}${state.audioLastDropReason ? ` · ${state.audioLastDropReason}` : ""}`
+      : "";
     const ageText = formatFrameAge(state.lastAudioFrameAgeMs);
     const ageMetricText = ageText ? ` · ${ageText}` : "";
-    elements.audioFlowMetric.textContent = `${firstAudioText}接收 ${state.audioFrames} · 播放 ${state.audioPlayedFrames}${droppedText}${ageMetricText}`;
+    elements.audioFlowMetric.textContent = `${firstAudioText}接收 ${state.audioFrames} · 播放 ${state.audioPlayedFrames}${droppedText}${queueText}${resyncText}${ageMetricText}`;
   } else {
     elements.audioFlowMetric.textContent = elements.audioToggle.checked ? "等待音频" : "未开启";
   }
@@ -1715,6 +1727,9 @@ function buildLogExportText() {
     `- 视频诊断：${elements.videoFlowMetric.textContent || "-"}`,
     `- 音频状态：${elements.audioStatus.textContent || "-"}`,
     `- 音频诊断：${elements.audioFlowMetric.textContent || "-"}`,
+    `- 音频队列：${state.audioQueueMs} ms`,
+    `- 音频重同步：${state.audioResyncCount}${state.audioLastDropReason ? ` · ${state.audioLastDropReason}` : ""}`,
+    `- 音频丢弃帧：${state.audioDroppedFrames}`,
     `- 远端声音：${elements.audioToggle.checked ? `开启 · ${audioVolume()}%` : "关闭"}`,
     "",
     "输入与剪贴板",
@@ -2569,15 +2584,58 @@ function updateAudioVolumeLabel() {
   elements.audioVolumeText.textContent = `${audioVolume()}%`;
 }
 
+function clearQueuedAudioSources({ stop = false } = {}) {
+  const sources = [...state.audioQueuedSources];
+  state.audioQueuedSources.clear();
+  for (const source of sources) {
+    if (stop) {
+      try {
+        source.stop(0);
+      } catch {
+        // Source may already have ended; disconnect below is still safe to try.
+      }
+    }
+    try {
+      source.disconnect();
+    } catch {
+      // Ignore already-disconnected sources.
+    }
+  }
+  return sources.length;
+}
+
+function updateAudioQueueMetric(audioContext = state.audioContext) {
+  if (!audioContext || !state.audioNextPlayTime) {
+    state.audioQueueMs = 0;
+    return state.audioQueueMs;
+  }
+  state.audioQueueMs = Math.round(Math.max(0, state.audioNextPlayTime - audioContext.currentTime) * 1000);
+  return state.audioQueueMs;
+}
+
+function resyncAudioQueue(audioContext, reason) {
+  const stoppedSources = clearQueuedAudioSources({ stop: true });
+  state.audioDroppedFrames += Math.max(1, stoppedSources);
+  state.audioResyncCount += 1;
+  state.audioLastDropReason = reason;
+  state.audioNextPlayTime = audioContext.currentTime + audioLowWaterSeconds;
+  updateAudioQueueMetric(audioContext);
+  logEvent("声音队列重同步", `${reason} · 停止 ${stoppedSources} 个旧音源`);
+}
+
 function resetAudioPlayback() {
+  clearQueuedAudioSources({ stop: true });
   if (state.audioContext) {
     state.audioContext.close().catch(() => {});
   }
   state.audioContext = null;
   state.audioGain = null;
   state.audioNextPlayTime = 0;
+  state.audioQueueMs = 0;
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
+  state.audioResyncCount = 0;
+  state.audioLastDropReason = "";
   state.audioLastError = "";
   state.audioFrames = 0;
   state.audioLevel = 0;
@@ -2602,7 +2660,8 @@ async function ensureAudioPlayback(sampleRate = 48000) {
     }
     state.audioGain = state.audioContext.createGain();
     state.audioGain.connect(state.audioContext.destination);
-    state.audioNextPlayTime = state.audioContext.currentTime + 0.04;
+    state.audioNextPlayTime = state.audioContext.currentTime + audioLowWaterSeconds;
+    updateAudioQueueMetric(state.audioContext);
   }
 
   if (state.audioContext.state === "suspended") {
@@ -2736,14 +2795,24 @@ async function playPcmAudioFrame(frame) {
   source.connect(state.audioGain);
   const now = audioContext.currentTime;
   const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
-  if (queuedSeconds > 0.35) {
-    state.audioDroppedFrames += 1;
-    state.audioNextPlayTime = now + 0.04;
+  if (queuedSeconds > audioHighWaterSeconds) {
+    resyncAudioQueue(audioContext, "queue-overflow-flush-old");
+  } else if (queuedSeconds < audioLowWaterSeconds) {
+    state.audioNextPlayTime = now + audioLowWaterSeconds;
   }
-  const playAt = Math.max(audioContext.currentTime + 0.015, state.audioNextPlayTime);
+  const playAt = Math.max(audioContext.currentTime + audioStartLeadSeconds, state.audioNextPlayTime);
   source.start(playAt);
-  source.onended = () => source.disconnect();
+  state.audioQueuedSources.add(source);
+  source.onended = () => {
+    state.audioQueuedSources.delete(source);
+    try {
+      source.disconnect();
+    } catch {
+      // Ignore already-disconnected sources.
+    }
+  };
   state.audioNextPlayTime = playAt + buffer.duration;
+  updateAudioQueueMetric(audioContext);
   state.audioPlayedFrames += 1;
   return true;
 }
@@ -2760,9 +2829,13 @@ function renderAudioFrameStatus(frame) {
       ? elements.audioToggle.checked ? " · 等待播放" : " · 未播放"
       : "";
   const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
-  elements.audioStatus.textContent = `${codec} · level ${levelText}${ageStatusText}${playbackText}${droppedText}`;
+  const queueText = state.audioPlayedFrames > 0 || state.audioQueueMs > 0 ? ` · 队列 ${state.audioQueueMs} ms` : "";
+  const resyncText = state.audioResyncCount > 0
+    ? ` · 重同步 ${state.audioResyncCount}${state.audioLastDropReason ? ` · ${state.audioLastDropReason}` : ""}`
+    : "";
+  elements.audioStatus.textContent = `${codec} · level ${levelText}${ageStatusText}${playbackText}${droppedText}${queueText}${resyncText}`;
   elements.audioPlaybackStatus.textContent = payload
-    ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz${ageStatusText}`
+    ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz${ageStatusText}${queueText}${resyncText}`
     : `接收 ${state.audioFrames} 帧 · ${frame.audioMode || "mock"}${ageStatusText}`;
   renderSessionDiagnostics();
 }
