@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Mac Codex
+
+日期：2026-06-21 W2/W3 PASS 后发现后台冻结新 blocker
+开发端：Mac Codex
+本轮目标：把通讯板上的真实复测 PASS 和随后出现的后台/失焦视频冻结 blocker 提升到交接第一屏，避免两端继续围绕已修复的 H.264 首屏 blocker 空转。
+完成内容：根据通讯板 Supervisor 记录，真实 Windows 控 Mac 复测已 PASS：连接 `192.168.31.122:43770`，H.264 `canvas=true 1920x1080`，`decoded=已绘制 18`，`recv=22 key=1 sps/pps/idr=1/1/1`，`h264Errors=0`，实收约 `89.8 FPS`，音频接收/播放 `14/14` 丢 `0`。已用 Agent Link Board `clear-call` 清理旧 `Run real WinClientRetest for W2/W3` currentCall。随后用户真实体验暴露新问题：切出 Codex/控制端窗口后视频卡死但声音正常，连接仍在、音频 `9583/9583`，视频回到“等待关键帧”，`queue=470ms staleDrops=142 reason=queue-overflow-wait-keyframe`。已向 Windows Codex 发起 `Fix W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE` call，文档顶部明确当前 owner 是 Windows 控制端，Mac 只保持 host 在线。
+修改文件：docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：`git diff --check`；行首冲突标记扫描；Agent Link Board `watch --once` 确认旧 call 已清理，并看到新的 Windows call。
+遗留问题：当前最高优先级是 Windows 处理 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`；W2/W3 gate 已过不代表完整体验验收完成；M1 remote-only 声音与 M2 真实输入仍必须走用户同意/看屏/安全边界门禁。
+下一步建议：Windows 侧优先查 page visibility/background throttling、`requestAnimationFrame`/canvas draw、WebCodecs decode queue/backpressure、`visibilitychange` 后恢复策略；Mac 侧保持 host 在线，除非 Windows 收到侧 `recv/key/sps/pps/idr` 缺失，不再补 H.264 关键帧证据。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/用户继续真实体验验收；本轮不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 Windows Codex
 
 日期：2026-06-21 W2/W3 真实复测入口无密预检

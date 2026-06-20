@@ -4,6 +4,14 @@
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
+- 当前最高优先级：处理 `W2-BACKGROUND-VISIBILITY-VIDEO-FREEZE`。用户切出 Codex/控制端窗口后视频卡死但声音正常，证据显示连接和音频都还在，视频回到“等待关键帧”且 `queue=470ms staleDrops=142 reason=queue-overflow-wait-keyframe`。这归 Windows 控制端处理：查 page visibility/background throttling、`requestAnimationFrame`/canvas draw、WebCodecs decode queue/backpressure、`visibilitychange` 后清队列并请求/等待下一 IDR 的恢复策略。Mac 侧只保持 host 在线；除非 Windows 收到侧 `recv/key/sps/pps/idr` 缺失，不要让 Mac 继续补 H.264 关键帧证据。
+
+- 今日协作优先级：W2 后台冻结最高；W3 音频低延迟/低丢包第二，验收看连续体验接收=播放、丢包接近 0、重同步/补缓冲下降；W1 只保持入口稳定，不再扩展 helper；M2 真实输入安全流程排在 W2/W3 稳定后；M1 远程独占声音只做方案/只读探测，未获用户明确同意不得改系统声音输出；C3 双方真实体验收口需要 Windows/Mac 分别勾选。当前主线仍只做 Windows 控 Mac，不做 Mac 控 Windows/反控/WindowsHost。
+
+- 当前阶段背景：W2/W3 真实复测已 PASS，旧 `Run real WinClientRetest for W2/W3` 呼叫已清理，说明首屏 H.264 解码 gate 已过。不要再重复旧 H.264 首屏 blocker 诊断；在修完后台冻结后继续真实体验收口，按顺序确认画面稳定性/延迟、音频连续性、窗口/全屏/原画、剪贴板/文件、输入安全日志到真实控制流程。涉及用户授权、密码、真实输入或声音输出变更时，必须先播放提示音，再说明目标、用户动作、安全边界和预计耗时；密码只在本机隐藏提示输入，不上通讯板，不发真实 input/inject。
+
+- W2/W3 后续复测口径：如果体验收口中再次发现黑屏、卡顿或声音断续，再重新运行对应真实复测/诊断；只有 `W2W3Retest h264=` 显示 `decoded=0`、`canvas=false image=false`、`needsKeyframe=yes` 或 `h264Errors>0` 时，才回到 H.264/WebCodecs 诊断。当前已有 PASS 证据为 `canvas=true 1920x1080`、`decoded=已绘制 18`、`h264Errors=0`、实收约 `89.8 FPS`、音频 `14/14 drop=0`。
+
 - W2/W3 真实复测前先跑无密预检：如果不确定 Mac 目标、Windows client 本地诊断或“密码输到哪里”，先运行 `Run-WinClientRetest-And-Post.cmd -PreflightOnly`。看到 `WinClientRetestPreflight=ready` 后，再运行不带参数的 `Run-WinClientRetest-And-Post.cmd`；正式复测出现“当前终端输入 Mac 临时密码（输入不显示，回车继续）:”时，只在这个黑色终端输入 Mac 当前临时密码。预检不请求密码、不认证、不发板、不发 input/inject。
 
 - W2-H264 复测摘要 surface 最新口径：下一次真实 `Run-WinClientRetest-And-Post.cmd` 上板后，先看 `W2W3Retest h264=` 里的 `decoded=<n> canvas=<true|false> image=<true|false> needsKeyframe=<yes>`，再看 `W2H264BoardDiagnosis surface=canvas:<...> image:<...>`。`recv/key/sps/pps/idr` 正常但 `canvas=false image=false` 时继续查 Windows WebCodecs decoded surface / canvas 绘制；`canvas=true` 则进入人工画面/FPS/声音观感确认。不要再让 Mac 端重复补关键帧证据，除非 `recv/key/sps/pps/idr` 缺失。
