@@ -254,6 +254,20 @@ async function checkWatchOnceCanShowAllEvents(args) {
   console.log("[OK] codex-link-client watch --once can still show the full event history");
 }
 
+async function checkWatchOnceAcceptsCustomEventLimit(args) {
+  const state = { ...makeState(), events: makeEvents(15) };
+  await withFakeBoard(state, async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "watch", "--once", "--eventLimit", "3"], args);
+    assert(result.status === 0, `watch --once --eventLimit 3 should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "recentEvents: last 3 of 15", "watch --once --eventLimit");
+    assertNotIncludes(result.stdout, "message Mac Codex: event 12\n", "watch --once --eventLimit");
+    assertIncludes(result.stdout, "message Mac Codex: event 13\n", "watch --once --eventLimit");
+    assertIncludes(result.stdout, "message Mac Codex: event 15\n", "watch --once --eventLimit");
+    assert(requests.length === 1 && requests[0].url === "/api/state", `watch --once --eventLimit should read state once: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client watch --once accepts a custom recent event limit");
+}
+
 async function checkPresencePost(args) {
   await withFakeBoard(makeState(), async (serverUrl, requests) => {
     const result = await run([
@@ -311,6 +325,7 @@ async function main() {
   await checkWatchOnceShowsUserPresence(args);
   await checkWatchOnceLimitsEventsByDefault(args);
   await checkWatchOnceCanShowAllEvents(args);
+  await checkWatchOnceAcceptsCustomEventLimit(args);
   await checkPresencePost(args);
   await checkPresenceUnsupportedHint(args);
   console.log("[OK] codex-link-client self-test passed");

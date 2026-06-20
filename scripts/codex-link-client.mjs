@@ -107,7 +107,13 @@ function printWatchHeader(state) {
 
 function selectWatchOnceEvents(events, options) {
   if (options.allEvents) return events;
-  return events.slice(-defaultWatchOnceEventLimit);
+  return events.slice(-getWatchOnceEventLimit(options));
+}
+
+function getWatchOnceEventLimit(options) {
+  const value = Number(options.eventLimit || options.events || defaultWatchOnceEventLimit);
+  if (!Number.isSafeInteger(value) || value < 1) return defaultWatchOnceEventLimit;
+  return value;
 }
 
 async function post(options, path, body) {
@@ -243,7 +249,7 @@ function sleep(ms) {
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once] [--allEvents]
+  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once] [--eventLimit 10] [--allEvents]
   node scripts/codex-link-client.mjs --server http://host:17888 state [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
   node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"
