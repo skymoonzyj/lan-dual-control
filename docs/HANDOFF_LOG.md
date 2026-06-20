@@ -18,6 +18,31 @@
 ```
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W3/M1 Windows 消费 Mac remote audio consent/restore guard
+开发端：Windows Codex
+本轮目标：让 Windows 控制端把 Mac 新版远端独占声音同意/恢复门禁显示给用户，并清理上一轮 stale 文件占用。
+完成内容：
+- `parseMacRemoteAudioPlanEvidenceLabels` 新增 `Consent=explicit-before-change` 与 `RestorePath=required-before-apply` 识别。
+- Mac 提醒区、值守证据和复制/导出诊断会显示“恢复路径需先确认”。
+- 修正 `docs/ACTIVE_LOCKS.md` 当前占用区残留的上一轮 W2 Windows 行，避免误导另一端。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 MacRemoteAudioPlan 证据缺少“恢复路径需先确认”。
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：这仍是只读门禁提示，不会自动静音 Mac 或切换输出设备；真正 remote-only 仍需用户明确同意和恢复复查。
+下一步建议：真实体验时如果需要远端独占声音，先让用户选择一条路线并确认恢复路径，再由 Mac 端执行相应人工/产品级步骤。
+是否改了协议：否；只消费 Mac 已上板的文本字段。
+是否需要另一端配合：暂不需要；后续真正执行 remote-only 时需要用户和 Mac 端现场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows H.264 JPEG fallback 冷却恢复
 开发端：Windows Codex
 本轮目标：让 H.264 等关键帧超时切到 JPEG 兜底后，稳定后能自动尝试回到 H.264 低延迟链路。

@@ -3,6 +3,8 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+## 2026-06-20 W3/M1 Windows 消费 remote audio consent/restore guard
+- Windows 控制端现在会识别 Mac remote audio plan 摘要里的 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`；Mac 提醒区、值守证据和复制/导出诊断会在原有“Mac 远端独占声音方案已提供 / 当前不会自动静音 Mac 本机 / 远端独占声音需用户明确同意 / 不自动改系统音量”之外，再显示“恢复路径需先确认”。页面自测先红于缺少该恢复路径提示，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮同时清理上一轮残留在 `ACTIVE_LOCKS` 当前占用区的 stale Windows W2 行；不改协议、不认证、不请求或发送密码、不发 input/inject。
 ## 2026-06-20 M1 Mac remote audio consent/restore guard
 - `plan-mac-remote-audio --json/--boardSummary` 现在除原有 `status=plan-only`、`capture=system-pcm-does-not-mute-local`、三条 `RemoteOnlyOptions=` 和 `safety=no-volume-change,no password/input/inject` 外，还结构化输出 `consentChecklist[]` 与 `restoreChecklist[]`。一行摘要追加 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，明确任何静音、切输出设备或产品开关前，都必须先说明当前 Mac 本机可能仍会出声、选择唯一路线并确认恢复复查路径。脚本仍只读，不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject；这不是 remote-only 已启用的证据。
 

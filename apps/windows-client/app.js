@@ -3663,8 +3663,11 @@ function parseMacRemoteAudioPlanEvidenceLabels(text) {
   if (/\bcapture\s*=\s*system-pcm-does-not-mute-local\b|does-not-mute-local|does not mute local|不会自动静音/i.test(source)) {
     labels.push("当前不会自动静音 Mac 本机");
   }
-  if (/\brecommended\s*=\s*product-toggle-with-explicit-consent\b|explicit-consent|明确同意/i.test(source)) {
+  if (/\brecommended\s*=\s*product-toggle-with-explicit-consent\b|\bConsent\s*=\s*explicit-before-change\b|explicit-consent|明确同意/i.test(source)) {
     labels.push("远端独占声音需用户明确同意");
+  }
+  if (/\bRestorePath\s*=\s*required-before-apply\b|restoreChecklist|恢复复查路径|恢复路径/i.test(source)) {
+    labels.push("恢复路径需先确认");
   }
   if (/\bsafety\s*=\s*[^;\r\n]*\bno-volume-change\b|\bno-volume-change\b|no volume change|不自动改系统音量/i.test(source)) {
     labels.push("不自动改系统音量");

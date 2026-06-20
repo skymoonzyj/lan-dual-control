@@ -1521,7 +1521,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
-        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject. Consent=explicit-before-change; RestorePath=required-before-apply.",
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
@@ -1587,7 +1587,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           : {};
       const macRemoteAudioPlanText = [
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
-        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject. Consent=explicit-before-change; RestorePath=required-before-apply.",
       ].join("; ");
       const macRemoteAudioPlanAttention =
         typeof parseMacUnattendedAttention === "function"
@@ -2642,6 +2642,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           macRemoteAudioPlanAttention?.evidenceSummary.includes("当前不会自动静音 Mac 本机") &&
           macRemoteAudioPlanAttention?.evidenceSummary.includes("远端独占声音需用户明确同意") &&
           macRemoteAudioPlanAttention?.evidenceSummary.includes("不自动改系统音量") &&
+          macRemoteAudioPlanAttention?.evidenceSummary.includes("恢复路径需先确认") &&
           Array.isArray(macRemoteAudioPlanAttention?.evidenceLabels) &&
           macRemoteAudioPlanAttention.evidenceLabels.length >= 4 &&
           macRemoteAudioPlanView.statusText.includes("证据：") &&
@@ -2649,6 +2650,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           macRemoteAudioPlanView.statusText.includes("当前不会自动静音 Mac 本机") &&
           macRemoteAudioPlanView.statusText.includes("远端独占声音需用户明确同意") &&
           macRemoteAudioPlanView.statusText.includes("不自动改系统音量") &&
+          macRemoteAudioPlanView.statusText.includes("恢复路径需先确认") &&
           !macRemoteAudioPlanView.statusText.includes("风险：") &&
           macRemoteAudioStatusAttention?.summary.includes("Mac 本机仍会出声") &&
           macRemoteAudioStatusAttention?.summary.includes("远端独占声音未开启") &&
@@ -5649,7 +5651,7 @@ async function verifyReconnectControls(session) {
         "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
-        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject. Consent=explicit-before-change; RestorePath=required-before-apply.",
         "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
         "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
