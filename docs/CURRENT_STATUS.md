@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Mac client H.264 decode queue guard
+- Mac 控 Windows 页面 H.264 WebCodecs 本地解码队列现在有低延迟保护：排队超过 8 帧或最旧帧超过 450ms 时会关闭旧 decoder、清空旧队列、记录本地丢帧，并进入等待下一关键帧状态，避免本地继续播放严重过期画面。会话诊断、顶部视频状态和复制/导出诊断会显示 `本地丢 <n>`、`解码队列 <n>`、`queue-overflow-wait-keyframe`、H.264 解码帧/错误等字段；这些诊断在页面临时切回 mock/JPEG 帧时也会保留到本轮会话日志中。新增 `test-mac-client-browser --expectH264QueueGuard`：在页面里安装只收帧不出帧的 fake WebCodecs decoder，并注入合成 H.264 burst，稳定覆盖本地队列保护。本轮不改协议、不认证、不请求密码、不发 input/inject，不触碰 Windows host/readiness。
+
 ## 2026-06-20 Mac client WebAudio queue guard
 - Mac 控 Windows 页面播放 `pcm-f32le-base64` 时现在有 80ms 低水位预缓冲和 450ms 高水位队列保护；音频突发堆积时会停止旧的已排队 source，重置到最新帧，并在顶部状态、播放状态、会话诊断和复制/导出诊断中显示 `队列 <ms>`、`重同步 <n>`、`queue-overflow-flush-old`、丢弃帧数。新增 `test-mac-client-browser --expectAudioQueueGuard`：认证后向页面注入合成 PCM burst，稳定覆盖 WebAudio 队列保护，不依赖真实 Windows WASAPI。本轮不改协议、不认证、不请求密码、不发 input/inject。
 

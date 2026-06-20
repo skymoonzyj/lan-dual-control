@@ -50,6 +50,9 @@ const defaults = {
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
   expectBinaryH264Video: false,
+  expectH264QueueGuard: false,
+  injectSyntheticH264Burst: false,
+  syntheticH264BurstFrames: 24,
   expectWgcNv12H264Video: false,
   expectH264Fallback: false,
   requireH264Video: false,
@@ -125,6 +128,7 @@ Options:
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --expectBinaryH264Video          Start ffmpeg-h264 mode and require binary H.264 video transport.
+  --expectH264QueueGuard           Inject a stalled H.264 burst and require local queue-drop diagnostics.
   --expectWgcNv12H264Video         Start real WGC helper NV12 bridge and require binary H.264 page video.
   --expectH264Fallback             Start ffmpeg-h264 mode and require Mac client to request MJPEG fallback.
   --requireH264Video               Require the Mac client to render H.264 video instead of JPEG fallback.
@@ -277,6 +281,15 @@ function parseArgs(argv) {
       args.screenMode = "ffmpeg-h264";
       continue;
     }
+    if (key === "expectH264QueueGuard") {
+      args.expectH264QueueGuard = true;
+      args.injectSyntheticH264Burst = true;
+      continue;
+    }
+    if (key === "injectSyntheticH264Burst") {
+      args.injectSyntheticH264Burst = true;
+      continue;
+    }
     if (key === "expectWgcNv12H264Video") {
       args.expectWgcNv12H264Video = true;
       args.expectBinaryH264Video = true;
@@ -313,6 +326,10 @@ function parseArgs(argv) {
   args.syntheticAudioBurstFrames = Number(args.syntheticAudioBurstFrames);
   if (!Number.isFinite(args.syntheticAudioBurstFrames) || args.syntheticAudioBurstFrames <= 0) {
     args.syntheticAudioBurstFrames = defaults.syntheticAudioBurstFrames;
+  }
+  args.syntheticH264BurstFrames = Number(args.syntheticH264BurstFrames);
+  if (!Number.isFinite(args.syntheticH264BurstFrames) || args.syntheticH264BurstFrames <= 0) {
+    args.syntheticH264BurstFrames = defaults.syntheticH264BurstFrames;
   }
   args.observeVideoMs = Number(args.observeVideoMs);
   args.minObservedVideoFrames = Number(args.minObservedVideoFrames);
@@ -531,6 +548,55 @@ async function injectSyntheticAudioBurst(session, args) {
     })()`,
   );
   print("OK", `Synthetic audio burst injected: ${result.burstFrames} frames / ${result.payloadBytes} B payload`);
+  return result;
+}
+
+function makeSyntheticH264PayloadBase64({ keyFrame = false } = {}) {
+  const bytes = keyFrame
+    ? Buffer.from([0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x21])
+    : Buffer.from([0x00, 0x00, 0x00, 0x01, 0x41, 0x9a, 0x22, 0x11]);
+  return { payload: bytes.toString("base64"), payloadBytes: bytes.byteLength };
+}
+
+async function injectSyntheticH264Burst(session, args) {
+  const burstFrames = Math.max(1, Math.round(Number(args.syntheticH264BurstFrames) || defaults.syntheticH264BurstFrames));
+  const keyPayload = makeSyntheticH264PayloadBase64({ keyFrame: true });
+  const deltaPayload = makeSyntheticH264PayloadBase64({ keyFrame: false });
+  const result = await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      const burstFrames = ${burstFrames};
+      const keyPayload = ${JSON.stringify(keyPayload.payload)};
+      const keyPayloadBytes = ${keyPayload.payloadBytes};
+      const deltaPayload = ${JSON.stringify(deltaPayload.payload)};
+      const deltaPayloadBytes = ${deltaPayload.payloadBytes};
+      const baseFrameId = 700000;
+      for (let index = 0; index < burstFrames; index += 1) {
+        const keyFrame = index === 0;
+        const message = {
+          type: "video_frame",
+          codec: "h264",
+          codecString: "avc1.42E01F",
+          encoding: "annexb-base64",
+          videoTransport: "json",
+          width: 1920,
+          height: 1080,
+          frameId: baseFrameId + index,
+          keyFrame,
+          payload: keyFrame ? keyPayload : deltaPayload,
+          payloadBytes: keyFrame ? keyPayloadBytes : deltaPayloadBytes,
+          timestampUs: (baseFrameId + index) * 16667,
+          durationUs: 16667,
+          timestamp: new Date(Date.now() - Math.max(0, (burstFrames - index) * 16)).toISOString(),
+        };
+        socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
+      }
+      return { burstFrames, payloadBytes: keyPayloadBytes };
+    })()`,
+  );
+  print("OK", `Synthetic H.264 burst injected: ${result.burstFrames} frames / ${result.payloadBytes} B key payload`);
   return result;
 }
 
@@ -1429,6 +1495,18 @@ function buildSnapshotExpression() {
         .filter((message) => message.type === "video_frame" && message.repeatPreviousFrame === true).length,
       binaryVideoFrames: Number(window.__lanDualCounters?.binaryVideoFrames || 0),
       binaryH264VideoFrames: Number(window.__lanDualCounters?.binaryH264VideoFrames || 0),
+      h264QueueGuardDebug: (() => {
+        const h264Frames = (window.__lanDualReceivedMessages || [])
+          .filter((message) => message.type === "video_frame" && String(message.codec || "").toLowerCase() === "h264");
+        return {
+          receivedH264Frames: h264Frames.length,
+          fakeDecodeCount: Number(window.__lanDualFakeH264DecodeCount || 0),
+          fakeDecoderState: window.__lanDualFakeVideoDecoder?.state || "",
+          fakeDecoderQueueSize: Number(window.__lanDualFakeVideoDecoder?.decodeQueueSize || 0),
+          fakeLastChunkType: window.__lanDualFakeH264LastChunk?.type || "",
+          fakeLastChunkBytes: Number(window.__lanDualFakeH264LastChunk?.byteLength || 0),
+        };
+      })(),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -2859,6 +2937,60 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
 })();`,
       });
     }
+    if (args.expectH264QueueGuard) {
+      await session.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `(() => {
+  class LanDualFakeEncodedVideoChunk {
+    constructor(init = {}) {
+      this.type = init.type || "delta";
+      this.timestamp = Number(init.timestamp) || 0;
+      this.duration = Number(init.duration) || 0;
+      this.byteLength = init.data?.byteLength || init.data?.length || 0;
+    }
+  }
+  class LanDualFakeVideoDecoder {
+    static async isConfigSupported(config) {
+      return { supported: true, config };
+    }
+    constructor(init = {}) {
+      this.output = init.output;
+      this.error = init.error;
+      this.state = "unconfigured";
+      this.decodeQueueSize = 0;
+      window.__lanDualFakeVideoDecoder = this;
+    }
+    configure(config) {
+      this.config = config;
+      this.state = "configured";
+    }
+    decode(chunk) {
+      if (this.state !== "configured") {
+        throw new Error("Fake decoder is not configured");
+      }
+      this.decodeQueueSize += 1;
+      window.__lanDualFakeH264DecodeCount = Number(window.__lanDualFakeH264DecodeCount || 0) + 1;
+      window.__lanDualFakeH264LastChunk = {
+        type: chunk.type,
+        timestamp: chunk.timestamp,
+        duration: chunk.duration,
+        byteLength: chunk.byteLength,
+      };
+    }
+    flush() {
+      return Promise.resolve();
+    }
+    reset() {
+      this.decodeQueueSize = 0;
+    }
+    close() {
+      this.state = "closed";
+    }
+  }
+  Object.defineProperty(window, "EncodedVideoChunk", { value: LanDualFakeEncodedVideoChunk, configurable: true });
+  Object.defineProperty(window, "VideoDecoder", { value: LanDualFakeVideoDecoder, configurable: true });
+})();`,
+      });
+    }
     await session.send("Page.navigate", { url: clientUrl });
     await session.waitForEvent("Page.loadEventFired", args.timeoutMs);
     await waitFor(
@@ -3139,6 +3271,36 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     }
     print("OK", `Diagnostics: ${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`);
     lastBoardSummaryReport.videoDiagnostics = `${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`;
+    if (args.expectH264QueueGuard) {
+      await injectSyntheticH264Burst(session, args);
+      const h264QueueSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client H.264 queue guard",
+        onSnapshot: (value) => {
+          lastSnapshot = value;
+        },
+        check: async (value) => {
+          const combinedVideoDiagnostics = [
+            value.video,
+            value.videoFlowMetric,
+          ].join(" ");
+          const hasReason = combinedVideoDiagnostics.includes("queue-overflow-wait-keyframe");
+          const hasQueueEvidence = combinedVideoDiagnostics.includes("解码队列") || combinedVideoDiagnostics.includes("本地丢");
+          return hasReason && hasQueueEvidence ? value : null;
+        },
+      }).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
+          print("INFO", `Last H.264 queue guard debug: ${JSON.stringify(lastSnapshot.h264QueueGuardDebug || {})}`);
+          print("INFO", `Last logs: ${(lastSnapshot.logs || []).join(" | ")}`);
+        }
+        throw error;
+      });
+      print("OK", `H.264 queue guard: ${h264QueueSnapshot.video} / ${h264QueueSnapshot.videoFlowMetric}`);
+      lastBoardSummaryReport.videoDiagnostics = `${h264QueueSnapshot.firstVideoMetric} / ${h264QueueSnapshot.videoFlowMetric}`;
+    }
     if (args.requireH264Video) {
       const h264Snapshot = await waitForPageSnapshot({
         args,

@@ -13,7 +13,7 @@
 - 认证失败时显示远端返回的剩余尝试次数，清理远程画面、远端摘要、音频状态、会话诊断和远端运行信息，并自动释放连接按钮，方便改密码后重连。
 - 意外断线后最多自动重连 3 次，等待期间会显示倒计时和“立即重连”按钮，并会清理上一帧远程画面、音频状态和远端运行信息，远端摘要显示“连接中断”；手动断开和认证失败不会自动重连。
 - 手动断开会停止剪贴板监听、取消正在发送的文件、关闭音频播放、清理上一帧远程画面，并把远端摘要、音频状态、会话诊断和远端运行信息重置为未就绪状态。
-- 显示 Windows host 的 `video_frame`；浏览器支持 WebCodecs 时会优先请求 `h264` / `annexb` 并渲染到 canvas，不支持或连续解码失败时自动请求 MJPEG/JPEG 兜底；二进制视频默认开启，H.264 会声明 `preferredVideoTransport=binary-h264`，JPEG/MJPEG 会声明 `binary-jpeg`，Windows host 支持时可用 WebSocket 二进制帧传输，减少 base64 文本开销；收到 `video_frame.timestamp` 时，视频状态和会话诊断会显示帧到达年龄或时钟偏差；收到 Windows WGC `repeatPreviousFrame` 轻量重复帧时会保持上一帧画面并显示重复计数。
+- 显示 Windows host 的 `video_frame`；浏览器支持 WebCodecs 时会优先请求 `h264` / `annexb` 并渲染到 canvas，不支持或连续解码失败时自动请求 MJPEG/JPEG 兜底；二进制视频默认开启，H.264 会声明 `preferredVideoTransport=binary-h264`，JPEG/MJPEG 会声明 `binary-jpeg`，Windows host 支持时可用 WebSocket 二进制帧传输，减少 base64 文本开销；H.264 本地解码队列超过 8 帧或最旧帧超过 450ms 时会关闭旧 decoder、清空旧队列并等待下一关键帧，诊断显示 `本地丢 <n>` 和 `queue-overflow-wait-keyframe`；收到 `video_frame.timestamp` 时，视频状态和会话诊断会显示帧到达年龄或时钟偏差；收到 Windows WGC `repeatPreviousFrame` 轻量重复帧时会保持上一帧画面并显示重复计数。
 - 支持画质、分辨率、刷新率和码率设置，当前可选 1080P/2K/4K、30/60/120/144/240 Hz、5/10/15/20/40/50 Mbps；成功连接后修改会立即发送 `display_settings`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`；Mac `Command` 会按 Windows `Ctrl` 发送，方便常用快捷键。
 - 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
@@ -101,7 +101,7 @@ node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 4
 ## 当前限制
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
-- H.264 当前使用浏览器 WebCodecs 解码；不支持 WebCodecs 或不支持当前 `codecString` 的浏览器会自动请求 MJPEG/JPEG。Windows host 的 `ffmpeg-h264` 模式已能在收到 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url` 后切回 JPEG 输出，避免页面无画面；Windows 本机页面级 `--requireH264Video` 已验证 H.264 canvas 解码可见，`--expectBinaryH264Video` 已验证 H.264 Annex B payload 可走 WebSocket 二进制帧，真机 Mac 控制真实 Windows host 的观感仍需继续验收。
+- H.264 当前使用浏览器 WebCodecs 解码；不支持 WebCodecs 或不支持当前 `codecString` 的浏览器会自动请求 MJPEG/JPEG。Windows host 的 `ffmpeg-h264` 模式已能在收到 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url` 后切回 JPEG 输出，避免页面无画面；Windows 本机页面级 `--requireH264Video` 已验证 H.264 canvas 解码可见，`--expectBinaryH264Video` 已验证 H.264 Annex B payload 可走 WebSocket 二进制帧，`--expectH264QueueGuard` 已验证本地解码队列卡住时会丢旧帧并等待关键帧，真机 Mac 控制真实 Windows host 的观感仍需继续验收。
 - 画质设置已能请求 60 Hz；Windows host FFmpeg gdigrab 本机观察 60 Hz 请求约 56 FPS，但真实 Mac 控制 Windows 的观感仍需真机确认。
 - 音频播放当前覆盖 PCM 过渡格式；真实 Windows 系统声音已可通过 Windows host WASAPI loopback 做页面级自检，真实听感还需要 Mac 真机连接 Windows host 继续确认。
 - 当前支持手动发送文本和文件剪贴板；Mac 本机文本剪贴板读取和自动监听默认关闭，需用户手动点击读取或开启监听。
@@ -140,7 +140,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 底层页面自检也支持量化持续视频体验：直接使用 `scripts/windows/test-mac-client-browser.mjs` 时，加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。连接首帧、认证失败、H.264/二进制视频、音频首帧/播放、重连恢复和长窗口观察都会输出等待进度心跳；默认每 10 秒输出一次，长观察会包含已收帧数、剩余时间和当前 FPS；可用 `--progressIntervalMs <毫秒>` 调整，传 `0` 可关闭。需要把页面自检结果直接同步到 Agent Link Board 时，日常优先使用上面的 Mac 包装器 `--boardSummary`；高级场景可直接给底层脚本加 `--boardSummary`，stdout 只输出一行无密摘要，详细进度转到 stderr。
 
-会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryH264Video` 时，脚本会要求页面收到 `binary-h264` 帧并保持 H.264 canvas 可见；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--disableBinaryVideo` 时，脚本会用 `?binaryVideo=0` 关闭二进制视频并要求旧 JSON/base64 路径仍可显示；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
+会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryH264Video` 时，脚本会要求页面收到 `binary-h264` 帧并保持 H.264 canvas 可见；加 `--expectH264QueueGuard` 时，脚本会安装一个只收帧不出帧的 fake WebCodecs decoder，注入合成 H.264 burst，并要求页面诊断显示 `本地丢` 和 `queue-overflow-wait-keyframe`；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--disableBinaryVideo` 时，脚本会用 `?binaryVideo=0` 关闭二进制视频并要求旧 JSON/base64 路径仍可显示；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
 真实 WGC NV12 H.264 页面链路也可用同一个自检覆盖：加 `--expectWgcNv12H264Video` 时，脚本会启动真实 WGC helper、启用 NV12 H.264 bridge 和 `h264_nvenc`，要求页面收到 `binary-h264`、显示 H.264 canvas，并断言 session pipeline 为 `windows-wgc-helper-nv12-ffmpeg-h264`。
 

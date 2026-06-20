@@ -67,6 +67,8 @@ const elements = {
 const audioStartLeadSeconds = 0.015;
 const audioLowWaterSeconds = 0.08;
 const audioHighWaterSeconds = 0.45;
+const h264DecoderQueueHighWaterFrames = 8;
+const h264DecoderQueueMaxAgeMs = 450;
 
 const state = {
   socket: null,
@@ -116,6 +118,8 @@ const state = {
   h264FallbackActive: false,
   h264FallbackReason: "",
   h264DecoderLatencyMs: 0,
+  h264DroppedStaleFrames: 0,
+  h264LastDropReason: "",
   reconnectTotal: 0,
   fileTransferActive: false,
   fileTransferAwaitingResult: false,
@@ -970,6 +974,30 @@ function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   renderSessionDiagnostics();
 }
 
+function h264DecoderQueueAgeMs(now = performance.now()) {
+  const oldestFrame = state.h264DecoderQueue[0];
+  return oldestFrame?.queuedAt ? Math.max(0, now - oldestFrame.queuedAt) : 0;
+}
+
+function h264QueueDiagnosticText() {
+  const parts = [];
+  if (state.h264DecoderQueue.length > 0) {
+    parts.push(`解码队列 ${state.h264DecoderQueue.length}`);
+  }
+  const shouldShowLatency = state.h264DecoderLatencyMs > 0 &&
+    (String(state.lastVideoCodec || "").startsWith("h264") || state.h264DecoderQueue.length > 0 || state.h264DroppedStaleFrames > 0);
+  if (shouldShowLatency) {
+    parts.push(`解码延迟 ${formatMs(state.h264DecoderLatencyMs)}`);
+  }
+  if (state.h264DroppedStaleFrames > 0) {
+    parts.push(`本地丢 ${state.h264DroppedStaleFrames}`);
+  }
+  if (state.h264LastDropReason) {
+    parts.push(state.h264LastDropReason);
+  }
+  return parts.join(" · ");
+}
+
 function renderSessionDiagnostics() {
   elements.firstVideoMetric.textContent = state.firstVideoFrameMs > 0
     ? `${formatMs(state.firstVideoFrameMs)} · ${state.remoteWidth}x${state.remoteHeight}`
@@ -981,7 +1009,9 @@ function renderSessionDiagnostics() {
     const ageMetricText = ageText ? ` · ${ageText}` : "";
     const repeatText = state.repeatSignalVideoFrames > 0 ? ` · 重复 ${state.repeatSignalVideoFrames}` : "";
     const binaryText = state.binaryVideoFrames > 0 ? ` · 二进制 ${state.binaryVideoFrames}` : "";
-    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}${repeatText}${binaryText}`;
+    const h264QueueText = h264QueueDiagnosticText();
+    const h264MetricText = h264QueueText ? ` · ${h264QueueText}` : "";
+    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}${repeatText}${binaryText}${h264MetricText}`;
   } else {
     elements.videoFlowMetric.textContent = state.connected ? "等待视频" : "未接收";
   }
@@ -1725,6 +1755,11 @@ function buildLogExportText() {
     `- 码率：${settings.bandwidthMbps} Mbps`,
     `- 视频状态：${elements.videoStatus.textContent || "-"}`,
     `- 视频诊断：${elements.videoFlowMetric.textContent || "-"}`,
+    `- H.264 解码帧：${state.h264DecodedFrames}`,
+    `- H.264 解码队列：${state.h264DecoderQueue.length}`,
+    `- H.264 本地丢帧：${state.h264DroppedStaleFrames}`,
+    `- H.264 最近丢帧原因：${state.h264LastDropReason || "-"}`,
+    `- H.264 错误：${state.h264DecoderErrorCount}${state.h264DecoderLastError ? ` · ${state.h264DecoderLastError}` : ""}`,
     `- 音频状态：${elements.audioStatus.textContent || "-"}`,
     `- 音频诊断：${elements.audioFlowMetric.textContent || "-"}`,
     `- 音频队列：${state.audioQueueMs} ms`,
@@ -1745,8 +1780,6 @@ function buildLogExportText() {
     `- 音频帧：${state.audioFrames}`,
     `- 音频播放帧：${state.audioPlayedFrames}`,
     `- 二进制视频帧：${state.binaryVideoFrames}`,
-    `- H.264 解码帧：${state.h264DecodedFrames}`,
-    `- H.264 错误：${state.h264DecoderErrorCount}`,
     `- 重连次数：${state.reconnectTotal}`,
     "",
     "事件记录",
@@ -2090,7 +2123,7 @@ function showRemoteImageFrame(source, { objectUrl = false } = {}) {
   } else {
     releaseRemoteImageObjectUrl();
   }
-  resetVideoDecoder();
+  resetVideoDecoder({ preserveDiagnostics: true });
   elements.remoteImage.src = source;
   elements.remoteImage.classList.add("is-visible");
   elements.remoteCanvas.classList.remove("is-visible");
@@ -2164,7 +2197,18 @@ function recordVideoFrameStats(frame) {
   renderSessionDiagnostics();
 }
 
-function resetVideoDecoder({ resetFallback = false } = {}) {
+function resetVideoDecoder({ resetFallback = false, preserveDiagnostics = false } = {}) {
+  const preservedDiagnostics = preserveDiagnostics
+    ? {
+      h264DecoderErrorCount: state.h264DecoderErrorCount,
+      h264DecoderLastError: state.h264DecoderLastError,
+      h264SkippedDeltaFrames: state.h264SkippedDeltaFrames,
+      h264DecodedFrames: state.h264DecodedFrames,
+      h264DecoderLatencyMs: state.h264DecoderLatencyMs,
+      h264DroppedStaleFrames: state.h264DroppedStaleFrames,
+      h264LastDropReason: state.h264LastDropReason,
+    }
+    : null;
   if (state.h264Decoder && state.h264Decoder.state !== "closed") {
     try {
       state.h264Decoder.close();
@@ -2183,10 +2227,41 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264SkippedDeltaFrames = 0;
   state.h264DecodedFrames = 0;
   state.h264DecoderLatencyMs = 0;
+  state.h264DroppedStaleFrames = 0;
+  state.h264LastDropReason = "";
+  if (preservedDiagnostics) {
+    Object.assign(state, preservedDiagnostics);
+  }
   if (resetFallback) {
     state.h264FallbackActive = false;
     state.h264FallbackReason = "";
   }
+}
+
+function shouldFlushH264DecoderQueue(now = performance.now()) {
+  return state.h264DecoderQueue.length >= h264DecoderQueueHighWaterFrames ||
+    h264DecoderQueueAgeMs(now) > h264DecoderQueueMaxAgeMs;
+}
+
+function flushH264DecoderQueue(reason = "queue-overflow-wait-keyframe") {
+  const droppedFrames = state.h264DecoderQueue.length;
+  if (state.h264Decoder && state.h264Decoder.state !== "closed") {
+    try {
+      state.h264Decoder.close();
+    } catch {
+      // Best-effort cleanup; stale decode queues should not block the next key frame.
+    }
+  }
+  state.h264Decoder = null;
+  state.h264DecoderKey = "";
+  state.h264DecoderConfigPromise = null;
+  state.h264DecoderQueue = [];
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264DecoderStatus = "waiting-keyframe";
+  state.h264DecoderLatencyMs = 0;
+  state.h264DroppedStaleFrames += droppedFrames;
+  state.h264LastDropReason = reason;
+  logEvent("H.264 队列重同步", `本地丢 ${droppedFrames} · ${reason}`);
 }
 
 function requestJpegVideoFallback(reason) {
@@ -2338,13 +2413,9 @@ async function ensureH264Decoder(frame) {
     return state.h264DecoderConfigPromise;
   }
 
-  const previousErrorCount = state.h264DecoderErrorCount;
-  const previousLastError = state.h264DecoderLastError;
-  resetVideoDecoder();
+  resetVideoDecoder({ preserveDiagnostics: true });
   state.h264DecoderStatus = "configuring";
   state.h264DecoderKey = decoderKey;
-  state.h264DecoderErrorCount = previousErrorCount;
-  state.h264DecoderLastError = previousLastError;
   const baseConfig = {
     codec,
     hardwareAcceleration: "prefer-hardware",
@@ -2383,6 +2454,7 @@ async function handleH264VideoFrame(frame) {
     logEvent("视频帧", "收到 H.264 视频帧但缺少 payload");
     return;
   }
+  const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
   recordVideoFrameStats({ ...frame, codec: "h264" });
   elements.videoStatus.textContent = `h264 · #${frame.frameId || state.frameCount} · ${state.h264DecoderStatus}`;
 
@@ -2391,17 +2463,40 @@ async function handleH264VideoFrame(frame) {
     return;
   }
 
+  if (state.h264DecoderNeedsKeyFrame && !isKeyFrame && state.h264DecoderStatus === "waiting-keyframe" && !state.h264DecoderConfigPromise) {
+    state.h264SkippedDeltaFrames += 1;
+    state.h264DecoderStatus = "waiting-keyframe";
+    const reasonText = state.h264LastDropReason ? ` · ${state.h264LastDropReason}` : "";
+    elements.videoStatus.textContent = `h264 · 等待关键帧 · 跳过 ${state.h264SkippedDeltaFrames}${reasonText}`;
+    renderSessionDiagnostics();
+    return;
+  }
+
   try {
-    const decoder = await ensureH264Decoder(frame);
-    const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
+    let decoder = await ensureH264Decoder(frame);
+    if (shouldFlushH264DecoderQueue()) {
+      flushH264DecoderQueue("queue-overflow-wait-keyframe");
+      if (!isKeyFrame) {
+        state.h264SkippedDeltaFrames += 1;
+        elements.videoStatus.textContent = `h264 · 等待关键帧 · 跳过 ${state.h264SkippedDeltaFrames} · ${state.h264LastDropReason}`;
+        renderSessionDiagnostics();
+        return;
+      }
+      decoder = await ensureH264Decoder(frame);
+    }
     if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
       state.h264SkippedDeltaFrames += 1;
       state.h264DecoderStatus = "waiting-keyframe";
-      elements.videoStatus.textContent = `h264 · 等待关键帧 · 跳过 ${state.h264SkippedDeltaFrames}`;
+      const reasonText = state.h264LastDropReason ? ` · ${state.h264LastDropReason}` : "";
+      elements.videoStatus.textContent = `h264 · 等待关键帧 · 跳过 ${state.h264SkippedDeltaFrames}${reasonText}`;
+      renderSessionDiagnostics();
       return;
     }
     if (isKeyFrame) {
       state.h264DecoderNeedsKeyFrame = false;
+    }
+    if (!state.h264Decoder || state.h264Decoder !== decoder || decoder.state === "closed") {
+      decoder = await ensureH264Decoder(frame);
     }
     const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.lastVideoFps || currentVideoSettings().fps || 30));
     const timestampUs =
@@ -2422,6 +2517,7 @@ async function handleH264VideoFrame(frame) {
       duration: durationUs,
       data: payloadBytes,
     }));
+    renderSessionDiagnostics();
   } catch (error) {
     recordH264DecodeError(error);
   }
@@ -2462,7 +2558,9 @@ function drawDecodedVideoFrame(videoFrame) {
   elements.emptyState.classList.add("is-hidden");
   const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
   const ageStatusText = ageText ? ` · ${ageText}` : "";
-  elements.videoStatus.textContent = `h264 · 解码 #${decodedMeta?.frameId ?? state.h264DecodedFrames} · ${formatMs(state.h264DecoderLatencyMs)}${ageStatusText}`;
+  const h264QueueText = h264QueueDiagnosticText();
+  const h264StatusText = h264QueueText ? ` · ${h264QueueText}` : "";
+  elements.videoStatus.textContent = `h264 · 解码 #${decodedMeta?.frameId ?? state.h264DecodedFrames} · ${formatMs(state.h264DecoderLatencyMs)}${ageStatusText}${h264StatusText}`;
   renderSessionDiagnostics();
 }
 

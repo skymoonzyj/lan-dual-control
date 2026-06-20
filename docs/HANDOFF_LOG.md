@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac client H.264 解码队列保护
+开发端：Mac Codex
+本轮目标：让 Mac 控 Windows 页面在 H.264 WebCodecs 本地解码器卡住时，不继续堆积和播放严重过期画面，并把原因写进现场诊断。
+完成内容：
+- H.264 本地解码队列超过 8 帧或最旧帧超过 450ms 时，页面会关闭旧 decoder、清空旧队列、累计本地丢帧，并切到等待下一关键帧。
+- 会话诊断、顶部视频状态和复制/导出诊断现在会显示 `本地丢 <n>`、`解码队列 <n>`、`queue-overflow-wait-keyframe`、H.264 解码帧/队列/错误/最近原因。
+- 页面短暂切回 mock/JPEG 帧时只关闭旧 decoder，不清掉本轮 H.264 队列保护诊断，避免现场证据被后续帧覆盖。
+- `test-mac-client-browser` 新增 `--expectH264QueueGuard`，安装只收帧不出帧的 fake WebCodecs decoder 并注入合成 H.264 burst，稳定覆盖本地队列保护。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --expectH264QueueGuard --progressIntervalMs 0 --timeoutMs 45000` 先失败于 `Mac client H.264 queue guard timed out`，诊断里没有 `queue-overflow-wait-keyframe`。
+- 定位：失败快照显示 `fakeDecodeCount=1`，确认初次 decoder 配置期间过早跳过 delta；修正后同一命令通过。
+- 绿灯：同一命令输出 `H.264 queue guard: h264 · 等待关键帧 · 跳过 16 · queue-overflow-wait-keyframe / ... 本地丢 8 · queue-overflow-wait-keyframe`。
+遗留问题：
+- Agent Link Board active call 仍是 Windows host readiness，需要 Windows 端刷新 Windows host/status；本轮没有覆盖该 call。
+下一步建议：
+- 真机 Mac 控 Windows 若出现“画面延迟越来越大/不像实时”，优先复制 Mac client 诊断，看 `本地丢`、`queue-overflow-wait-keyframe`、解码队列和帧间隔，再判断是 Windows 编码、网络还是 Mac 本地解码队列问题。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 代码修改；真实 Windows host 可发现后再做真机观感验收。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac client WebAudio 队列保护
 开发端：Mac Codex
 本轮目标：让 Mac 控 Windows 页面在远端 PCM 音频突发时不要继续堆播放旧音源，并把队列/重同步证据暴露给现场诊断。
