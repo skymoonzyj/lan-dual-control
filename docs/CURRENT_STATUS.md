@@ -3,6 +3,10 @@
 最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
+## 2026-06-20 W3 Windows 音频状态实时可见化
+- Windows 控制端页面声音状态行现在会把最近 2 秒音频帧到达统计直接显示出来：样本足够时追加 `最大间隔 <ms> ms`，出现 >=120ms 长间隔时追加 `音频卡顿 <n>`。这样用户不复制诊断也能在远控窗口里直接看到声音供流是否有明显抖动；复制/导出诊断仍保留更完整的平均间隔、最大间隔、音频卡顿和最大音频卡顿。本轮页面自测先红于 `arrivalGapStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
+
 ## 2026-06-20 W3 Windows 音频到达间隔诊断
 - Windows 控制端现在记录最近 2 秒 `audioFrameTimes`，复制/导出诊断“现场声音”在至少 2 个音频帧样本时显示 `平均间隔 <ms> ms`、`最大间隔 <ms> ms`，并对 >=120ms 的音频到达长间隔输出 `音频卡顿 <n>` / `最大音频卡顿 <ms> ms`。这用于区分 Mac/网络供流抖动与 Windows 本地 WebAudio 队列补缓冲/重同步；页面自测先红于缺少 `平均间隔 118 ms` / `音频卡顿 2`，再绿于 `test-windows-client-browser --diagnosticsOnly`。本轮不改协议、不认证、不请求或发送密码、不发 input/inject、不改音量或输出设备。
 

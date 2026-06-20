@@ -16,6 +16,20 @@
 是否改了协议：
 是否需要另一端配合：
 ```
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 W3 Windows 音频状态实时可见化
+开发端：Windows Codex
+本轮目标：让用户不复制诊断也能在 Windows 控制端页面声音状态行看到音频供流抖动。
+完成内容：页面声音状态行追加最近最大音频到达间隔和音频卡顿次数；复制诊断保持完整平均/最大/卡顿明细；页面自测补红绿断言。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 arrivalGapStatusVisible=false；绿灯 node --check app/test 与 test-windows-client-browser --diagnosticsOnly 通过。
+遗留问题：只增强 Windows 页面可见性，不改变 Mac 采集、网络传输、WebAudio 队列策略或 remote-only 声音路径。
+下一步建议：真实听感测试时先看页面声音行的最大间隔/音频卡顿，再结合复制诊断里的补缓冲、稳缓冲和重同步判断查供流端还是播放队列。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实听感仍需要用户现场确认。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 W3 Windows 音频到达间隔诊断

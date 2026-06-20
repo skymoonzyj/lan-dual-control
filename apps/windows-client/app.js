@@ -3262,6 +3262,14 @@ function shouldRenderAudioStatus({ force = false } = {}) {
   return now - state.audioLastStatusUpdateAt >= audioStatusRenderIntervalMs;
 }
 
+function formatAudioArrivalStatusText() {
+  const { sampleCount, maxGapMs, stutterCount } = getAudioFrameGapStats();
+  if (sampleCount < 2) return "";
+  const parts = [`最大间隔 ${maxGapMs} ms`];
+  if (stutterCount > 0) parts.push(`音频卡顿 ${stutterCount}`);
+  return ` · ${parts.join(" · ")}`;
+}
+
 function renderAudioStatusFromFrame(frame, options = {}) {
   if (!shouldRenderAudioStatus(options)) return false;
   state.audioLastStatusUpdateAt = performance.now();
@@ -3275,7 +3283,8 @@ function renderAudioStatusFromFrame(frame, options = {}) {
       ? " · 等待播放"
       : "";
   const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
-  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}`;
+  const arrivalText = formatAudioArrivalStatusText();
+  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}${arrivalText}`;
   syncFloatingControlStatus();
 
   if (state.audioFrames === 1 || state.audioFrames % 20 === 0) {

@@ -6569,6 +6569,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
           arrivalGapExportText.includes("最大间隔 220 ms") &&
           arrivalGapExportText.includes("音频卡顿 2") &&
           arrivalGapExportText.includes("最大音频卡顿 220 ms");
+        renderAudioStatusFromFrame(makeFrame(), { force: true });
+        const arrivalGapStatusText = document.querySelector("#audioText")?.textContent || "";
+        const arrivalGapStatusVisible =
+          arrivalGapStatusText.includes("最大间隔 220 ms") &&
+          arrivalGapStatusText.includes("音频卡顿 2");
         const adaptivePrebuffered =
           adaptiveUnderrunPlayed &&
           adaptiveUnderrunStart >= 10.315 &&
@@ -6607,7 +6612,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && flushedOldQueue,
+          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && flushedOldQueue,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -6617,6 +6622,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           adaptivePrebuffered,
           arrivalGapDiagnosed,
           arrivalGapExportText,
+          arrivalGapStatusVisible,
+          arrivalGapStatusText,
           adaptiveUnderrunStart,
           adaptiveUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,
