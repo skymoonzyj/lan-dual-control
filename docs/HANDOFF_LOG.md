@@ -17,6 +17,19 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
+
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 M1 Mac remote audio status consent/restore gate
@@ -30,6 +43,19 @@
 是否改了协议：否。
 是否需要另一端配合：不需要 Windows 改代码；Windows/用户只需按新状态字段理解门禁。不在通讯板发送密码，不发 input/inject。
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
+
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 W2/W3 复测结果 stdin 上板入口
@@ -42,6 +68,19 @@
 下一步建议：Windows 端真实复测后可任选 `--text`、`--file` 或 `type retest.txt | node scripts/windows/post-w2w3-retest-board.mjs --stdin --send` 上板；随后两端看最新 `W2H264BoardDiagnosis=`。
 是否改了协议：否。
 是否需要另一端配合：需要 Windows 端继续运行真实 `Run-WinClientRetest.cmd` 并上板结果；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
 
 ## 2026-06-21 Mac Codex
 
@@ -181,6 +220,19 @@
 下一步建议：推送后让 Mac 端保持 `192.168.31.122:43770` 在线，用户在本机终端输入 Mac 临时密码复跑 `WinClientRetest=`，把 `W2W3Retest=` 发通讯板。
 是否改了协议：否。
 是否需要另一端配合：需要 Mac host 保持 60Hz/H.264 在线；不在通讯板发送密码，不发 input/inject。
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
+
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 M5 Mac H.264 keyframe 证据上板
@@ -194,6 +246,19 @@
 是否改了协议：否。只扩展 Mac 观察脚本/ready 摘要，不改变 WebSocket 消息格式。
 是否需要另一端配合：需要 Windows 端继续真实 60Hz/H.264 页面复测和解码侧排查；不在通讯板发送密码，不发 input/inject。
 
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
+
 ## 2026-06-21 Mac Codex
 
 日期：2026-06-21 M4 Mac 第一屏媒体基线统一 60Hz
@@ -206,6 +271,19 @@
 下一步建议：Windows 端继续运行 `WinClientRetest=`，结束后把 `W2W3Retest=` 一行发通讯板；Mac 保持 host `192.168.31.122:43770` / `inputMode=log` / `maxScreenFps=60` 在线。
 是否改了协议：否。
 是否需要另一端配合：需要 Windows/User 做真实 60Hz/H.264 页面复测；不在通讯板发送密码，不发 input/inject。
+
+## 2026-06-21 Windows Codex
+
+日期：2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+开发端：Windows Codex
+本轮目标：修复真实复测中 Windows 已收到 SPS/PPS/IDR 关键帧但控制端仍显示“等待关键帧”、canvas/image 不出画面的本地 H.264 解码门禁问题。
+完成内容：先在 `test-windows-client-browser` 的 H.264 keyframe 回归里加入 `h264DecoderNeedsKeyFrame === false` 断言，红灯复现为 `recv=2/key=1/sps=1/pps=1/idr=1/lastNal=7/8/5` 但 `needsKeyFrame=true`。根因是 `renderH264VideoFrame` 已识别当前帧为关键帧并清门禁，随后 `ensureH264Decoder` 首次创建/重建 decoder 调用 `resetVideoDecoder()` 又把门禁设回 true。修复为传递 `currentFrameIsKeyFrame`，并在 decoder 配置成功后保留 `h264DecoderNeedsKeyFrame=false`；普通 delta 等待关键帧和队列背压重同步逻辑保持不变。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败于 `h264DecoderNeedsKeyFrame=true`；绿灯同命令通过；`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000` 通过；`node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+遗留问题：还需要用户在场后用真实 Mac host 重新跑 `Run-WinClientRetest-And-Post.cmd` 证明现场 canvas/image surface 已恢复；如果仍黑屏，下一步查 WebCodecs decode error / decoded surface / canvas 绘制，而不是再补 Mac 关键帧证据。
+下一步建议：两端拉最新后，Mac 侧保持 host 在线，Windows 侧运行真实复测入口并把脱敏 `W2W3Retest=` 自动上板；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端保持 host 在线；真实密码仍由用户在 Windows 本机隐藏终端输入。
 
 ## 2026-06-21 Mac Codex
 

@@ -5271,6 +5271,7 @@ async function verifyH264KeyFrameDetection(session) {
           state.h264ReceivedIdr === 1 &&
           state.h264LastNalTypes === "7/8/5" &&
           String(state.h264LastKeyFrameId) === "42" &&
+          state.h264DecoderNeedsKeyFrame === false &&
           exportText.includes("H.264收到 2") &&
           exportText.includes("关键帧 1") &&
           exportText.includes("SPS/PPS/IDR 1/1/1") &&
@@ -5294,6 +5295,7 @@ async function verifyH264KeyFrameDetection(session) {
           h264ReceivedIdr: state.h264ReceivedIdr,
           h264LastNalTypes: state.h264LastNalTypes,
           h264LastKeyFrameId: state.h264LastKeyFrameId,
+          h264DecoderNeedsKeyFrame: state.h264DecoderNeedsKeyFrame,
           exportText,
         };
       } finally {

@@ -9363,7 +9363,7 @@ async function renderH264VideoFrame(frame) {
     if (isKeyFrame) {
       state.h264DecoderNeedsKeyFrame = false;
     }
-    const decoder = await ensureH264Decoder(frame);
+    const decoder = await ensureH264Decoder(frame, { currentFrameIsKeyFrame: isKeyFrame });
     const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.negotiatedFps || 30));
     const timestampUs =
       Number(frame.timestampUs) ||
@@ -9397,7 +9397,7 @@ async function renderH264VideoFrame(frame) {
   }
 }
 
-async function ensureH264Decoder(frame) {
+async function ensureH264Decoder(frame, { currentFrameIsKeyFrame = false } = {}) {
   if (!supportsWebCodecsH264()) {
     state.h264DecoderStatus = "unsupported";
     updateH264DecoderDiagnostics();
@@ -9447,6 +9447,9 @@ async function ensureH264Decoder(frame) {
   state.h264Decoder = decoder;
   state.h264DecoderKey = decoderKey;
   state.h264DecoderCodec = `${codec}:${label}`;
+  if (currentFrameIsKeyFrame) {
+    state.h264DecoderNeedsKeyFrame = false;
+  }
   state.h264DecoderStatus = "configured";
   updateH264DecoderDiagnostics();
   return decoder;

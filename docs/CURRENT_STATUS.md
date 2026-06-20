@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2-H264-DECODE-GATE-BLOCKER Windows keyframe gate fix
+- 用户真实复测已经证明 Mac 侧和网络不是当前主因：Windows 连接成功，H.264 实收约 58 FPS，收到 2588 帧，其中关键帧 22，SPS/PPS/IDR=22/22/22，lastNal=1，但 Windows 控制端仍显示“等待关键帧”且 canvas/image 没有出画面。本轮定位到 Windows 控制端 `renderH264VideoFrame` 先因当前帧是 SPS/PPS/IDR 关键帧而清掉 `h264DecoderNeedsKeyFrame`，随后首次创建/重建 WebCodecs decoder 时 `resetVideoDecoder()` 又把同一标记设回 true，导致收到有效关键帧后仍被诊断为 `needsKeyframe=yes`。现在 `ensureH264Decoder(frame, { currentFrameIsKeyFrame })` 会在当前帧为关键帧且 decoder 配置成功后保留门禁解锁状态；delta 等待关键帧、队列背压重同步、H.264 恢复和 JPEG fallback 路径保持原有安全逻辑。回归测试先红于 `h264DecoderNeedsKeyFrame=true`，绿灯 `test-windows-client-browser --diagnosticsOnly` 与 `--boardSummary` 均通过。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-21 M1 Mac remote audio status consent/restore gate
 - `check-mac-remote-audio-status --boardSummary` 的 `MacRemoteAudioStatus=` 现在直接追加 `Consent=explicit-before-change` 和 `RestorePath=required-before-apply`，不再只有 plan 摘要携带这两个门禁。无论当前是 `local-playback-active` blocker，还是 `local-output-muted` 候选，都表示任何静音、切输出设备或 remote-only 产品开关前必须先说明影响、取得用户明确同意，并确认如何恢复后再执行。脚本仍只读，不改系统音量、不切输出设备、不请求密码、不认证、不发送 input/inject。
 
