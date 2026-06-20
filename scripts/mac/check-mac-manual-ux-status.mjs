@@ -307,7 +307,10 @@ function isUserAwakeText(text) {
 
 function isUserPresenceReferenceText(text) {
   const source = compactText(text);
-  if (!/\bUSER_SLEEPING\b|\bUSER_AWAKE\b|\bBLOCKED_BY_USER_SLEEP\b/i.test(source)) return false;
+  const tokenReference = /\bUSER_SLEEPING\b|\bUSER_AWAKE\b|\bBLOCKED_BY_USER_SLEEP\b/i.test(source);
+  const chinesePresenceReference = /用户睡眠|睡眠态|醒来信号|用户醒来|用户在场/i.test(source)
+    && /区分|说明|标签|引用|功能|脚本|状态脚本|已补|新增|实现|测试|文案|识别|解析|守卫|防误判/i.test(source);
+  if (!tokenReference && !chinesePresenceReference) return false;
   return /\b(gate|parser|parse|detect|test|coverage|help|docs?|summary|status script|script)\b/i.test(source)
     || /已补|新增|实现|测试|文案|说明|引用|标签|识别|解析|守卫|防误判|功能说明/i.test(source);
 }

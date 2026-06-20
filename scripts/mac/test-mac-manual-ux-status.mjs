@@ -456,6 +456,12 @@ function expiredMacManualUxCallWithAwakeAfterPresenceLabelReferenceBoardState() 
         from: "Mac Codex",
         text: "USER_AWAKE: 用户已在 Mac Codex 线程确认可以正式工作并可参与授权。后续仍需按任务发明确 call；不要在通讯板发送密码、密钥或系统账号。",
       },
+      {
+        at: "2026-06-20T10:14:00.000Z",
+        type: "message",
+        from: "Mac Codex",
+        text: "Mac 本轮准备本地提交：manual UX 状态脚本会区分真实用户睡眠/醒来信号与说明性标签引用；睡眠态抑制 reconfirm/sendCall，说明文字不再误判。",
+      },
     ],
   };
 }
