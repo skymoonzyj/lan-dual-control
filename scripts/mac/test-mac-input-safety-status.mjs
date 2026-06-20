@@ -306,6 +306,9 @@ async function checkBoardUserPresencePresentAllowsExplainedInject(args) {
       assertIncludes(payload.boardSummary, "UserPresence=present", "present user boardSummary");
       assertIncludes(payload.boardSummary, "source=api-state", "present user boardSummary");
       assertIncludes(payload.boardSummary, "MacInputSafetyAction=explain-before-inject", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "--checkBoard", "present user boardSummary");
+      assertIncludes(payload.boardSummary, "--boardSummary", "present user boardSummary");
       assertSafeOutput(outputOf(result), "present user input safety JSON");
     });
   });

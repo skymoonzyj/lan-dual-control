@@ -130,6 +130,29 @@ function boolPermission(value) {
   return value === true;
 }
 
+function shellQuote(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+function makeCommand(script, args) {
+  return ["node", script, ...args].map(shellQuote).join(" ");
+}
+
+function makeMacSafeInjectRehearsalCommand(args, host) {
+  return makeCommand("scripts/mac/plan-mac-safe-inject-rehearsal.mjs", [
+    "--host",
+    host?.host || args.host || defaults.host,
+    "--port",
+    String(host?.port || args.port || defaults.port),
+    "--checkBoard",
+    "--server",
+    args.server || defaults.server,
+    "--boardSummary",
+  ]);
+}
+
 function inputModeFromDiscovery(payload) {
   return normalizedText(payload?.capabilities?.input?.mode || payload?.capabilities?.inputMode || payload?.inputMode || "unknown").toLowerCase();
 }
@@ -353,7 +376,8 @@ function makeMacInputSafetyAction(report) {
   };
 }
 
-function applyUserPresenceGate(report, userPresence) {
+function applyUserPresenceGate(report, userPresence, args = defaults) {
+  report.commands.macSafeInjectRehearsal = makeMacSafeInjectRehearsalCommand(args, report.host);
   if (!userPresence?.checked) {
     report.macInputSafetyAction = makeMacInputSafetyAction(report);
     return report;
@@ -400,6 +424,9 @@ function makeBoardSummary(report) {
       parts.push(`MacInputSafetyAction=${action}`);
     }
   }
+  if (report.macInputSafetyAction?.id === "explain-before-inject" && report.commands?.macSafeInjectRehearsal) {
+    parts.push(`MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}.`);
+  }
   parts.push(
     ".",
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlan}.`,
@@ -436,7 +463,7 @@ async function buildReport(args) {
     report = assess({ online: false, host: args.host, port: args.port }, error.message);
   }
   const userPresence = await readUserPresence(args);
-  return applyUserPresenceGate(report, userPresence);
+  return applyUserPresenceGate(report, userPresence, args);
 }
 
 async function main() {
