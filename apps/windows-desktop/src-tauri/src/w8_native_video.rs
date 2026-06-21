@@ -2,10 +2,10 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Mutex};
 #[cfg(windows)]
-use std::{ffi::c_void, mem::ManuallyDrop, ptr, sync::mpsc, thread, time::Duration};
+use std::{ffi::c_void, mem::ManuallyDrop, ptr, slice, sync::mpsc, thread, time::Duration};
 
 #[cfg(windows)]
-use windows::core::GUID;
+use windows::core::{Interface, GUID};
 #[cfg(windows)]
 use windows::Win32::Foundation::HMODULE;
 #[cfg(windows)]
@@ -14,9 +14,9 @@ use windows::Win32::Graphics::Direct3D::{
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, D3D11_BIND_DECODER,
-    D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
-    D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
+    D3D11_BIND_DECODER, D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+    D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::Common::{
@@ -189,6 +189,10 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub native_surface_width: u32,
     pub native_surface_height: u32,
     pub native_surface_reason: String,
+    pub native_surface_copy_status: String,
+    pub native_surface_copy_bytes: u64,
+    pub native_surface_presented_frames: u64,
+    pub native_surface_last_frame_id: Option<u64>,
     pub reason: String,
 }
 
@@ -683,8 +687,13 @@ impl W8NativeVideoDecoderSessionState {
             .as_ref()
             .map(|current| current.active)
             .unwrap_or(false);
+        let next_submitted_frame = self
+            .summary
+            .as_ref()
+            .map(|current| current.submitted_frames + 1)
+            .unwrap_or(1);
         let process_result = if should_process {
-            Some(self.process(summary))
+            Some(self.process(summary, next_submitted_frame))
         } else {
             None
         };
@@ -703,6 +712,18 @@ impl W8NativeVideoDecoderSessionState {
                     current.latest_frame_bytes = process_output_byte_len;
                     current.latest_frame_format = current.output_subtype.clone();
                     current.frame_handoff_status = "latest-frame-ready".to_string();
+                    if let Some(surface_copy) = process_result.surface_copy.as_ref() {
+                        current.native_surface_status = surface_copy.status.clone();
+                        current.native_surface_copy_status = surface_copy.status.clone();
+                        current.native_surface_copy_bytes = surface_copy.bytes_copied;
+                        current.native_surface_presented_frames = surface_copy.presented_frames;
+                        current.native_surface_last_frame_id = surface_copy.last_frame_id;
+                        current.native_surface_reason = surface_copy.reason.clone();
+                        if surface_copy.status == "latest-frame-presented" {
+                            current.last_status = surface_copy.status.clone();
+                            current.frame_handoff_status = "latest-frame-ready".to_string();
+                        }
+                    }
                 } else if process_result.input_accepted && current.frame_handoff_active {
                     current.frame_handoff_status = "waiting-decoded-frame".to_string();
                 } else if current.frame_handoff_active {
@@ -748,6 +769,10 @@ impl W8NativeVideoDecoderSessionState {
             native_surface_width: 0,
             native_surface_height: 0,
             native_surface_reason: "starting native surface target preflight".to_string(),
+            native_surface_copy_status: "waiting-decoded-frame".to_string(),
+            native_surface_copy_bytes: 0,
+            native_surface_presented_frames: 0,
+            native_surface_last_frame_id: None,
             reason: "starting persistent decoder session".to_string(),
         };
 
@@ -772,6 +797,10 @@ impl W8NativeVideoDecoderSessionState {
                     started.native_surface_width = surface_target.width;
                     started.native_surface_height = surface_target.height;
                     started.native_surface_reason = surface_target.reason;
+                    started.native_surface_copy_status = surface_target.copy_status;
+                    started.native_surface_copy_bytes = surface_target.copy_bytes;
+                    started.native_surface_presented_frames = surface_target.presented_frames;
+                    started.native_surface_last_frame_id = surface_target.last_frame_id;
                     started.reason = "ready; dedicated native decoder worker active".to_string();
                     self.worker = Some(worker);
                 }
@@ -800,11 +829,15 @@ impl W8NativeVideoDecoderSessionState {
         self.summary = Some(started);
     }
 
-    fn process(&mut self, summary: &NativeH264AnnexBSummary) -> W8NativeVideoDecoderSessionProcess {
+    fn process(
+        &mut self,
+        summary: &NativeH264AnnexBSummary,
+        frame_id: u64,
+    ) -> W8NativeVideoDecoderSessionProcess {
         #[cfg(windows)]
         {
             if let Some(worker) = self.worker.as_ref() {
-                return worker.process(summary.access_unit_bytes.clone());
+                return worker.process(summary.access_unit_bytes.clone(), frame_id);
             }
             W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
@@ -812,6 +845,7 @@ impl W8NativeVideoDecoderSessionState {
                 output_byte_len: 0,
                 status: "worker-inactive".to_string(),
                 reason: "blocked: dedicated native decoder worker is not active".to_string(),
+                surface_copy: None,
             }
         }
         #[cfg(not(windows))]
@@ -822,6 +856,7 @@ impl W8NativeVideoDecoderSessionState {
                 output_byte_len: 0,
                 status: "inactive".to_string(),
                 reason: "blocked: persistent decoder session is not active".to_string(),
+                surface_copy: None,
             }
         }
     }
@@ -833,12 +868,23 @@ struct W8NativeVideoDecoderSessionProcess {
     output_byte_len: u64,
     status: String,
     reason: String,
+    surface_copy: Option<W8NativeSurfaceCopyResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct W8NativeSurfaceCopyResult {
+    status: String,
+    bytes_copied: u64,
+    presented_frames: u64,
+    last_frame_id: Option<u64>,
+    reason: String,
 }
 
 #[cfg(windows)]
 enum W8NativeVideoDecoderWorkerCommand {
     Decode {
         access_unit: Vec<u8>,
+        frame_id: u64,
         response: mpsc::Sender<W8NativeVideoDecoderSessionProcess>,
     },
     Stop,
@@ -869,9 +915,11 @@ impl W8NativeVideoDecoderWorker {
                             match command {
                                 W8NativeVideoDecoderWorkerCommand::Decode {
                                     access_unit,
+                                    frame_id,
                                     response,
                                 } => {
-                                    let process = unsafe { runtime.process(&access_unit) };
+                                    let process =
+                                        unsafe { runtime.process(&access_unit, frame_id) };
                                     let _ = response.send(process);
                                 }
                                 W8NativeVideoDecoderWorkerCommand::Stop => break,
@@ -905,10 +953,11 @@ impl W8NativeVideoDecoderWorker {
         }
     }
 
-    fn process(&self, access_unit: Vec<u8>) -> W8NativeVideoDecoderSessionProcess {
+    fn process(&self, access_unit: Vec<u8>, frame_id: u64) -> W8NativeVideoDecoderSessionProcess {
         let (response_sender, response_receiver) = mpsc::channel();
         if let Err(error) = self.sender.send(W8NativeVideoDecoderWorkerCommand::Decode {
             access_unit,
+            frame_id,
             response: response_sender,
         }) {
             return W8NativeVideoDecoderSessionProcess {
@@ -917,6 +966,7 @@ impl W8NativeVideoDecoderWorker {
                 output_byte_len: 0,
                 status: "worker-send-blocked".to_string(),
                 reason: format!("blocked: native decoder worker command send failed: {error}"),
+                surface_copy: None,
             };
         }
 
@@ -928,6 +978,7 @@ impl W8NativeVideoDecoderWorker {
                 output_byte_len: 0,
                 status: "worker-timeout".to_string(),
                 reason: format!("blocked: native decoder worker response timed out: {error}"),
+                surface_copy: None,
             },
         }
     }
@@ -968,6 +1019,10 @@ struct W8NativeSurfaceTargetSummary {
     width: u32,
     height: u32,
     reason: String,
+    copy_status: String,
+    copy_bytes: u64,
+    presented_frames: u64,
+    last_frame_id: Option<u64>,
 }
 
 #[cfg(windows)]
@@ -1233,6 +1288,10 @@ unsafe fn create_d3d11_latest_frame_texture_target(
                 "ready; D3D11 {} latest-frame texture target created",
                 format_d3d_feature_level(selected)
             ),
+            copy_status: "waiting-decoded-frame".to_string(),
+            copy_bytes: 0,
+            presented_frames: 0,
+            last_frame_id: None,
         },
     })
 }
@@ -1243,6 +1302,117 @@ fn dxgi_format_for_surface_output(output_subtype: &str) -> (DXGI_FORMAT, String)
         (DXGI_FORMAT_NV12, "NV12".to_string())
     } else {
         (DXGI_FORMAT_B8G8R8A8_UNORM, "BGRA8".to_string())
+    }
+}
+
+#[cfg(windows)]
+unsafe fn copy_decoded_sample_to_native_surface(
+    target: &mut W8NativeSurfaceTargetRuntime,
+    sample: &IMFSample,
+    frame_id: u64,
+) -> Result<W8NativeSurfaceCopyResult, String> {
+    let sample_bytes = contiguous_sample_bytes(sample)?;
+    let (row_pitch, expected_bytes) = native_surface_copy_layout(
+        &target.summary.format,
+        target.summary.width,
+        target.summary.height,
+    )?;
+    if sample_bytes.len() < expected_bytes as usize {
+        target.summary.copy_status = "sample-too-small".to_string();
+        target.summary.status = "sample-too-small".to_string();
+        target.summary.reason = format!(
+            "blocked: decoded sample {} bytes is smaller than {} bytes {} texture",
+            sample_bytes.len(),
+            expected_bytes,
+            target.summary.format
+        );
+        return Err(target.summary.reason.clone());
+    }
+
+    let resource: ID3D11Resource = target
+        ._texture
+        .cast()
+        .map_err(|error| format!("ID3D11Texture2D cast to resource failed: {error}"))?;
+    target._context.UpdateSubresource(
+        &resource,
+        0,
+        None,
+        sample_bytes.as_ptr() as *const c_void,
+        row_pitch,
+        expected_bytes,
+    );
+    target._context.Flush();
+
+    let presented_frames = target.summary.presented_frames.saturating_add(1);
+    target.summary.status = "latest-frame-presented".to_string();
+    target.summary.copy_status = "latest-frame-presented".to_string();
+    target.summary.copy_bytes = u64::from(expected_bytes);
+    target.summary.presented_frames = presented_frames;
+    target.summary.last_frame_id = Some(frame_id);
+    target.summary.reason = format!(
+        "ready; copied {} bytes into D3D11 {} latest-frame texture",
+        expected_bytes, target.summary.format
+    );
+
+    Ok(W8NativeSurfaceCopyResult {
+        status: target.summary.copy_status.clone(),
+        bytes_copied: target.summary.copy_bytes,
+        presented_frames,
+        last_frame_id: target.summary.last_frame_id,
+        reason: target.summary.reason.clone(),
+    })
+}
+
+#[cfg(windows)]
+fn native_surface_copy_layout(format: &str, width: u32, height: u32) -> Result<(u32, u32), String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    if format.eq_ignore_ascii_case("NV12") {
+        let rows = height
+            .checked_add((height + 1) / 2)
+            .ok_or_else(|| "NV12 row count overflow".to_string())?;
+        let expected = width
+            .checked_mul(rows)
+            .ok_or_else(|| "NV12 sample size overflow".to_string())?;
+        Ok((width, expected))
+    } else if format.eq_ignore_ascii_case("BGRA8") {
+        let row_pitch = width
+            .checked_mul(4)
+            .ok_or_else(|| "BGRA8 row pitch overflow".to_string())?;
+        let expected = row_pitch
+            .checked_mul(height)
+            .ok_or_else(|| "BGRA8 sample size overflow".to_string())?;
+        Ok((row_pitch, expected))
+    } else {
+        Err(format!("unsupported native surface copy format {format}"))
+    }
+}
+
+#[cfg(windows)]
+unsafe fn contiguous_sample_bytes(sample: &IMFSample) -> Result<Vec<u8>, String> {
+    let buffer = sample
+        .ConvertToContiguousBuffer()
+        .map_err(|error| format!("ConvertToContiguousBuffer failed: {error}"))?;
+    let mut source = ptr::null_mut();
+    let mut max_length = 0_u32;
+    let mut current_length = 0_u32;
+    buffer
+        .Lock(
+            &mut source,
+            Some(&mut max_length),
+            Some(&mut current_length),
+        )
+        .map_err(|error| format!("decoded IMFMediaBuffer::Lock failed: {error}"))?;
+    let result = if source.is_null() {
+        Err("decoded IMFMediaBuffer::Lock returned null data".to_string())
+    } else {
+        Ok(slice::from_raw_parts(source as *const u8, current_length as usize).to_vec())
+    };
+    let unlock = buffer.Unlock();
+    match (result, unlock) {
+        (Ok(bytes), Ok(())) => Ok(bytes),
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(format!("decoded IMFMediaBuffer::Unlock failed: {error}")),
     }
 }
 
@@ -1423,7 +1593,11 @@ impl W8MfH264DecoderWorkerRuntime {
         started
     }
 
-    unsafe fn process(&mut self, access_unit: &[u8]) -> W8NativeVideoDecoderSessionProcess {
+    unsafe fn process(
+        &mut self,
+        access_unit: &[u8],
+        frame_id: u64,
+    ) -> W8NativeVideoDecoderSessionProcess {
         let input_sample = match create_mf_sample_from_bytes(access_unit, 0, 16_667) {
             Ok(sample) => sample,
             Err(error) => {
@@ -1433,6 +1607,7 @@ impl W8MfH264DecoderWorkerRuntime {
                     output_byte_len: 0,
                     status: "sample-create-blocked".to_string(),
                     reason: format!("blocked: {error}"),
+                    surface_copy: None,
                 };
             }
         };
@@ -1444,6 +1619,7 @@ impl W8MfH264DecoderWorkerRuntime {
                 output_byte_len: 0,
                 status: "process-input-blocked".to_string(),
                 reason: format!("blocked: native worker ProcessInput failed: {error}"),
+                surface_copy: None,
             };
         }
 
@@ -1456,6 +1632,7 @@ impl W8MfH264DecoderWorkerRuntime {
                     output_byte_len: 0,
                     status: "output-sample-blocked".to_string(),
                     reason: format!("blocked: {error}"),
+                    surface_copy: None,
                 };
             }
         };
@@ -1483,7 +1660,8 @@ impl W8MfH264DecoderWorkerRuntime {
         } else {
             0
         };
-        let status = match output_result {
+        let mut surface_copy = None;
+        let mut status = match output_result {
             Ok(()) if output_produced => "decoded-output".to_string(),
             Ok(()) => "no-output".to_string(),
             Err(error) if error.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => {
@@ -1494,7 +1672,7 @@ impl W8MfH264DecoderWorkerRuntime {
             }
             Err(error) => format!("process-output-blocked:{:?}", error.code()),
         };
-        let reason = match status.as_str() {
+        let mut reason = match status.as_str() {
             "decoded-output" => format!(
                 "ready; native worker produced {} frame",
                 self.output_subtype
@@ -1509,6 +1687,26 @@ impl W8MfH264DecoderWorkerRuntime {
             _ => format!("blocked: native worker ProcessOutput failed with {status}"),
         };
 
+        if output_produced {
+            if let Some(sample) = output_buffer.pSample.as_ref() {
+                match copy_decoded_sample_to_native_surface(
+                    &mut self.surface_target,
+                    sample,
+                    frame_id,
+                ) {
+                    Ok(copy) => {
+                        status = copy.status.clone();
+                        reason = copy.reason.clone();
+                        surface_copy = Some(copy);
+                    }
+                    Err(error) => {
+                        status = "surface-copy-blocked".to_string();
+                        reason = format!("blocked: {error}");
+                    }
+                }
+            }
+        }
+
         let output_sample = ManuallyDrop::into_inner(output_buffer.pSample);
         let output_events = ManuallyDrop::into_inner(output_buffer.pEvents);
         drop(output_sample);
@@ -1520,6 +1718,7 @@ impl W8MfH264DecoderWorkerRuntime {
             output_byte_len,
             status,
             reason,
+            surface_copy,
         }
     }
 }
@@ -2151,6 +2350,37 @@ mod tests {
         assert!(!second_session.output_subtype.trim().is_empty());
         assert!(!second_session.last_status.trim().is_empty());
         assert!(!second_session.reason.trim().is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_surface_target_copies_sample_into_latest_frame_texture() {
+        unsafe {
+            MFStartup(MF_VERSION, MFSTARTUP_LITE).expect("MFStartup should succeed");
+            let result = (|| -> Result<(), String> {
+                let mut target = create_d3d11_latest_frame_texture_target("NV12")?;
+                let expected_bytes =
+                    (target.summary.width as usize * target.summary.height as usize * 3) / 2;
+                let frame_bytes = vec![0x7f; expected_bytes];
+                let sample = create_mf_sample_from_bytes(&frame_bytes, 0, 16_667)?;
+
+                let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 7)?;
+
+                assert_eq!(copy.status, "latest-frame-presented");
+                assert_eq!(copy.bytes_copied, expected_bytes as u64);
+                assert_eq!(copy.presented_frames, 1);
+                assert_eq!(copy.last_frame_id, Some(7));
+                assert_eq!(target.summary.status, "latest-frame-presented");
+                assert_eq!(target.summary.copy_status, "latest-frame-presented");
+                assert_eq!(target.summary.copy_bytes, expected_bytes as u64);
+                assert_eq!(target.summary.presented_frames, 1);
+                assert_eq!(target.summary.last_frame_id, Some(7));
+                Ok(())
+            })();
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+            result.expect("native surface copy should succeed");
+        }
     }
 
     #[test]

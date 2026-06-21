@@ -22,7 +22,7 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 - 原生侧会维护持续 decoder session 诊断摘要：首个 decoder config 建立会话后，后续 H.264 push 会累计提交帧、MF 输入接受帧、decoded frame 计数、输出 subtype 和最近状态。
 - 真正长期持有 `IMFTransform` 的 runtime 已放进专用 `lan-dual-w8-mf-decoder` worker 线程；Tauri 全局状态只保存可 Send 的命令通道/线程句柄和摘要，后续 access unit 通过 worker 命令队列进入同一个 MF decoder。
 - decoder session 会同步返回 decoded frame handoff / latest-frame 摘要：`frameHandoffActive/frameHandoffMode/frameHandoffStatus/latestFrameFormat/latestFrameBytes/latestFrameId`。有 decoded sample 时记录最新帧格式、长度和序号；还没产出 decoded sample 时显示 `waiting-decoded-frame`，不宣称已经完成 native surface 绘制。
-- worker 启动时会创建 D3D11 latest-frame texture target：`nativeSurfaceReady/nativeSurfaceMode/nativeSurfaceStatus/nativeSurfaceFormat/nativeSurfaceWidth/nativeSurfaceHeight/nativeSurfaceReason`。当前是 surface target preflight，证明 D3D11 texture 目标可以建立；还没有把 decoded sample copy/present 到该 surface。
+- worker 启动时会创建 D3D11 latest-frame texture target：`nativeSurfaceReady/nativeSurfaceMode/nativeSurfaceStatus/nativeSurfaceFormat/nativeSurfaceWidth/nativeSurfaceHeight/nativeSurfaceReason`。`ProcessOutput` 产出 decoded `IMFSample` 后，会把 sample 合并成 contiguous buffer，并用 D3D11 `UpdateSubresource` 写入 latest-frame texture；`decoderSession` 同步返回 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`。
 - 原生队列默认目标约 80ms，硬上限约 180ms。
 - 队列积压且已有较新关键帧时，直接丢旧跳到最新关键帧。
 - 队列积压但没有可用新关键帧时，清掉 delta 积压并进入等待关键帧状态，避免继续攒旧帧。
@@ -44,7 +44,7 @@ Tauri 原生命令：
 
 ## 下一步
 
-1. 把 decoded sample copy/present 到 D3D11/native surface texture，窗口最小化 / 后台 / 切 app 时仍按实时队列丢旧保新。
+1. 把 latest-frame D3D11 texture 接到真实窗口 surface/swapchain 或 native renderer，窗口最小化 / 后台 / 切 app 时仍按实时队列丢旧保新。
 2. 把 Mac host H.264 WebSocket 接收路径从浏览器渲染循环迁到桌面原生侧或独立 native renderer，并调用 `push_w8_native_h264_annexb_frame`。
 3. 完善 decoded sample 到 surface 的失败原因和恢复策略，例如 stream-change 后重新选择输出类型、surface resize、device lost。
 4. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
@@ -61,5 +61,6 @@ Tauri 原生命令：
 - Rust decoder worker 测试必须覆盖：会话摘要声明 `workerThread=true`、`workerMode=dedicated-native-decoder-thread`、`workerStatus=active`，并且 Tauri state 不直接持有非 Send 的 `IMFTransform`。
 - Rust decoded frame handoff 测试必须覆盖：会话摘要声明 `frameHandoffActive=true`、`frameHandoffMode=native-latest-frame-handoff`，还没产出 decoded sample 时返回 `waiting-decoded-frame`，产出 sample 后能记录 latest-frame 格式和字节数。
 - Rust native surface target 测试必须覆盖：会话摘要声明 `nativeSurfaceReady=true`、`nativeSurfaceMode=d3d11-latest-frame-texture-target`、目标尺寸 `1920x1080`、格式与 decoder 输出 subtype 对齐。
+- Rust native surface copy 测试必须覆盖：contiguous decoded `IMFSample` 能写入 D3D11 latest-frame texture，并记录 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`。
 - 桌面端 `cargo check` 必须通过。
 - 后续接入真实渲染后，真实最小化 / 切 app / 切回测试要看本机视频队列是否保持在 80-180ms 附近，而不是继续堆到 600ms+。

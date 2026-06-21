@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 decoded sample -> D3D11 texture copy
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 D3D11 latest-frame texture target 后，把 MF decoded sample 真实写入该 texture，并把 copy/present 状态透到 Windows 控制端诊断。
+完成内容：`lan-dual-w8-mf-decoder` worker 的 decode 命令带上 frame id；`ProcessOutput` 产出 decoded `IMFSample` 后，原生侧会 `ConvertToContiguousBuffer`，按 NV12/BGRA8 计算 row pitch，用 D3D11 `UpdateSubresource` 写入 latest-frame texture 并 `Flush`。`decoderSession` 新增 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`。Windows 控制端诊断/复制导出新增 `原生表面写入 ... bytes` 和 `原生表面呈现 ...`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `copy_decoded_sample_to_native_surface` 和 surface copy 字段，前端专项失败于缺 `原生表面写入 3110400 bytes` / `原生表面呈现 1`；绿灯后验证通过：`native_surface_target_copies_sample_into_latest_frame_texture` 通过、W8 Rust 专项 14 项通过、桌面端 `cargo test` 全量 6+24+doc 通过、`cargo check` 通过、H.264 页面专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`cargo fmt --check` 通过、`git diff --check` 通过、冲突扫描无命中。
+遗留问题：本轮已能把 decoded sample 写入 D3D11 latest-frame texture，但还没有把该 texture 接到真实窗口 surface/swapchain，也没有处理 stream-change、surface resize 和 device lost 的完整恢复。
+下一步建议：继续 W8：把 latest-frame D3D11 texture 接到真实 native renderer/window surface，并补 stream-change 后重新选输出类型、resize 重建 texture、device lost 重建设备。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实 native renderer 验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 D3D11 native surface target preflight
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 decoded frame handoff 后让 worker 创建 D3D11 latest-frame texture target，为下一步 decoded sample copy/present 到 native surface 做真实接线准备。

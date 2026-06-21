@@ -654,6 +654,10 @@ const state = {
   w8NativeVideoNativeSurfaceWidth: 0,
   w8NativeVideoNativeSurfaceHeight: 0,
   w8NativeVideoNativeSurfaceReason: "",
+  w8NativeVideoNativeSurfaceCopyStatus: "",
+  w8NativeVideoNativeSurfaceCopyBytes: 0,
+  w8NativeVideoNativeSurfacePresentedFrames: 0,
+  w8NativeVideoNativeSurfaceLastFrameId: null,
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -821,6 +825,10 @@ const state = {
     w8NativeVideoNativeSurfaceWidth: 0,
     w8NativeVideoNativeSurfaceHeight: 0,
     w8NativeVideoNativeSurfaceReason: "",
+    w8NativeVideoNativeSurfaceCopyStatus: "",
+    w8NativeVideoNativeSurfaceCopyBytes: 0,
+    w8NativeVideoNativeSurfacePresentedFrames: 0,
+    w8NativeVideoNativeSurfaceLastFrameId: null,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1093,6 +1101,10 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoNativeSurfaceWidth: 0,
     w8NativeVideoNativeSurfaceHeight: 0,
     w8NativeVideoNativeSurfaceReason: "",
+    w8NativeVideoNativeSurfaceCopyStatus: "",
+    w8NativeVideoNativeSurfaceCopyBytes: 0,
+    w8NativeVideoNativeSurfacePresentedFrames: 0,
+    w8NativeVideoNativeSurfaceLastFrameId: null,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1496,6 +1508,13 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeSurfaceWidth = Number(diagnostics.w8NativeVideoNativeSurfaceWidth);
   const nativeSurfaceHeight = Number(diagnostics.w8NativeVideoNativeSurfaceHeight);
   const nativeSurfaceReason = String(diagnostics.w8NativeVideoNativeSurfaceReason || "").trim();
+  const nativeSurfaceCopyStatus = String(
+    diagnostics.w8NativeVideoNativeSurfaceCopyStatus || "",
+  ).trim();
+  const nativeSurfaceCopyBytes = Number(diagnostics.w8NativeVideoNativeSurfaceCopyBytes);
+  const nativeSurfacePresentedFrames = Number(
+    diagnostics.w8NativeVideoNativeSurfacePresentedFrames,
+  );
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1618,6 +1637,21 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeSurfaceStatus) {
     parts.push(`原生表面状态 ${nativeSurfaceStatus}`);
+  }
+  if (
+    nativeSurfaceCopyStatus &&
+    nativeSurfaceCopyStatus !== nativeSurfaceStatus
+  ) {
+    parts.push(`原生表面写入状态 ${nativeSurfaceCopyStatus}`);
+  }
+  if (Number.isFinite(nativeSurfaceCopyBytes) && nativeSurfaceCopyBytes > 0) {
+    parts.push(`原生表面写入 ${Math.round(nativeSurfaceCopyBytes)} bytes`);
+  }
+  if (
+    Number.isFinite(nativeSurfacePresentedFrames) &&
+    nativeSurfacePresentedFrames > 0
+  ) {
+    parts.push(`原生表面呈现 ${Math.round(nativeSurfacePresentedFrames)}`);
   }
   if (nativeSurfaceReason && !nativeSurfaceReady) {
     parts.push(`原生表面原因 ${nativeSurfaceReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -6020,6 +6054,21 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoNativeSurfaceReason ||
       "",
   ).trim();
+  const nativeSurfaceCopyStatus = String(
+    state.w8NativeVideoNativeSurfaceCopyStatus ||
+      state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyStatus ||
+      "",
+  ).trim();
+  const nativeSurfaceCopyBytes =
+    Number(
+      state.w8NativeVideoNativeSurfaceCopyBytes ||
+        state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyBytes,
+    ) || 0;
+  const nativeSurfacePresentedFrames =
+    Number(
+      state.w8NativeVideoNativeSurfacePresentedFrames ||
+        state.hostDiagnostics?.w8NativeVideoNativeSurfacePresentedFrames,
+    ) || 0;
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -6122,6 +6171,15 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`原生表面目标 D3D11 ${surfaceSize}${nativeSurfaceFormat}`.trim());
   }
   if (nativeSurfaceStatus) parts.push(`原生表面状态 ${nativeSurfaceStatus}`);
+  if (nativeSurfaceCopyStatus && nativeSurfaceCopyStatus !== nativeSurfaceStatus) {
+    parts.push(`原生表面写入状态 ${nativeSurfaceCopyStatus}`);
+  }
+  if (nativeSurfaceCopyBytes > 0) {
+    parts.push(`原生表面写入 ${Math.round(nativeSurfaceCopyBytes)} bytes`);
+  }
+  if (nativeSurfacePresentedFrames > 0) {
+    parts.push(`原生表面呈现 ${Math.round(nativeSurfacePresentedFrames)}`);
+  }
   if (nativeSurfaceReason && !nativeSurfaceReady) {
     parts.push(`原生表面原因 ${nativeSurfaceReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
@@ -7587,6 +7645,10 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoNativeSurfaceWidth = 0;
   state.w8NativeVideoNativeSurfaceHeight = 0;
   state.w8NativeVideoNativeSurfaceReason = "";
+  state.w8NativeVideoNativeSurfaceCopyStatus = "";
+  state.w8NativeVideoNativeSurfaceCopyBytes = 0;
+  state.w8NativeVideoNativeSurfacePresentedFrames = 0;
+  state.w8NativeVideoNativeSurfaceLastFrameId = null;
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7701,6 +7763,22 @@ function updateW8NativeVideoDiagnostics({
     state.w8NativeVideoNativeSurfaceReason = String(decoderSession.nativeSurfaceReason || "")
       .replace(/\s+/g, " ")
       .slice(0, 160);
+    state.w8NativeVideoNativeSurfaceCopyStatus = String(
+      decoderSession.nativeSurfaceCopyStatus || "",
+    ).trim();
+    state.w8NativeVideoNativeSurfaceCopyBytes = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.nativeSurfaceCopyBytes) || 0),
+    );
+    state.w8NativeVideoNativeSurfacePresentedFrames = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.nativeSurfacePresentedFrames) || 0),
+    );
+    state.w8NativeVideoNativeSurfaceLastFrameId =
+      decoderSession.nativeSurfaceLastFrameId === null ||
+      decoderSession.nativeSurfaceLastFrameId === undefined
+        ? null
+        : Math.max(0, Math.trunc(Number(decoderSession.nativeSurfaceLastFrameId) || 0));
   }
 
   updateHostDiagnostics({
@@ -7746,6 +7824,10 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoNativeSurfaceWidth: state.w8NativeVideoNativeSurfaceWidth,
     w8NativeVideoNativeSurfaceHeight: state.w8NativeVideoNativeSurfaceHeight,
     w8NativeVideoNativeSurfaceReason: state.w8NativeVideoNativeSurfaceReason,
+    w8NativeVideoNativeSurfaceCopyStatus: state.w8NativeVideoNativeSurfaceCopyStatus,
+    w8NativeVideoNativeSurfaceCopyBytes: state.w8NativeVideoNativeSurfaceCopyBytes,
+    w8NativeVideoNativeSurfacePresentedFrames: state.w8NativeVideoNativeSurfacePresentedFrames,
+    w8NativeVideoNativeSurfaceLastFrameId: state.w8NativeVideoNativeSurfaceLastFrameId,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

@@ -5526,22 +5526,27 @@ async function verifyH264KeyFrameDetection(session) {
                           outputSubtype: "NV12",
                           submittedFrames: id === 42 ? 1 : 2,
                           acceptedInputFrames: id === 42 ? 1 : 2,
-                          decodedFrames: 0,
-                          lastStatus: "need-more-input",
+                          decodedFrames: 1,
+                          lastStatus: "latest-frame-presented",
                           workerThread: true,
                           workerMode: "dedicated-native-decoder-thread",
                           workerStatus: "active",
                           frameHandoffActive: true,
                           frameHandoffMode: "native-latest-frame-handoff",
-                          frameHandoffStatus: "waiting-decoded-frame",
+                          frameHandoffStatus: "latest-frame-ready",
                           latestFrameFormat: "NV12",
-                          latestFrameBytes: 0,
+                          latestFrameBytes: 3110400,
+                          latestFrameId: 1,
                           nativeSurfaceReady: true,
                           nativeSurfaceMode: "d3d11-latest-frame-texture-target",
-                          nativeSurfaceStatus: "ready",
+                          nativeSurfaceStatus: "latest-frame-presented",
                           nativeSurfaceFormat: "NV12",
                           nativeSurfaceWidth: 1920,
                           nativeSurfaceHeight: 1080,
+                          nativeSurfaceCopyStatus: "latest-frame-presented",
+                          nativeSurfaceCopyBytes: 3110400,
+                          nativeSurfacePresentedFrames: 1,
+                          nativeSurfaceLastFrameId: 1,
                           reason: "ready; persistent decoder session active",
                         }
                       : null,
@@ -5647,6 +5652,10 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativeSurfaceWidth = 0;
         state.w8NativeVideoNativeSurfaceHeight = 0;
         state.w8NativeVideoNativeSurfaceReason = "";
+        state.w8NativeVideoNativeSurfaceCopyStatus = "";
+        state.w8NativeVideoNativeSurfaceCopyBytes = 0;
+        state.w8NativeVideoNativeSurfacePresentedFrames = 0;
+        state.w8NativeVideoNativeSurfaceLastFrameId = null;
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5708,22 +5717,26 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoDecoderSessionOutputSubtype === "NV12" &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionSubmittedFrames === 1 &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionAcceptedInputFrames === 1 &&
-          state.hostDiagnostics?.w8NativeVideoDecoderSessionDecodedFrames === 0 &&
-          state.hostDiagnostics?.w8NativeVideoDecoderSessionStatus === "need-more-input" &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionDecodedFrames === 1 &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionStatus === "latest-frame-presented" &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerThread === true &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerMode ===
             "dedicated-native-decoder-thread" &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerStatus === "active" &&
           state.hostDiagnostics?.w8NativeVideoFrameHandoffActive === true &&
           state.hostDiagnostics?.w8NativeVideoFrameHandoffMode === "native-latest-frame-handoff" &&
-          state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus === "waiting-decoded-frame" &&
+          state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus === "latest-frame-ready" &&
           state.hostDiagnostics?.w8NativeVideoLatestFrameFormat === "NV12" &&
           state.hostDiagnostics?.w8NativeVideoNativeSurfaceReady === true &&
           state.hostDiagnostics?.w8NativeVideoNativeSurfaceMode === "d3d11-latest-frame-texture-target" &&
-          state.hostDiagnostics?.w8NativeVideoNativeSurfaceStatus === "ready" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceStatus === "latest-frame-presented" &&
           state.hostDiagnostics?.w8NativeVideoNativeSurfaceFormat === "NV12" &&
           state.hostDiagnostics?.w8NativeVideoNativeSurfaceWidth === 1920 &&
           state.hostDiagnostics?.w8NativeVideoNativeSurfaceHeight === 1080 &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyStatus === "latest-frame-presented" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyBytes === 3110400 &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfacePresentedFrames === 1 &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceLastFrameId === 1 &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
           exportText.includes("原生解码配置 avc1.420029") &&
@@ -5736,15 +5749,17 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生解码会话 active") &&
           exportText.includes("原生会话输出 NV12") &&
           exportText.includes("原生会话输入 1") &&
-          exportText.includes("原生会话解码 0") &&
-          exportText.includes("原生会话状态 need-more-input") &&
+          exportText.includes("原生会话解码 1") &&
+          exportText.includes("原生会话状态 latest-frame-presented") &&
           exportText.includes("原生解码线程 active") &&
           exportText.includes("原生帧交接 active") &&
           exportText.includes("原生最新帧 NV12") &&
-          exportText.includes("原生帧状态 waiting-decoded-frame") &&
+          exportText.includes("原生帧状态 latest-frame-ready") &&
           exportText.includes("原生表面 ready") &&
           exportText.includes("原生表面目标 D3D11 1920x1080 NV12") &&
-          exportText.includes("原生表面状态 ready");
+          exportText.includes("原生表面状态 latest-frame-presented") &&
+          exportText.includes("原生表面写入 3110400 bytes") &&
+          exportText.includes("原生表面呈现 1");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5821,6 +5836,14 @@ async function verifyH264KeyFrameDetection(session) {
             state.hostDiagnostics?.w8NativeVideoNativeSurfaceWidth,
           w8NativeVideoNativeSurfaceHeight:
             state.hostDiagnostics?.w8NativeVideoNativeSurfaceHeight,
+          w8NativeVideoNativeSurfaceCopyStatus:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyStatus,
+          w8NativeVideoNativeSurfaceCopyBytes:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceCopyBytes,
+          w8NativeVideoNativeSurfacePresentedFrames:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfacePresentedFrames,
+          w8NativeVideoNativeSurfaceLastFrameId:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceLastFrameId,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
