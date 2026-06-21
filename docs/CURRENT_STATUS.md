@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端原生解码配置准备
+- Windows 主线继续只做 W8 视频侧，本轮不碰 W9 音频。`w8_native_video` 现在会在 Rust 原生侧从 Annex B H.264 SPS/PPS 中提取解码配置：输出 `spsCount/ppsCount/hasDecoderConfig/codecString`，例如 `avc1.420029`；`push_w8_native_h264_annexb_frame` 会把这份摘要随原生队列结果返回。Windows 控制端桌面壳收到原生结果后，会把 `原生解码配置 avc1...` 写入诊断和复制/导出报告，便于后续接 Windows Media Foundation / D3D11 时确认 SPS/PPS 已经到达原生层。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；还没有完成 Media Foundation/D3D11 解码或原生画面绘制。
+
 ## 2026-06-21 W8 Windows 桌面控制端原生视频队列接线
 - Windows 主线按通讯板纠偏回到 W8 视频侧，本轮未继续 W9 音频。Windows 控制端前端在桌面壳运行时会检测 Tauri invoke，收到 H.264 Annex B base64 帧后按到达顺序串行调用 `start_w8_native_video_session` 和 `push_w8_native_h264_annexb_frame`，把同一批 Mac H.264 payload 并行送入 Rust `w8_native_video` 原生队列；普通浏览器预览版无 Tauri invoke 时保持原 WebCodecs/canvas 路径。诊断和导出现在会显示 W8 `原生队列` 帧数、队列毫秒、原生丢旧帧、最近原因和错误。验证新增浏览器专项守卫：先红灯确认 `nativeCalls=[]`，实现后 `test-windows-client-browser --diagnosticsOnly --onlyH264LatencyQueueGuard` 通过，并确认两帧 H.264 以 41->42 到达顺序进入原生队列。本轮不改 Mac、不改协议、不认证、不请求密码、不发 input/inject；下一步仍是 Media Foundation / D3D11 解码和原生画面绘制。
 

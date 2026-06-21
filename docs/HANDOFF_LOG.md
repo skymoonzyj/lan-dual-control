@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端原生解码配置准备
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在接 Media Foundation / D3D11 前把 H.264 SPS/PPS decoder config 从 Web 路径推进到 Rust 原生侧。
+完成内容：`w8_native_video` 的 Annex B H.264 摘要新增 `spsCount/ppsCount/hasDecoderConfig/codecString`，可从 SPS/PPS 提取 `avc1.420029` 这类配置字符串；`push_w8_native_h264_annexb_frame` 返回该摘要后，Windows 控制端桌面壳会把 `原生解码配置 avc1...` 并入诊断和复制/导出报告。`get_w8_native_video_plan` 的下一步也改成使用 SPS/PPS 配置接 MF/D3D11 decoder，再接原生 surface 绘制。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `sps_count/codec_string` 字段，前端专项也失败于导出缺 `原生解码配置 avc1.420029`；实现后专项转绿。完整验证见本轮提交前命令记录。
+遗留问题：本轮仍不是完整原生播放器；还没有完成 Windows Media Foundation / D3D11 解码，也没有把解码帧画到原生 surface。
+下一步建议：Windows 主线继续 W8：用原生侧已拿到的 SPS/PPS decoder config 初始化 MF/D3D11 解码器，再做 latest-frame native surface 绘制；WebCodecs/canvas 保持诊断备用。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实 native renderer 联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端原生视频队列接线
 开发端：Windows Codex
 本轮目标：按用户最新要求主要完成视频侧修改，并按通讯板纠偏不继续 W9 音频，把 Windows 桌面控制端 H.264 收帧路径接到 W8 原生队列。

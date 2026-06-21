@@ -62,6 +62,10 @@ pub struct NativeH264AnnexBSummary {
     pub has_pps: bool,
     pub has_idr: bool,
     pub is_keyframe: bool,
+    pub sps_count: u64,
+    pub pps_count: u64,
+    pub has_decoder_config: bool,
+    pub codec_string: Option<String>,
     pub byte_len: u64,
 }
 
@@ -241,6 +245,9 @@ impl NativeVideoQueue {
 
 pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
     let mut nal_types = Vec::new();
+    let mut sps_count = 0;
+    let mut pps_count = 0;
+    let mut codec_string = None;
     let mut cursor = 0;
 
     while let Some((start, prefix_len)) = find_annexb_start_code(data, cursor) {
@@ -249,18 +256,36 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
             .map(|(next_start, _)| next_start)
             .unwrap_or(data.len());
         if nal_start < nal_end {
-            nal_types.push(data[nal_start] & 0x1f);
+            let nal = &data[nal_start..nal_end];
+            let nal_type = nal[0] & 0x1f;
+            nal_types.push(nal_type);
+            if nal_type == 7 {
+                sps_count += 1;
+                if codec_string.is_none() {
+                    codec_string = codec_string_from_sps(nal);
+                }
+            } else if nal_type == 8 {
+                pps_count += 1;
+            }
         }
         cursor = nal_end;
     }
 
     if nal_types.is_empty() && !data.is_empty() {
-        nal_types.push(data[0] & 0x1f);
+        let nal_type = data[0] & 0x1f;
+        nal_types.push(nal_type);
+        if nal_type == 7 {
+            sps_count += 1;
+            codec_string = codec_string_from_sps(data);
+        } else if nal_type == 8 {
+            pps_count += 1;
+        }
     }
 
     let has_sps = nal_types.contains(&7);
     let has_pps = nal_types.contains(&8);
     let has_idr = nal_types.contains(&5);
+    let has_decoder_config = has_sps && has_pps && codec_string.is_some();
 
     NativeH264AnnexBSummary {
         nal_types,
@@ -268,8 +293,19 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
         has_pps,
         has_idr,
         is_keyframe: has_idr,
+        sps_count,
+        pps_count,
+        has_decoder_config,
+        codec_string,
         byte_len: data.len() as u64,
     }
+}
+
+fn codec_string_from_sps(sps: &[u8]) -> Option<String> {
+    if sps.len() < 4 {
+        return None;
+    }
+    Some(format!("avc1.{:02X}{:02X}{:02X}", sps[1], sps[2], sps[3]))
 }
 
 fn find_annexb_start_code(data: &[u8], from: usize) -> Option<(usize, usize)> {
@@ -370,8 +406,8 @@ pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
         video_queue_hard_max_ms: config.hard_max_queue_ms,
         max_frames: config.max_frames,
         next_native_steps: vec![
-            "move H.264 receive path out of browser render loop".to_string(),
-            "connect Windows Media Foundation or D3D11 decoder".to_string(),
+            "feed SPS/PPS decoder config into Windows Media Foundation or D3D11 decoder"
+                .to_string(),
             "render decoded frames to a native surface with latest-frame policy".to_string(),
         ],
     }
@@ -503,7 +539,7 @@ mod tests {
 
     #[test]
     fn inspects_annexb_parameter_sets_and_idr() {
-        let payload = annexb_payload(&[&[0x67, 0x42, 0x00], &[0x68, 0xce], &[0x65, 0x88]]);
+        let payload = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce], &[0x65, 0x88]]);
 
         let summary = inspect_h264_annexb(&payload);
 
@@ -512,12 +548,31 @@ mod tests {
         assert!(summary.has_pps);
         assert!(summary.has_idr);
         assert!(summary.is_keyframe);
+        assert_eq!(summary.sps_count, 1);
+        assert_eq!(summary.pps_count, 1);
+        assert!(summary.has_decoder_config);
+        assert_eq!(summary.codec_string.as_deref(), Some("avc1.420029"));
         assert_eq!(summary.byte_len, payload.len() as u64);
     }
 
     #[test]
+    fn keeps_idr_without_parameter_sets_from_claiming_decoder_config() {
+        let payload = annexb_payload(&[&[0x65, 0x88]]);
+
+        let summary = inspect_h264_annexb(&payload);
+
+        assert_eq!(summary.nal_types, vec![5]);
+        assert!(summary.has_idr);
+        assert!(summary.is_keyframe);
+        assert_eq!(summary.sps_count, 0);
+        assert_eq!(summary.pps_count, 0);
+        assert!(!summary.has_decoder_config);
+        assert_eq!(summary.codec_string, None);
+    }
+
+    #[test]
     fn pushes_annexb_idr_into_video_queue_as_keyframe() {
-        let payload = annexb_payload(&[&[0x67, 0x42], &[0x68, 0xce], &[0x65, 0x88]]);
+        let payload = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce], &[0x65, 0x88]]);
         let mut queue = NativeVideoQueue::new(NativeVideoQueueConfig {
             target_queue_ms: 80,
             hard_max_queue_ms: 120,
@@ -534,6 +589,8 @@ mod tests {
         assert_eq!(result.video.reason, "queued");
         assert_eq!(result.summary.nal_types, vec![7, 8, 5]);
         assert!(result.summary.is_keyframe);
+        assert!(result.summary.has_decoder_config);
+        assert_eq!(result.summary.codec_string.as_deref(), Some("avc1.420029"));
         assert_eq!(queue.frame_ids(), vec![42]);
         assert_eq!(queue.snapshot().last_frame_id, Some(42));
         assert_eq!(queue.snapshot().queue_ms, 0);

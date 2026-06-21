@@ -615,6 +615,8 @@ const state = {
   w8NativeVideoPushPromise: null,
   w8NativeVideoFramesPushed: 0,
   w8NativeVideoDroppedFrames: 0,
+  w8NativeVideoHasDecoderConfig: false,
+  w8NativeVideoCodecString: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -744,6 +746,8 @@ const state = {
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
+    w8NativeVideoHasDecoderConfig: false,
+    w8NativeVideoCodecString: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -978,6 +982,8 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
+    w8NativeVideoHasDecoderConfig: false,
+    w8NativeVideoCodecString: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1330,6 +1336,8 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeFrames = Number(diagnostics.w8NativeVideoFramesPushed);
   const nativeQueueMs = Number(diagnostics.w8NativeVideoQueueMs);
   const nativeDroppedFrames = Number(diagnostics.w8NativeVideoDroppedFrames);
+  const nativeHasDecoderConfig = Boolean(diagnostics.w8NativeVideoHasDecoderConfig);
+  const nativeCodecString = String(diagnostics.w8NativeVideoCodecString || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1362,6 +1370,11 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (Number.isFinite(nativeDroppedFrames) && nativeDroppedFrames > 0) {
     parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
+  }
+  if (nativeCodecString) {
+    parts.push(`原生解码配置 ${nativeCodecString}`);
+  } else if (nativeHasDecoderConfig) {
+    parts.push("原生解码配置已到达");
   }
   if (nativeLastReason) {
     parts.push(`原生原因 ${nativeLastReason}`);
@@ -5610,6 +5623,12 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeQueueMs = Number(state.hostDiagnostics?.w8NativeVideoQueueMs) || 0;
   const nativeDroppedFrames =
     Number(state.w8NativeVideoDroppedFrames || state.hostDiagnostics?.w8NativeVideoDroppedFrames) || 0;
+  const nativeHasDecoderConfig = Boolean(
+    state.w8NativeVideoHasDecoderConfig || state.hostDiagnostics?.w8NativeVideoHasDecoderConfig,
+  );
+  const nativeCodecString = String(
+    state.w8NativeVideoCodecString || state.hostDiagnostics?.w8NativeVideoCodecString || "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5659,6 +5678,8 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeFrames > 0) parts.push(`原生队列 ${nativeFrames}`);
   if (nativeQueueMs > 0) parts.push(`原生队列 ${Math.round(nativeQueueMs)} ms`);
   if (nativeDroppedFrames > 0) parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
+  if (nativeCodecString) parts.push(`原生解码配置 ${nativeCodecString}`);
+  else if (nativeHasDecoderConfig) parts.push("原生解码配置已到达");
   if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
   if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
   if (nativeLastError) parts.push(`原生最近错误 ${nativeLastError.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -7079,6 +7100,8 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoPushPromise = null;
   state.w8NativeVideoFramesPushed = 0;
   state.w8NativeVideoDroppedFrames = 0;
+  state.w8NativeVideoHasDecoderConfig = false;
+  state.w8NativeVideoCodecString = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7101,6 +7124,7 @@ function updateW8NativeVideoDiagnostics({
 } = {}) {
   const queue = snapshot?.queue || {};
   const video = pushResult?.video || {};
+  const summary = pushResult?.summary || {};
   const queueMs = Number.isFinite(Number(video.queueMs))
     ? Number(video.queueMs)
     : Number(queue.queueMs) || 0;
@@ -7112,11 +7136,20 @@ function updateW8NativeVideoDiagnostics({
   if (error) {
     state.w8NativeVideoLastError = String(error).replace(/\s+/g, " ").slice(0, 120);
   }
+  const codecString = String(summary.codecString || "").trim();
+  if (codecString) {
+    state.w8NativeVideoCodecString = codecString;
+  }
+  if (summary.hasDecoderConfig === true || codecString) {
+    state.w8NativeVideoHasDecoderConfig = true;
+  }
 
   updateHostDiagnostics({
     w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
     w8NativeVideoQueueMs: Math.max(0, Math.round(queueMs)),
     w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
+    w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
+    w8NativeVideoCodecString: state.w8NativeVideoCodecString,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows 桌面控制端原生解码配置准备：`w8_native_video` 从 Annex B H.264 SPS/PPS 提取 `spsCount/ppsCount/hasDecoderConfig/codecString`，例如 `avc1.420029`，并随 `push_w8_native_h264_annexb_frame` 结果透到 Windows 控制端诊断/导出里的 `原生解码配置`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步接 Windows Media Foundation / D3D11 解码和原生绘制。
 - [x] W8 Windows 桌面控制端原生视频队列接线：桌面壳前端收到 H.264 Annex B base64 帧时，按到达顺序串行调用 `start_w8_native_video_session` / `push_w8_native_h264_annexb_frame`，并把原生队列帧数、队列毫秒、丢旧帧、最近原因和错误并入诊断；普通浏览器预览版保持 WebCodecs/canvas 路径。不改协议、不改 Mac、不请求密码、不发 input/inject。
 - [x] W8 Windows 桌面控制端 H.264 入站识别：`w8_native_video` 新增 Annex B NAL 识别，能提取 SPS/PPS/IDR/isKeyframe/byteLen，并通过 Tauri `push_w8_native_h264_annexb_frame` 把 base64 H.264 payload 的关键帧元数据送入原生实时队列；测试覆盖 NAL 识别和 IDR 入队为关键帧。不改协议、不改 Mac、不请求密码、不发 input/inject。
 - [x] W8 Windows 桌面控制端视频侧 MVP：根据通讯板和用户确认，Windows 端切到桌面控制端主线。`apps/windows-desktop` 新增 Rust 原生 `w8_native_video` 队列和 Tauri 命令，先完成低延迟队列策略：正常帧保留、积压跳到最新关键帧、无关键帧时清 delta 并等待关键帧。当前不改协议、不改 Mac host、不宣称硬解码/原生绘制完成；下一步接 Windows Media Foundation / D3D11 或独立 native renderer。

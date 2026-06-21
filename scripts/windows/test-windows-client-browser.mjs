@@ -5349,6 +5349,9 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoSessionPromise: state.w8NativeVideoSessionPromise,
         w8NativeVideoPushPromise: state.w8NativeVideoPushPromise,
         w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
+        w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
+        w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
+        w8NativeVideoCodecString: state.w8NativeVideoCodecString,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5425,8 +5428,30 @@ async function verifyH264KeyFrameDetection(session) {
                       reason: "queued",
                     },
                     summary: id === 42
-                      ? { nalTypes: [7, 8, 5], hasSps: true, hasPps: true, hasIdr: true, isKeyframe: true, byteLen: 23 }
-                      : { nalTypes: [1], hasSps: false, hasPps: false, hasIdr: false, isKeyframe: false, byteLen: 7 },
+                      ? {
+                          nalTypes: [7, 8, 5],
+                          hasSps: true,
+                          hasPps: true,
+                          hasIdr: true,
+                          isKeyframe: true,
+                          byteLen: 23,
+                          spsCount: 1,
+                          ppsCount: 1,
+                          hasDecoderConfig: true,
+                          codecString: "avc1.420029",
+                        }
+                      : {
+                          nalTypes: [1],
+                          hasSps: false,
+                          hasPps: false,
+                          hasIdr: false,
+                          isKeyframe: false,
+                          byteLen: 7,
+                          spsCount: 0,
+                          ppsCount: 0,
+                          hasDecoderConfig: false,
+                          codecString: null,
+                        },
                   };
                 }
                 throw new Error("unexpected invoke " + command);
@@ -5475,6 +5500,9 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoSessionPromise = null;
         state.w8NativeVideoPushPromise = null;
         state.w8NativeVideoFramesPushed = 0;
+        state.w8NativeVideoDroppedFrames = 0;
+        state.w8NativeVideoHasDecoderConfig = false;
+        state.w8NativeVideoCodecString = "";
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5515,8 +5543,11 @@ async function verifyH264KeyFrameDetection(session) {
           state.w8NativeVideoFramesPushed === 2 &&
           state.hostDiagnostics?.w8NativeVideoFramesPushed === 2 &&
           state.hostDiagnostics?.w8NativeVideoQueueMs === 16 &&
+          state.hostDiagnostics?.w8NativeVideoHasDecoderConfig === true &&
+          state.hostDiagnostics?.w8NativeVideoCodecString === "avc1.420029" &&
           exportText.includes("原生队列 2") &&
-          exportText.includes("原生队列 16 ms");
+          exportText.includes("原生队列 16 ms") &&
+          exportText.includes("原生解码配置 avc1.420029");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5547,6 +5578,8 @@ async function verifyH264KeyFrameDetection(session) {
           nativeCalls,
           w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
           w8NativeVideoQueueMs: state.hostDiagnostics?.w8NativeVideoQueueMs,
+          w8NativeVideoHasDecoderConfig: state.hostDiagnostics?.w8NativeVideoHasDecoderConfig,
+          w8NativeVideoCodecString: state.hostDiagnostics?.w8NativeVideoCodecString,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5594,6 +5627,9 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoSessionPromise = original.w8NativeVideoSessionPromise;
         state.w8NativeVideoPushPromise = original.w8NativeVideoPushPromise;
         state.w8NativeVideoFramesPushed = original.w8NativeVideoFramesPushed;
+        state.w8NativeVideoDroppedFrames = original.w8NativeVideoDroppedFrames;
+        state.w8NativeVideoHasDecoderConfig = original.w8NativeVideoHasDecoderConfig;
+        state.w8NativeVideoCodecString = original.w8NativeVideoCodecString;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;
