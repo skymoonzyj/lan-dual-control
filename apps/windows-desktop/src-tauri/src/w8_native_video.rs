@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Mutex};
 
@@ -26,9 +27,7 @@ impl Default for NativeVideoQueueConfig {
 impl NativeVideoQueueConfig {
     fn normalized(self) -> Self {
         let target_queue_ms = self.target_queue_ms.clamp(16, 500);
-        let hard_max_queue_ms = self
-            .hard_max_queue_ms
-            .clamp(target_queue_ms.max(32), 1000);
+        let hard_max_queue_ms = self.hard_max_queue_ms.clamp(target_queue_ms.max(32), 1000);
         let max_frames = self.max_frames.clamp(8, 360);
 
         Self {
@@ -48,6 +47,24 @@ pub struct NativeVideoFrame {
     pub byte_len: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeH264AnnexBFrame {
+    pub id: u64,
+    pub received_at_ms: u64,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeH264AnnexBSummary {
+    pub nal_types: Vec<u8>,
+    pub has_sps: bool,
+    pub has_pps: bool,
+    pub has_idr: bool,
+    pub is_keyframe: bool,
+    pub byte_len: u64,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVideoPushResult {
@@ -56,6 +73,13 @@ pub struct NativeVideoPushResult {
     pub queue_ms: u64,
     pub waiting_for_keyframe: bool,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeH264AnnexBPushResult {
+    pub video: NativeVideoPushResult,
+    pub summary: NativeH264AnnexBSummary,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -130,7 +154,11 @@ impl NativeVideoQueue {
             return self.result(true, dropped_frames, "queued");
         }
 
-        match self.frames.iter().rposition(|candidate| candidate.is_keyframe) {
+        match self
+            .frames
+            .iter()
+            .rposition(|candidate| candidate.is_keyframe)
+        {
             Some(keyframe_index) if keyframe_index > 0 => {
                 dropped_frames += self.drop_before(keyframe_index);
                 self.dropped_frames += dropped_frames as u64;
@@ -139,6 +167,18 @@ impl NativeVideoQueue {
             }
             _ => self.drop_all_and_request_keyframe(dropped_frames),
         }
+    }
+
+    pub fn push_h264_annexb(&mut self, frame: NativeH264AnnexBFrame) -> NativeH264AnnexBPushResult {
+        let summary = inspect_h264_annexb(&frame.data);
+        let video = self.push(NativeVideoFrame {
+            id: frame.id,
+            received_at_ms: frame.received_at_ms,
+            is_keyframe: summary.is_keyframe,
+            byte_len: summary.byte_len,
+        });
+
+        NativeH264AnnexBPushResult { video, summary }
     }
 
     pub fn queue_ms(&self) -> u64 {
@@ -199,6 +239,55 @@ impl NativeVideoQueue {
     }
 }
 
+pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
+    let mut nal_types = Vec::new();
+    let mut cursor = 0;
+
+    while let Some((start, prefix_len)) = find_annexb_start_code(data, cursor) {
+        let nal_start = start + prefix_len;
+        let nal_end = find_annexb_start_code(data, nal_start)
+            .map(|(next_start, _)| next_start)
+            .unwrap_or(data.len());
+        if nal_start < nal_end {
+            nal_types.push(data[nal_start] & 0x1f);
+        }
+        cursor = nal_end;
+    }
+
+    if nal_types.is_empty() && !data.is_empty() {
+        nal_types.push(data[0] & 0x1f);
+    }
+
+    let has_sps = nal_types.contains(&7);
+    let has_pps = nal_types.contains(&8);
+    let has_idr = nal_types.contains(&5);
+
+    NativeH264AnnexBSummary {
+        nal_types,
+        has_sps,
+        has_pps,
+        has_idr,
+        is_keyframe: has_idr,
+        byte_len: data.len() as u64,
+    }
+}
+
+fn find_annexb_start_code(data: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut index = from;
+    while index + 3 <= data.len() {
+        if data[index] == 0 && data[index + 1] == 0 {
+            if data[index + 2] == 1 {
+                return Some((index, 3));
+            }
+            if index + 4 <= data.len() && data[index + 2] == 0 && data[index + 3] == 1 {
+                return Some((index, 4));
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
 #[derive(Default)]
 pub struct W8NativeVideoState {
     session: Mutex<W8NativeVideoSession>,
@@ -237,6 +326,14 @@ pub struct W8NativeVideoStartRequest {
     pub target_queue_ms: Option<u64>,
     pub hard_max_queue_ms: Option<u64>,
     pub max_frames: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct W8NativeH264AnnexBFrameRequest {
+    pub id: u64,
+    pub received_at_ms: u64,
+    pub data_base64: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -325,6 +422,28 @@ pub fn push_w8_native_video_frame(
 }
 
 #[tauri::command]
+pub fn push_w8_native_h264_annexb_frame(
+    request: W8NativeH264AnnexBFrameRequest,
+    state: tauri::State<'_, W8NativeVideoState>,
+) -> Result<NativeH264AnnexBPushResult, String> {
+    let data = general_purpose::STANDARD
+        .decode(request.data_base64.as_bytes())
+        .map_err(|_| "W8 H.264 Annex B base64 解码失败".to_string())?;
+    let mut session = state
+        .session
+        .lock()
+        .map_err(|_| "W8 视频会话锁定失败".to_string())?;
+    if !session.running {
+        return Err("W8 视频会话尚未启动".to_string());
+    }
+    Ok(session.queue.push_h264_annexb(NativeH264AnnexBFrame {
+        id: request.id,
+        received_at_ms: request.received_at_ms,
+        data,
+    }))
+}
+
+#[tauri::command]
 pub fn get_w8_native_video_snapshot(
     state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W8NativeVideoSnapshot, String> {
@@ -371,6 +490,53 @@ mod tests {
             is_keyframe: keyframe,
             byte_len: 4096,
         }
+    }
+
+    fn annexb_payload(nals: &[&[u8]]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        for nal in nals {
+            payload.extend_from_slice(&[0, 0, 0, 1]);
+            payload.extend_from_slice(nal);
+        }
+        payload
+    }
+
+    #[test]
+    fn inspects_annexb_parameter_sets_and_idr() {
+        let payload = annexb_payload(&[&[0x67, 0x42, 0x00], &[0x68, 0xce], &[0x65, 0x88]]);
+
+        let summary = inspect_h264_annexb(&payload);
+
+        assert_eq!(summary.nal_types, vec![7, 8, 5]);
+        assert!(summary.has_sps);
+        assert!(summary.has_pps);
+        assert!(summary.has_idr);
+        assert!(summary.is_keyframe);
+        assert_eq!(summary.byte_len, payload.len() as u64);
+    }
+
+    #[test]
+    fn pushes_annexb_idr_into_video_queue_as_keyframe() {
+        let payload = annexb_payload(&[&[0x67, 0x42], &[0x68, 0xce], &[0x65, 0x88]]);
+        let mut queue = NativeVideoQueue::new(NativeVideoQueueConfig {
+            target_queue_ms: 80,
+            hard_max_queue_ms: 120,
+            max_frames: 64,
+        });
+
+        let result = queue.push_h264_annexb(NativeH264AnnexBFrame {
+            id: 42,
+            received_at_ms: 1000,
+            data: payload.clone(),
+        });
+
+        assert!(result.video.accepted);
+        assert_eq!(result.video.reason, "queued");
+        assert_eq!(result.summary.nal_types, vec![7, 8, 5]);
+        assert!(result.summary.is_keyframe);
+        assert_eq!(queue.frame_ids(), vec![42]);
+        assert_eq!(queue.snapshot().last_frame_id, Some(42));
+        assert_eq!(queue.snapshot().queue_ms, 0);
     }
 
     #[test]

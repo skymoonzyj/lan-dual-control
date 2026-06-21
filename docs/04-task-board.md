@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows 桌面控制端 H.264 入站识别：`w8_native_video` 新增 Annex B NAL 识别，能提取 SPS/PPS/IDR/isKeyframe/byteLen，并通过 Tauri `push_w8_native_h264_annexb_frame` 把 base64 H.264 payload 的关键帧元数据送入原生实时队列；测试覆盖 NAL 识别和 IDR 入队为关键帧。不改协议、不改 Mac、不请求密码、不发 input/inject。
 - [x] W8 Windows 桌面控制端视频侧 MVP：根据通讯板和用户确认，Windows 端切到桌面控制端主线。`apps/windows-desktop` 新增 Rust 原生 `w8_native_video` 队列和 Tauri 命令，先完成低延迟队列策略：正常帧保留、积压跳到最新关键帧、无关键帧时清 delta 并等待关键帧。当前不改协议、不改 Mac host、不宣称硬解码/原生绘制完成；下一步接 Windows Media Foundation / D3D11 或独立 native renderer。
 
 - [x] C3 Agent Link Board 结构化 presence API：`codex-link-server` 新增 `/api/presence` 并在重启时保留 `userPresence` / `pinnedTasks`；`codex-link-client presence --status present|away` 可命令行同步用户在场/离开。该状态只作为授权前门禁输入，不能跳过提示音、目标说明、安全边界和预计耗时；当前权威仍以 `/api/state.userPresence` 为准。不认证、不请求或发送密码、不发 input/inject。

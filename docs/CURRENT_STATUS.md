@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 H.264 入站识别
+- Windows 桌面端 W8 视频侧在上一轮原生队列 MVP 上继续前进：`w8_native_video` 现在能在 Rust 原生侧识别 Annex B H.264 payload 的 NAL type，并输出 `SPS/PPS/IDR/isKeyframe/byteLen` 摘要；新增 Tauri 命令 `push_w8_native_h264_annexb_frame`，接收 base64 Annex B payload 后把关键帧元数据送入原生实时队列。测试覆盖 SPS/PPS/IDR 识别和 IDR 入队为关键帧。本轮仍不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；还没有完成 Media Foundation/D3D11 解码或原生画面绘制。
+
 ## 2026-06-21 W8 Windows 桌面控制端视频侧 MVP
 - 通讯板确认用户已批准切到 Windows 桌面控制端主线，不再把 WebCodecs/canvas/rAF 作为最终体验路径。本轮 Windows 端新增桌面原生视频队列模块 `apps/windows-desktop/src-tauri/src/w8_native_video.rs`，并通过 Tauri 命令暴露 W8 视频计划、启动/停止会话、推入视频帧元数据和读取队列快照。队列策略默认目标约 80ms、硬上限约 180ms：积压且有较新关键帧时丢旧跳到最新关键帧；没有可用关键帧时清 delta 积压并进入等待关键帧，避免后台/切 app 后继续攒 600ms+ 旧帧。本轮不改协议、不改 Mac host、不认证、不请求密码、不发 input/inject；当前仍是视频队列/接口 MVP，下一步才接 Windows Media Foundation/D3D11 或独立 native renderer 做 H.264 解码和原生绘制。
 

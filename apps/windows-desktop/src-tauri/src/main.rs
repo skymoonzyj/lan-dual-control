@@ -2231,6 +2231,7 @@ fn main() {
             w8_native_video::get_w8_native_video_plan,
             w8_native_video::start_w8_native_video_session,
             w8_native_video::push_w8_native_video_frame,
+            w8_native_video::push_w8_native_h264_annexb_frame,
             w8_native_video::get_w8_native_video_snapshot,
             w8_native_video::stop_w8_native_video_session
         ])

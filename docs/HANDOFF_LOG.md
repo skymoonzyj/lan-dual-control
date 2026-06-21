@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 H.264 入站识别
+开发端：Windows Codex
+本轮目标：继续 W8 视频侧，把 Mac host 当前 Annex B H.264 payload 的入站识别先迁入 Windows 桌面原生侧，为后续 native receiver / decoder 铺路。
+完成内容：`w8_native_video` 新增 Annex B H.264 NAL 识别，能输出 NAL type、SPS、PPS、IDR、isKeyframe、byteLen；新增 `NativeH264AnnexBFrame` / `NativeH264AnnexBPushResult` 和 `push_h264_annexb`，把 IDR payload 作为关键帧元数据送入原生实时队列；新增 Tauri 命令 `push_w8_native_h264_annexb_frame`，接收 base64 Annex B payload 并复用同一队列策略。文档同步 W8 入站边界。
+修改文件：apps/windows-desktop/src-tauri/src/main.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；docs/w8-windows-desktop-video-plan.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于缺 `inspect_h264_annexb`、`NativeH264AnnexBFrame`、`push_h264_annexb`；实现后 `cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml w8_native_video` 通过，新增 SPS/PPS/IDR 识别和 IDR 入队测试。
+遗留问题：本轮还没有把真实 WebSocket 接收迁到 native，也没有做 Media Foundation/D3D11 解码或原生画面绘制。
+下一步建议：继续 W8 视频主线：把 Mac host H.264 WebSocket 接收接入 desktop native/独立 renderer，调用 `push_w8_native_h264_annexb_frame`，再接 native decode/render。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实接收/渲染联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端视频侧 MVP
 开发端：Windows Codex
 本轮目标：按通讯板 W8 和用户要求，主要完成 Windows 桌面控制端视频侧修改，停止把 Web 渲染路径作为最终体验主线。
