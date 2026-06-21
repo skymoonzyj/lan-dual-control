@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8 短摘要显示 decoder 差值
+- Windows 视频侧继续补强通讯板短摘要：`post-w8-desktop-video-board --boardSummary` 和 `post-w2w3-retest-board --boardSummary` 现在会从已生成的 `W8NativeGate=` 提取 `pushed/submitted/decoderGap`，并在一行短摘要里追加 `w8Decoder=pushed:<n>/submitted:<n>/gap:<n>`。这样下一次真实桌面长跑时，不需要展开完整 `W8NativeGate=` 长行，也能直接看到推入 W8 原生队列、真正提交持久 MF/D3D11 decoder、以及被低延迟预过滤挡下的差值。本轮只改 Windows 视频侧上板摘要和测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
+
 ## 2026-06-22 W8NativeGate 转述 decoder 提交差值
 - Windows 视频侧继续补强通讯板判读：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 生成的 `W8NativeGate=` 现在会从同一条 `W8NativeVideo=` 转述 `pushed/submitted/decoderGap`。这样下一次真实桌面长跑即使只盯 gate 行，也能看到 W8 原生队列推入帧、真正提交持久 MF/D3D11 decoder 帧，以及被低延迟预过滤挡在 decoder 前的差值。本轮只改 Windows 上板 helper 和测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
 

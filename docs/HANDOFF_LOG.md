@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 短摘要显示 decoder 差值
+开发端：Windows Codex
+本轮目标：继续按用户要求主做视频侧，把 `W8NativeGate=` 里的 decoder 提交差值提升到一行 `--boardSummary`，方便通讯板首屏判读。
+完成内容：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 的短摘要现在会追加 `w8Decoder=pushed:<n>/submitted:<n>/gap:<n>`。该字段来自已生成的 `W8NativeGate=`，不伪造新证据；如果 gate 没有 `pushed/submitted/decoderGap`，短摘要显示 `w8Decoder=missing`。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于两个 helper 的 `boardSummary` 缺 `w8Decoder=pushed:192/submitted:190/gap:2`；实现后两个专项测试转绿。
+遗留问题：本轮没有跑真实带密码桌面长跑，不宣称真实卡顿已修；只是让下一次 W8 视频上板摘要更容易读。
+下一步建议：真实桌面长跑后先看 `w8NativeGate` 和 `w8Decoder`，再结合完整 `W8NativeGate/W8ArrivalBacklog` 判断继续查 native present、arrival/backlog 还是关键帧恢复。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在 Windows 本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8NativeGate 转述 decoder 提交差值
 开发端：Windows Codex
 本轮目标：继续按通讯板 W8 最新口径，让 `W8NativeGate=` 也能直接显示 `pushed/submitted/decoderGap`，避免只看 gate 行时漏掉 decoder 负载判断。

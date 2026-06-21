@@ -243,6 +243,7 @@ async function checkDryRunDoesNotPost(args) {
     assertIncludes(payload.w8NativeGateSummary, "submitted=190", "dry-run W8 native gate");
     assertIncludes(payload.w8NativeGateSummary, "decoderGap=2", "dry-run W8 native gate");
     assertIncludes(payload.w8NativeGateSummary, "next=investigate-arrival-backlog", "dry-run W8 native gate");
+    assertIncludes(payload.boardSummary, "w8Decoder=pushed:192/submitted:190/gap:2", "dry-run board summary");
     assertIncludes(payload.w8ArrivalBacklogSummary, "W8ArrivalBacklog=status=blocked", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "queueMs=190", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "staleDrops=125", "dry-run W8 arrival backlog");
@@ -332,6 +333,7 @@ async function checkSendRetestAndDiagnosis(args) {
     assert(payload.w8NativeVideoLine === w8NativeLine, "send JSON should include W8 native video line");
     assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=arrival-backlog-next", "send JSON W8 native gate");
     assertIncludes(payload.boardSummary, "w8NativeGate=arrival-backlog-next", "send JSON board summary");
+    assertIncludes(payload.boardSummary, "w8Decoder=pushed:192/submitted:190/gap:2", "send JSON board summary");
     assertIncludes(payload.w8ArrivalBacklogSummary, "W8ArrivalBacklog=status=blocked", "send JSON W8 arrival backlog");
     assertIncludes(payload.boardSummary, "w8ArrivalBacklog=blocked", "send JSON board summary");
     assertIncludes(payload.diagnosisBoardSummary, "W2H264BoardDiagnosis=status=ready", "send JSON diagnosis");

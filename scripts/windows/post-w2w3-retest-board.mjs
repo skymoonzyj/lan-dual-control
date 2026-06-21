@@ -179,6 +179,15 @@ function w8NativeGateStatus(summary) {
   return String(summary || "").match(/\bW8NativeGate=status=([^\s]+)/)?.[1] || "";
 }
 
+function w8DecoderSubmissionStatus(summary) {
+  const fields = {};
+  for (const match of String(summary || "").matchAll(/\b(pushed|submitted|decoderGap)=([^\s]+)/g)) {
+    fields[match[1]] = match[2];
+  }
+  if (fields.pushed === undefined && fields.submitted === undefined && fields.decoderGap === undefined) return "";
+  return `pushed:${fields.pushed ?? "unknown"}/submitted:${fields.submitted ?? "unknown"}/gap:${fields.decoderGap ?? "unknown"}`;
+}
+
 function summaryStatus(prefix, summary) {
   return String(summary || "").match(new RegExp(`\\b${prefix}=status=([^\\s]+)`))?.[1] || "";
 }
@@ -428,6 +437,7 @@ function makeBoardSummary(payload) {
     `retest=${payload.retestLine ? "present" : "missing"}`,
     `w8NativeVideo=${payload.w8NativeVideoLine ? "present" : "missing"}`,
     payload.w8NativeGateSummary ? `w8NativeGate=${w8NativeGateStatus(payload.w8NativeGateSummary) || "present"}` : "w8NativeGate=missing",
+    payload.w8NativeGateSummary ? `w8Decoder=${w8DecoderSubmissionStatus(payload.w8NativeGateSummary) || "missing"}` : "w8Decoder=missing",
     payload.w8ArrivalBacklogSummary ? `w8ArrivalBacklog=${summaryStatus("W8ArrivalBacklog", payload.w8ArrivalBacklogSummary) || "present"}` : "w8ArrivalBacklog=missing",
     payload.diagnosisBoardSummary ? `diagnosis=${payload.diagnosisBoardSummary}` : "diagnosis=skipped",
     "Safety=no-password-on-board,no-input-inject.",

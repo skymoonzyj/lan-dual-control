@@ -190,6 +190,7 @@ async function checkDryRunW8Only(args) {
     assertIncludes(payload.w8NativeGateSummary, "decoderGap=2", "dry-run W8 gate");
     assertIncludes(payload.boardSummary, "W8DesktopVideoPost=dry-run", "dry-run board summary");
     assertIncludes(payload.boardSummary, "w8NativeGate=arrival-backlog-next", "dry-run board summary");
+    assertIncludes(payload.boardSummary, "w8Decoder=pushed:192/submitted:190/gap:2", "dry-run board summary");
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "dry-run");
     console.log("[OK] W8 desktop video board helper dry-run is no-post and secret-safe");
