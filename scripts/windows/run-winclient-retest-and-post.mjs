@@ -26,6 +26,7 @@ Options:
                            Run no-password discovery/local diagnostics only; do not retest or post.
   --noDiagnose, -NoDiagnose
                            Post only W2W3Retest=; skip read-only diagnosis.
+  --printCommandJson       Print the generated child command as JSON; do not run it.
   --help, -Help, -h       Show this help without starting a retest.
 
 Description:
@@ -71,6 +72,10 @@ function parseArgs(argv) {
       args.diagnose = false;
       continue;
     }
+    if (token === "--printCommandJson" || token === "-PrintCommandJson") {
+      args.printCommandJson = true;
+      continue;
+    }
     if (token === "--") {
       args.retestArgs.push(...argv.slice(index + 1));
       break;
@@ -96,40 +101,59 @@ function commandFromEnv() {
   return { command: parsed[0], args: parsed.slice(1) };
 }
 
+function normalizePowerShellParameterName(token) {
+  const match = String(token || "").match(/^[-/]{1,2}([^:=\s]+)(?:[:=].*)?$/);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function hasForwardedPowerShellParameter(tokens, name) {
+  const expected = String(name || "").toLowerCase();
+  return tokens.some((token) => normalizePowerShellParameterName(token) === expected);
+}
+
+function appendDefaultPowerShellParameter(commandArgs, forwardedArgs, name, value) {
+  if (!hasForwardedPowerShellParameter(forwardedArgs, name)) {
+    commandArgs.push(`-${name}`, String(value));
+  }
+}
+
 function buildRetestCommand(args) {
   const override = commandFromEnv();
   if (override) return override;
+  const commandArgs = [
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", "scripts/windows/test-windows-client-browser.ps1",
+    "-Discover",
+    "-PromptPassword",
+    "-RequirePassword",
+    "-RequireH264",
+    "-BoardSummary",
+  ];
+  appendDefaultPowerShellParameter(commandArgs, args.retestArgs, "TimeoutMs", "45000");
+  commandArgs.push(...args.retestArgs);
   return {
     command: findPowerShellExe(),
-    args: [
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-File", "scripts/windows/test-windows-client-browser.ps1",
-      "-Discover",
-      "-PromptPassword",
-      "-RequirePassword",
-      "-RequireH264",
-      "-BoardSummary",
-      "-TimeoutMs", "45000",
-      ...args.retestArgs,
-    ],
+    args: commandArgs,
   };
 }
 function buildPreflightCommand(args) {
   const override = commandFromEnv();
   if (override) return override;
+  const commandArgs = [
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", "scripts/windows/test-windows-client-browser.ps1",
+    "-Discover",
+    "-DiagnosticsOnly",
+    "-BoardSummary",
+    "-OnlyH264LatencyQueueGuard",
+  ];
+  appendDefaultPowerShellParameter(commandArgs, args.retestArgs, "TimeoutMs", "45000");
+  commandArgs.push(...args.retestArgs);
   return {
     command: findPowerShellExe(),
-    args: [
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-File", "scripts/windows/test-windows-client-browser.ps1",
-      "-Discover",
-      "-DiagnosticsOnly",
-      "-BoardSummary",
-      "-TimeoutMs", "45000",
-      ...args.retestArgs,
-    ],
+    args: commandArgs,
   };
 }
 
@@ -212,6 +236,12 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.printCommandJson) {
+    const command = args.preflightOnly ? buildPreflightCommand(args) : buildRetestCommand(args);
+    console.log(JSON.stringify(command));
     return;
   }
 

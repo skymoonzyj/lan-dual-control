@@ -14,6 +14,7 @@ param(
   [switch] $Headed,
   [switch] $DiagnosticsOnly,
   [switch] $BoardSummary,
+  [switch] $OnlyH264LatencyQueueGuard,
   [switch] $NoRequireVideoSurface,
   [switch] $RequireH264,
   [switch] $InjectPcmAudio,
@@ -51,6 +52,7 @@ Options:
   -Headed                              Run browser headed instead of headless.
   -DiagnosticsOnly                     Only run local UI diagnostics; do not authenticate/connect.
   -BoardSummary                        Print one secret-free Agent Link Board summary line.
+  -OnlyH264LatencyQueueGuard           With -DiagnosticsOnly, only run the H.264 latency/keyframe queue check.
   -NoRequireVideoSurface               Do not require a visible decoded video surface.
   -RequireH264                         Require H.264/WebCodecs decoded video.
   -InjectPcmAudio                      Inject synthetic PCM into the page and require playback state.
@@ -94,6 +96,7 @@ if ($RequirePassword) { $nodeArgs += "--requirePassword" }
 if ($Headed) { $nodeArgs += "--headed" }
 if ($DiagnosticsOnly) { $nodeArgs += "--diagnosticsOnly" }
 if ($BoardSummary) { $nodeArgs += "--boardSummary" }
+if ($OnlyH264LatencyQueueGuard) { $nodeArgs += "--onlyH264LatencyQueueGuard" }
 if ($NoRequireVideoSurface) { $nodeArgs += "--noRequireVideoSurface" }
 if ($RequireH264) { $nodeArgs += "--requireH264" }
 if ($InjectPcmAudio) { $nodeArgs += "--injectPcmAudio" }

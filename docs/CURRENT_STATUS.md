@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 视频真实复测预检收窄为 H.264 专项
+- Windows 真实复测入口 `run-winclient-retest-and-post --preflightOnly` 现在不再跑完整 diagnosticsOnly 大杂烩，而是保留 Mac `/discovery` 目标发现后只执行 H.264 关键帧/低延迟队列专项 guard：`h264-keyframe`、`h264-latency-queue`、`w2w3-h264-summary`。这样 W2 视频复测前不会被独立的音频/重连 UI guard 拦住；同时修复 `--preflightOnly --timeoutMs <ms>` 转发到 PowerShell 时和默认 `-TimeoutMs 45000` 重复导致预检直接失败的问题，用户传入的 timeout 会覆盖默认值。已新增 `--printCommandJson` 只读诊断模式，方便验证生成子命令不启动浏览器、不请求密码。真实无密预检已在当前 Mac 目标 `192.168.31.122:43770` 通过，输出 `WinClientRetestPreflight=ready`。不改协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W2 视频 live backlog 立即丢旧追实时
 - Windows 控制端把 H.264 live backlog 策略从“队列超过实时窗口时只请求关键帧”升级为“立即清旧队列、丢当前 delta、请求关键帧并等待最新关键帧”。已出画面后，如果本机 WebCodecs/H.264 队列超过约 6 帧实时窗口但未到 450ms 硬重同步阈值，控制端会标记 `live-backlog-wait-keyframe`，增加 `追实时请求 <n> 次`、`本地过期丢帧`、`跳过 delta` 和 `需要关键帧` 诊断；关键帧到达后直接从最新关键帧继续解码，避免后台/切 app 恢复后继续吞旧 delta 把延迟拖成秒级。本轮新增 `--onlyH264LatencyQueueGuard` 视频专项入口：红灯先证明旧逻辑 `liveBacklogRequest.dropFrame=false` 且队列保留，绿灯后 H.264 专项通过；完整 diagnosticsOnly 当前会被独立音频/重连 guard 拦住，未混入本轮视频提交。不改协议、不改 Mac host、不碰 W6/W7 音频、不请求密码、不认证、不发 input/inject。
 

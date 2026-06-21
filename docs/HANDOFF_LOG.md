@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 视频真实复测预检专项化
+开发端：Windows Codex
+本轮目标：按用户要求主要完成视频侧修改，修复 W2 真测前第二步预检卡住的问题，避免视频复测入口被无关 diagnostics guard 阻断。
+完成内容：`run-winclient-retest-and-post --preflightOnly` 的子命令生成现在会去重 PowerShell 参数：用户传入 `--timeoutMs <ms>` 时不再追加默认 `-TimeoutMs 45000`，避免 `TimeoutMs` 重复绑定直接失败；新增 `--printCommandJson` 只读诊断模式。预检路径同时收窄为视频专项：先 discovery 找 Mac，再通过 PowerShell wrapper 传递 `-OnlyH264LatencyQueueGuard`，只跑 H.264 keyframe、latency queue 和 W2W3 h264 summary guard，不再被完整 diagnosticsOnly 中独立的音频/重连 UI 检查拦住。
+修改文件：scripts/windows/run-winclient-retest-and-post.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；scripts/windows/test-windows-client-browser.ps1；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯先复现旧行为：`node scripts/windows/test-run-winclient-retest-and-post.mjs --timeoutMs 30000` 失败于 `TimeoutMs` 重复；第二次红灯确认预检还缺 `-OnlyH264LatencyQueueGuard`。绿灯后专项回归通过；`node scripts/windows/run-winclient-retest-and-post.mjs --preflightOnly --printCommandJson --timeoutMs 30000` 输出单一 `--timeoutMs 30000` 且包含 `-OnlyH264LatencyQueueGuard`；真实无密预检对 `192.168.31.122:43770` 通过并输出 `WinClientRetestPreflight=ready`。
+遗留问题：仍需要用户用正式 `Run-WinClientRetest-And-Post.cmd` 输入 Mac 当前临时密码做真实最小化/切 app/切回复测；本轮不宣称真实体验已完全收口。若真测仍卡，继续看 `W2W3Retest h264=` 的 FPS、队列、`live-backlog-wait-keyframe` 和 `recv/key/sps/pps/idr`。
+下一步建议：双方拉最新后，先跑无密预检确认 ready，再由用户在当前黑色终端隐藏输入密码执行正式复测；不要把密码发通讯板，不发 input/inject。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；需要 Mac host 在线和用户真实复测。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 视频 live backlog 立即丢旧追实时
 开发端：Windows Codex
 本轮目标：按用户要求主要完成视频侧修改，继续收口 W2 后台/切 app 后 H.264 本机队列积压导致的延迟堆积。

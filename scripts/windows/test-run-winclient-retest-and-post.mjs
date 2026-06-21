@@ -66,6 +66,20 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function parseLastJsonLine(text, label) {
+  const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+  const candidate = lines.at(-1) || "";
+  try {
+    return JSON.parse(candidate);
+  } catch (error) {
+    throw new Error(`${label} did not end with JSON.\n${text}\n${error.message}`);
+  }
+}
+
+function countTimeoutParameters(commandArgs) {
+  return commandArgs.filter((token) => /^-{1,2}TimeoutMs$/i.test(token)).length;
+}
+
 function runNode(extraArgs, args, env = {}) {
   return runProcess(process.execPath, [script, ...extraArgs], args, env);
 }
@@ -214,6 +228,20 @@ async function checkHelp(args) {
   console.log("[OK] WinClient retest-and-post entry help is safe");
 }
 
+async function checkForwardedTimeoutDoesNotDuplicateDefault(args) {
+  const result = await runNode(["--preflightOnly", "--printCommandJson", "--timeoutMs", "30000"], args);
+  assert(result.exitCode === 0, `print preflight command should pass\n${result.stdout}\n${result.stderr}`);
+  const command = parseLastJsonLine(result.stdout, "print preflight command");
+  assert(Array.isArray(command.args), `printed command args should be an array\n${result.stdout}`);
+  assert(countTimeoutParameters(command.args) === 1, `preflight command should contain exactly one TimeoutMs parameter\n${JSON.stringify(command.args)}`);
+  assertIncludes(command.args.join(" "), "-OnlyH264LatencyQueueGuard", "preflight command args");
+  assertNotIncludes(command.args.join(" "), "-TimeoutMs 45000", "preflight command args");
+  const timeoutIndex = command.args.findIndex((token) => /^-{1,2}TimeoutMs$/i.test(token));
+  assert(command.args[timeoutIndex + 1] === "30000", `preflight command should keep forwarded timeout value\n${JSON.stringify(command.args)}`);
+  assertSecretSafe(result.stdout + result.stderr, "print preflight command");
+  console.log("[OK] WinClient retest-and-post forwarded TimeoutMs does not duplicate the default");
+}
+
 async function checkPreflightOnlyDoesNotPostOrPrompt(args) {
   await withFakeBoard(async (board) => {
     const result = await runNode(["--preflightOnly", "--server", board.url], args, {
@@ -294,6 +322,7 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   await checkHelp(args);
+  await checkForwardedTimeoutDoesNotDuplicateDefault(args);
   await checkPreflightOnlyDoesNotPostOrPrompt(args);
   await checkPreflightFailureSkipsPost(args);
   await checkSuccessfulRetestPostsRetestAndDiagnosis(args);
