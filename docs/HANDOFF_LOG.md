@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 stream-change 输出重选恢复
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 NV12 resize recovery 后，补上 Media Foundation decoder 输出 stream-change 时的自恢复。
+完成内容：`lan-dual-w8-mf-decoder` worker 遇到 `MF_E_TRANSFORM_STREAM_CHANGE` 时，不再停在 `stream-change` 状态；它会重新 `GetOutputAvailableType` / `SetOutputType`，按新的输出 subtype 重建 D3D11 latest-frame surface、BGRA8 present texture 和可用的 HWND swapchain 目标。`decoderSession` 会同步刷新 `outputSubtype`、`latestFrameFormat`、`nativeSurface*`、`nativePresent*`，成功状态为 `stream-change-reconfigured`，reason 包含 `reselected output ... and rebuilt D3D11 native surface target`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于缺少 `reconfigured_output_subtype/reconfigured_surface` 和 session 应用方法；实现后 `decoder_session_applies_stream_change_reconfigured_surface_summary` 通过，直接 runtime 测试 `decoder_worker_runtime_rebuilds_surface_target_after_stream_change` 也通过。完整验证见本轮提交前命令记录。
+遗留问题：还需要补 D3D11 device-lost / swapchain lost 后的 native surface 与 present target 重建；真实 Mac 长跑仍需观察偶发 stream-change 后是否继续出帧。
+下一步建议：继续 W8 视频侧：优先做 D3D11 device-lost rebuild；随后安排真实 Mac H.264 长跑，重点看 `nativePresentStatus`、`stream-change-reconfigured` 后续出帧和卡顿体感。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实长跑需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 NV12 HWND resize recovery
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 NV12 VideoProcessor -> HWND Present 后，补上窗口 client resize 时的 swapchain/present texture 恢复。
@@ -36,7 +48,7 @@
 完成内容：`lan-dual-w8-mf-decoder` worker 对 NV12 latest-frame 不再停在 `waiting-nv12-renderer`；decoded sample 写入 D3D11 NV12 latest-frame texture 后，通过 D3D11 `VideoProcessorBlt` 转入 BGRA8 present texture。带真实 Tauri HWND 时继续复用持久 `IDXGISwapChain1`，把 BGRA8 present texture 复制到 back buffer 并调用 `Present`；诊断状态为 `nativePresentMode=d3d11-hwnd-swapchain`、`nativePresentStatus=latest-frame-nv12-converted-presented`，reason 包含 `VideoProcessorBlt`。BGRA8 旧路径保持 `latest-frame-swapchain-presented`。
 修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
 验证方式：TDD 红灯先失败于 `waiting-nv12-renderer`；绿灯后 `native_surface_target_copies_sample_into_latest_frame_texture` 通过，`w8_native_video` Rust 专项 17 项通过。完整验证见本轮提交前命令记录。
-遗留问题：还需要补 stream-change 后输出重选、窗口 resize/swapchain resize、device-lost 恢复，以及真实 Mac 长时间观感验证。
+遗留问题：stream-change 后输出重选、窗口 resize/swapchain resize 已补；还需要 device-lost 恢复，以及真实 Mac 长时间观感验证。
 下一步建议：继续 W8 视频侧：先做 stream-change/resize/device-lost 恢复，再安排真实 Mac H.264 长跑，看 `nativePresentStatus` 是否稳定在 `latest-frame-nv12-converted-presented` 或 `latest-frame-swapchain-presented`。
 是否改了协议：否。
 是否需要另一端配合：暂不需要 Mac 改代码；后续真实长跑需要 Mac host 在线。无密码/auth/input/inject。

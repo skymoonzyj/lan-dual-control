@@ -731,50 +731,16 @@ impl W8NativeVideoDecoderSessionState {
             None
         };
 
+        if let Some(process_result) = process_result {
+            return self.apply_decoder_process_result(process_result, next_submitted_frame);
+        }
+
         if let Some(current) = self.summary.as_mut() {
             current.submitted_frames += 1;
-            if let Some(process_result) = process_result {
-                let process_status = process_result.status.clone();
-                let process_output_byte_len = process_result.output_byte_len;
-                if process_result.input_accepted {
-                    current.accepted_input_frames += 1;
-                }
-                if process_result.output_produced {
-                    current.decoded_frames += 1;
-                    current.latest_frame_id = Some(current.submitted_frames);
-                    current.latest_frame_bytes = process_output_byte_len;
-                    current.latest_frame_format = current.output_subtype.clone();
-                    current.frame_handoff_status = "latest-frame-ready".to_string();
-                    if let Some(surface_copy) = process_result.surface_copy.as_ref() {
-                        current.native_surface_status = surface_copy.status.clone();
-                        current.native_surface_copy_status = surface_copy.status.clone();
-                        current.native_surface_copy_bytes = surface_copy.bytes_copied;
-                        current.native_surface_presented_frames = surface_copy.presented_frames;
-                        current.native_surface_last_frame_id = surface_copy.last_frame_id;
-                        current.native_surface_reason = surface_copy.reason.clone();
-                        current.native_present_status = surface_copy.native_present_status.clone();
-                        current.native_present_frames = surface_copy.native_present_frames;
-                        current.native_present_last_frame_id =
-                            surface_copy.native_present_last_frame_id;
-                        current.native_present_reason = surface_copy.native_present_reason.clone();
-                        if surface_copy.status == "latest-frame-presented" {
-                            current.last_status = surface_copy.status.clone();
-                            current.frame_handoff_status = "latest-frame-ready".to_string();
-                        }
-                    }
-                } else if process_result.input_accepted && current.frame_handoff_active {
-                    current.frame_handoff_status = "waiting-decoded-frame".to_string();
-                } else if current.frame_handoff_active {
-                    current.frame_handoff_status = process_status.clone();
-                }
-                current.last_status = process_status;
-                current.reason = process_result.reason;
-                current.ready = current.active && current.accepted_input_frames > 0;
-            }
-            Some(current.clone())
-        } else {
-            None
+            return Some(current.clone());
         }
+
+        None
     }
 
     fn start(
@@ -915,6 +881,10 @@ impl W8NativeVideoDecoderSessionState {
                 status: "worker-inactive".to_string(),
                 reason: "blocked: dedicated native decoder worker is not active".to_string(),
                 surface_copy: None,
+                #[cfg(windows)]
+                reconfigured_output_subtype: None,
+                #[cfg(windows)]
+                reconfigured_surface: None,
             }
         }
         #[cfg(not(windows))]
@@ -929,6 +899,68 @@ impl W8NativeVideoDecoderSessionState {
             }
         }
     }
+
+    fn apply_decoder_process_result(
+        &mut self,
+        process_result: W8NativeVideoDecoderSessionProcess,
+        _frame_id: u64,
+    ) -> Option<W8NativeVideoDecoderSessionSummary> {
+        let current = self.summary.as_mut()?;
+        current.submitted_frames += 1;
+        let process_status = process_result.status.clone();
+        let process_output_byte_len = process_result.output_byte_len;
+
+        if process_result.input_accepted {
+            current.accepted_input_frames += 1;
+        }
+
+        #[cfg(windows)]
+        if let Some(output_subtype) = process_result.reconfigured_output_subtype.as_ref() {
+            current.output_subtype = output_subtype.clone();
+            current.latest_frame_format = output_subtype.clone();
+            current.frame_handoff_status = process_status.clone();
+            if let Some(surface) = process_result.reconfigured_surface.as_ref() {
+                apply_surface_target_summary_to_decoder_session(current, surface);
+            }
+        }
+
+        if process_result.output_produced {
+            current.decoded_frames += 1;
+            current.latest_frame_id = Some(current.submitted_frames);
+            current.latest_frame_bytes = process_output_byte_len;
+            current.latest_frame_format = current.output_subtype.clone();
+            current.frame_handoff_status = "latest-frame-ready".to_string();
+            if let Some(surface_copy) = process_result.surface_copy.as_ref() {
+                current.native_surface_status = surface_copy.status.clone();
+                current.native_surface_copy_status = surface_copy.status.clone();
+                current.native_surface_copy_bytes = surface_copy.bytes_copied;
+                current.native_surface_presented_frames = surface_copy.presented_frames;
+                current.native_surface_last_frame_id = surface_copy.last_frame_id;
+                current.native_surface_reason = surface_copy.reason.clone();
+                current.native_present_status = surface_copy.native_present_status.clone();
+                current.native_present_frames = surface_copy.native_present_frames;
+                current.native_present_last_frame_id = surface_copy.native_present_last_frame_id;
+                current.native_present_reason = surface_copy.native_present_reason.clone();
+                if surface_copy.status == "latest-frame-presented" {
+                    current.last_status = surface_copy.status.clone();
+                    current.frame_handoff_status = "latest-frame-ready".to_string();
+                }
+            }
+        } else if process_result.input_accepted && current.frame_handoff_active {
+            if process_status.contains("stream-change") {
+                current.frame_handoff_status = process_status.clone();
+            } else {
+                current.frame_handoff_status = "waiting-decoded-frame".to_string();
+            }
+        } else if current.frame_handoff_active {
+            current.frame_handoff_status = process_status.clone();
+        }
+
+        current.last_status = process_status;
+        current.reason = process_result.reason;
+        current.ready = current.active && current.accepted_input_frames > 0;
+        Some(current.clone())
+    }
 }
 
 struct W8NativeVideoDecoderSessionProcess {
@@ -938,6 +970,37 @@ struct W8NativeVideoDecoderSessionProcess {
     status: String,
     reason: String,
     surface_copy: Option<W8NativeSurfaceCopyResult>,
+    #[cfg(windows)]
+    reconfigured_output_subtype: Option<String>,
+    #[cfg(windows)]
+    reconfigured_surface: Option<W8NativeSurfaceTargetSummary>,
+}
+
+#[cfg(windows)]
+fn apply_surface_target_summary_to_decoder_session(
+    current: &mut W8NativeVideoDecoderSessionSummary,
+    surface: &W8NativeSurfaceTargetSummary,
+) {
+    current.native_surface_ready = surface.ready;
+    current.native_surface_mode = surface.mode.clone();
+    current.native_surface_status = surface.status.clone();
+    current.native_surface_format = surface.format.clone();
+    current.native_surface_width = surface.width;
+    current.native_surface_height = surface.height;
+    current.native_surface_reason = surface.reason.clone();
+    current.native_surface_copy_status = surface.copy_status.clone();
+    current.native_surface_copy_bytes = surface.copy_bytes;
+    current.native_surface_presented_frames = surface.presented_frames;
+    current.native_surface_last_frame_id = surface.last_frame_id;
+    current.native_present_ready = surface.native_present_ready;
+    current.native_present_mode = surface.native_present_mode.clone();
+    current.native_present_status = surface.native_present_status.clone();
+    current.native_present_format = surface.native_present_format.clone();
+    current.native_present_width = surface.native_present_width;
+    current.native_present_height = surface.native_present_height;
+    current.native_present_frames = surface.native_present_frames;
+    current.native_present_last_frame_id = surface.native_present_last_frame_id;
+    current.native_present_reason = surface.native_present_reason.clone();
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1043,6 +1106,8 @@ impl W8NativeVideoDecoderWorker {
                 status: "worker-send-blocked".to_string(),
                 reason: format!("blocked: native decoder worker command send failed: {error}"),
                 surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
             };
         }
 
@@ -1055,6 +1120,8 @@ impl W8NativeVideoDecoderWorker {
                 status: "worker-timeout".to_string(),
                 reason: format!("blocked: native decoder worker response timed out: {error}"),
                 surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
             },
         }
     }
@@ -1305,8 +1372,8 @@ pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
         max_frames: config.max_frames,
         next_native_steps: vec![
             "validate NV12 HWND swapchain resize during real Mac long-running sessions".to_string(),
-            "handle Media Foundation stream-change output reconfiguration".to_string(),
             "handle D3D11 device-lost rebuilds for native surface and swapchain".to_string(),
+            "validate Media Foundation stream-change reconfiguration during real Mac long-running sessions".to_string(),
         ],
     }
 }
@@ -2269,14 +2336,8 @@ impl W8MfH264DecoderWorkerRuntime {
             transform
                 .SetInputType(0, &input_type, 0)
                 .map_err(|error| format!("SetInputType H.264 failed: {error}"))?;
-            let (output_type, output_subtype) = first_decoder_output_type(&transform)?;
-            transform
-                .SetOutputType(0, &output_type, 0)
-                .map_err(|error| format!("SetOutputType {output_subtype} failed: {error}"))?;
-            let surface_target = create_d3d11_latest_frame_texture_target_for_window(
-                &output_subtype,
-                window_present_target,
-            )?;
+            let (output_subtype, surface_target) =
+                configure_decoder_output_and_surface_target(&transform, window_present_target)?;
             Ok(Self {
                 transform,
                 output_subtype,
@@ -2287,6 +2348,22 @@ impl W8MfH264DecoderWorkerRuntime {
             let _ = MFShutdown();
         }
         started
+    }
+
+    unsafe fn reconfigure_output_after_stream_change(
+        &mut self,
+    ) -> Result<(String, W8NativeSurfaceTargetSummary), String> {
+        let window_present_target = self.surface_target._window_present_target;
+        let (output_subtype, mut surface_target) =
+            configure_decoder_output_and_surface_target(&self.transform, window_present_target)?;
+        surface_target.summary.reason =
+            "ready; D3D11 native surface target rebuilt after stream change".to_string();
+        surface_target.summary.status = "ready".to_string();
+        surface_target.summary.copy_status = "waiting-decoded-frame".to_string();
+        let surface_summary = surface_target.summary.clone();
+        self.output_subtype = output_subtype.clone();
+        self.surface_target = surface_target;
+        Ok((output_subtype, surface_summary))
     }
 
     unsafe fn process(
@@ -2304,6 +2381,8 @@ impl W8MfH264DecoderWorkerRuntime {
                     status: "sample-create-blocked".to_string(),
                     reason: format!("blocked: {error}"),
                     surface_copy: None,
+                    reconfigured_output_subtype: None,
+                    reconfigured_surface: None,
                 };
             }
         };
@@ -2316,6 +2395,8 @@ impl W8MfH264DecoderWorkerRuntime {
                 status: "process-input-blocked".to_string(),
                 reason: format!("blocked: native worker ProcessInput failed: {error}"),
                 surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
             };
         }
 
@@ -2329,6 +2410,8 @@ impl W8MfH264DecoderWorkerRuntime {
                     status: "output-sample-blocked".to_string(),
                     reason: format!("blocked: {error}"),
                     surface_copy: None,
+                    reconfigured_output_subtype: None,
+                    reconfigured_surface: None,
                 };
             }
         };
@@ -2345,6 +2428,40 @@ impl W8MfH264DecoderWorkerRuntime {
             std::slice::from_mut(&mut output_buffer),
             &mut process_status,
         );
+        if let Err(error) = &output_result {
+            if error.code() == MF_E_TRANSFORM_STREAM_CHANGE {
+                let output_sample = ManuallyDrop::into_inner(output_buffer.pSample);
+                let output_events = ManuallyDrop::into_inner(output_buffer.pEvents);
+                drop(output_sample);
+                drop(output_events);
+                return match self.reconfigure_output_after_stream_change() {
+                    Ok((output_subtype, surface_target)) => W8NativeVideoDecoderSessionProcess {
+                        input_accepted: true,
+                        output_produced: false,
+                        output_byte_len: 0,
+                        status: "stream-change-reconfigured".to_string(),
+                        reason: format!(
+                            "ready; native worker ProcessOutput requested stream change; reselected output {output_subtype} and rebuilt D3D11 native surface target"
+                        ),
+                        surface_copy: None,
+                        reconfigured_output_subtype: Some(output_subtype),
+                        reconfigured_surface: Some(surface_target),
+                    },
+                    Err(error) => W8NativeVideoDecoderSessionProcess {
+                        input_accepted: true,
+                        output_produced: false,
+                        output_byte_len: 0,
+                        status: "stream-change-reconfigure-blocked".to_string(),
+                        reason: format!(
+                            "blocked: native worker ProcessOutput requested stream change but output reconfigure failed: {error}"
+                        ),
+                        surface_copy: None,
+                        reconfigured_output_subtype: None,
+                        reconfigured_surface: None,
+                    },
+                };
+            }
+        }
         let output_produced = output_result.is_ok() && output_buffer.pSample.is_some();
         let output_byte_len = if output_produced {
             output_buffer
@@ -2415,6 +2532,8 @@ impl W8MfH264DecoderWorkerRuntime {
             status,
             reason,
             surface_copy,
+            reconfigured_output_subtype: None,
+            reconfigured_surface: None,
         }
     }
 }
@@ -2561,6 +2680,22 @@ unsafe fn first_decoder_output_type(
         .map(video_subtype_label)
         .unwrap_or_else(|_| "unknown".to_string());
     Ok((media_type, subtype))
+}
+
+#[cfg(windows)]
+unsafe fn configure_decoder_output_and_surface_target(
+    transform: &IMFTransform,
+    window_present_target: Option<W8NativeWindowPresentTargetConfig>,
+) -> Result<(String, W8NativeSurfaceTargetRuntime), String> {
+    let (output_type, output_subtype) = first_decoder_output_type(transform)?;
+    transform
+        .SetOutputType(0, &output_type, 0)
+        .map_err(|error| format!("SetOutputType {output_subtype} failed: {error}"))?;
+    let surface_target = create_d3d11_latest_frame_texture_target_for_window(
+        &output_subtype,
+        window_present_target,
+    )?;
+    Ok((output_subtype, surface_target))
 }
 
 #[cfg(windows)]
@@ -2904,11 +3039,11 @@ mod tests {
         assert!(plan
             .next_native_steps
             .iter()
-            .any(|step| step.contains("stream-change")));
+            .any(|step| step.contains("D3D11 device-lost")));
         assert!(plan
             .next_native_steps
             .iter()
-            .any(|step| step.contains("device-lost")));
+            .any(|step| step.contains("real Mac")));
     }
 
     #[test]
@@ -3081,6 +3216,188 @@ mod tests {
         assert!(!second_session.output_subtype.trim().is_empty());
         assert!(!second_session.last_status.trim().is_empty());
         assert!(!second_session.reason.trim().is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_session_applies_stream_change_reconfigured_surface_summary() {
+        let mut state = W8NativeVideoDecoderSessionState::default();
+        state.summary = Some(test_decoder_session_summary("ARGB32"));
+        let surface = test_surface_target_summary("NV12", 1920, 1080);
+        let process = W8NativeVideoDecoderSessionProcess {
+            input_accepted: true,
+            output_produced: false,
+            output_byte_len: 0,
+            status: "stream-change-reconfigured".to_string(),
+            reason: "ready; native worker ProcessOutput requested stream change; reselected output NV12 and rebuilt D3D11 native surface target".to_string(),
+            surface_copy: None,
+            reconfigured_output_subtype: Some("NV12".to_string()),
+            reconfigured_surface: Some(surface.clone()),
+        };
+
+        let updated = state
+            .apply_decoder_process_result(process, 3)
+            .expect("decoder session summary should still be active");
+
+        assert_eq!(updated.output_subtype, "NV12");
+        assert_eq!(updated.latest_frame_format, "NV12");
+        assert_eq!(updated.last_status, "stream-change-reconfigured");
+        assert_eq!(updated.reason, "ready; native worker ProcessOutput requested stream change; reselected output NV12 and rebuilt D3D11 native surface target");
+        assert_eq!(updated.frame_handoff_status, "stream-change-reconfigured");
+        assert_eq!(updated.native_surface_format, "NV12");
+        assert_eq!(updated.native_surface_width, 1920);
+        assert_eq!(updated.native_surface_height, 1080);
+        assert_eq!(updated.native_surface_status, "ready");
+        assert_eq!(
+            updated.native_surface_reason,
+            "ready; D3D11 native surface target rebuilt after stream change"
+        );
+        assert_eq!(updated.native_present_format, "BGRA8");
+        assert_eq!(updated.native_present_status, "waiting-latest-frame");
+        assert_eq!(updated.native_present_width, 1920);
+        assert_eq!(updated.native_present_height, 1080);
+        assert_eq!(updated.accepted_input_frames, 1);
+        assert_eq!(updated.decoded_frames, 0);
+        assert_eq!(updated.submitted_frames, 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_session_keeps_stream_change_reconfigure_failure_visible() {
+        let mut state = W8NativeVideoDecoderSessionState::default();
+        state.summary = Some(test_decoder_session_summary("NV12"));
+        let process = W8NativeVideoDecoderSessionProcess {
+            input_accepted: true,
+            output_produced: false,
+            output_byte_len: 0,
+            status: "stream-change-reconfigure-blocked".to_string(),
+            reason: "blocked: native worker ProcessOutput requested stream change but output reconfigure failed: SetOutputType failed".to_string(),
+            surface_copy: None,
+            reconfigured_output_subtype: None,
+            reconfigured_surface: None,
+        };
+
+        let updated = state
+            .apply_decoder_process_result(process, 4)
+            .expect("decoder session summary should still be active");
+
+        assert_eq!(updated.output_subtype, "NV12");
+        assert_eq!(
+            updated.frame_handoff_status,
+            "stream-change-reconfigure-blocked"
+        );
+        assert_eq!(updated.last_status, "stream-change-reconfigure-blocked");
+        assert!(updated.reason.contains("output reconfigure failed"));
+        assert_eq!(updated.accepted_input_frames, 1);
+        assert_eq!(updated.decoded_frames, 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_worker_runtime_rebuilds_surface_target_after_stream_change() {
+        unsafe {
+            let sequence_header = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce]]);
+            let mut runtime = W8MfH264DecoderWorkerRuntime::start(&sequence_header, None)
+                .expect("native decoder worker runtime should start");
+
+            let (output_subtype, surface) = runtime
+                .reconfigure_output_after_stream_change()
+                .expect("stream change should reselect output and rebuild surface target");
+
+            assert_eq!(runtime.output_subtype, output_subtype);
+            assert_eq!(surface.format, output_subtype);
+            assert!(surface.ready);
+            assert_eq!(surface.mode, "d3d11-latest-frame-texture-target");
+            assert_eq!(surface.status, "ready");
+            assert_eq!(surface.copy_status, "waiting-decoded-frame");
+            assert_eq!(surface.width, 1920);
+            assert_eq!(surface.height, 1080);
+            assert!(surface.reason.contains("stream change"));
+            assert!(surface.native_present_ready);
+            assert_eq!(surface.native_present_format, "BGRA8");
+            assert_eq!(surface.native_present_status, "waiting-latest-frame");
+
+            drop(runtime);
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+        }
+    }
+
+    #[cfg(windows)]
+    fn test_decoder_session_summary(output_subtype: &str) -> W8NativeVideoDecoderSessionSummary {
+        W8NativeVideoDecoderSessionSummary {
+            mode: "media-foundation-h264-persistent-decoder-session".to_string(),
+            attempted: true,
+            active: true,
+            ready: true,
+            codec_string: Some("avc1.420029".to_string()),
+            output_subtype: output_subtype.to_string(),
+            submitted_frames: 0,
+            accepted_input_frames: 0,
+            decoded_frames: 0,
+            last_status: "active".to_string(),
+            worker_thread: true,
+            worker_mode: "dedicated-native-decoder-thread".to_string(),
+            worker_status: "active".to_string(),
+            frame_handoff_active: true,
+            frame_handoff_mode: "native-latest-frame-handoff".to_string(),
+            frame_handoff_status: "waiting-decoded-frame".to_string(),
+            latest_frame_format: output_subtype.to_string(),
+            latest_frame_bytes: 0,
+            latest_frame_id: None,
+            native_surface_ready: true,
+            native_surface_mode: "d3d11-latest-frame-texture-target".to_string(),
+            native_surface_status: "ready".to_string(),
+            native_surface_format: output_subtype.to_string(),
+            native_surface_width: 1920,
+            native_surface_height: 1080,
+            native_surface_reason: "ready; original native surface target".to_string(),
+            native_surface_copy_status: "waiting-decoded-frame".to_string(),
+            native_surface_copy_bytes: 0,
+            native_surface_presented_frames: 0,
+            native_surface_last_frame_id: None,
+            native_present_ready: true,
+            native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
+            native_present_status: "waiting-latest-frame".to_string(),
+            native_present_format: "BGRA8".to_string(),
+            native_present_width: 1920,
+            native_present_height: 1080,
+            native_present_frames: 0,
+            native_present_last_frame_id: None,
+            native_present_reason: "ready; original native present target".to_string(),
+            reason: "ready; dedicated native decoder worker active".to_string(),
+        }
+    }
+
+    #[cfg(windows)]
+    fn test_surface_target_summary(
+        output_subtype: &str,
+        width: u32,
+        height: u32,
+    ) -> W8NativeSurfaceTargetSummary {
+        W8NativeSurfaceTargetSummary {
+            ready: true,
+            mode: "d3d11-latest-frame-texture-target".to_string(),
+            status: "ready".to_string(),
+            format: output_subtype.to_string(),
+            width,
+            height,
+            reason: "ready; D3D11 native surface target rebuilt after stream change".to_string(),
+            copy_status: "waiting-decoded-frame".to_string(),
+            copy_bytes: 0,
+            presented_frames: 0,
+            last_frame_id: None,
+            native_present_ready: true,
+            native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
+            native_present_status: "waiting-latest-frame".to_string(),
+            native_present_format: "BGRA8".to_string(),
+            native_present_width: width,
+            native_present_height: height,
+            native_present_frames: 0,
+            native_present_last_frame_id: None,
+            native_present_reason: "ready; native present target rebuilt after stream change"
+                .to_string(),
+        }
     }
 
     #[cfg(windows)]
