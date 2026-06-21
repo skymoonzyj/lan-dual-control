@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 原生低延迟队列拒绝帧不再进 decoder
+开发端：Windows Codex
+本轮目标：按用户要求继续主要完成视频侧修改，减少 W8 原生主线里被低延迟队列判定丢弃的旧 H.264 delta 继续占用 MF/D3D11 decoder 的可能。
+完成内容：`W8NativeVideoSession::push_h264_annexb_frame` 现在先尊重 `NativeVideoQueue` 的 `accepted` 结果；当队列因积压返回 `need-keyframe`，或等待关键帧期间返回 `waiting-keyframe` 时，只保留上一条 decoder session 摘要给 UI/上板诊断，不再把该 access unit 交给持久 `lan-dual-w8-mf-decoder` worker。下一条关键帧 `keyframe-recovered` 后才继续进入 decoder。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 `native_session_does_not_submit_queue_rejected_delta_frames`，旧逻辑会把被拒 delta 的 `submittedFrames` 从 1 推到 2；实现后该用例转绿。随后 `cargo fmt --check`、`cargo test`、`cargo check`、`git diff --check` 和行首冲突扫描均通过。
+遗留问题：本轮未跑真实带密码桌面长跑，不宣称真实卡顿已彻底修复；真实效果仍要看 `W8NativeVideo/W8NativeGate/W8ArrivalBacklog`、原生 Present 增长、`presentGap/errors` 和体感。
+下一步建议：真实长跑若仍卡，优先看 `queueReason=need-keyframe|waiting-keyframe` 后下一条关键帧是否恢复、`submittedFrames` 是否只随有效帧增长、`presentFrames/decoded` 是否继续前进，再决定是否查 arrival/backlog 或 Mac 远端媒体 cadence。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在 Windows 本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8Post 可选 arrival/backlog 生成
 开发端：Windows Codex
 本轮目标：继续按通讯板 W8 最新验收口径，让桌面复制诊断直发入口在有足够信息时不只发 `W8NativeGate=`，也能给出 `W8ArrivalBacklog=` 和 `arrivalSource`。

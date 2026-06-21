@@ -3029,6 +3029,12 @@ impl W8NativeVideoSession {
             received_at_ms,
             data,
         });
+        if !result.video.accepted {
+            result.decoder_session = self.decoder_session.summary.clone();
+            result.decoder_init = self.decoder_init.clone();
+            result.decode_step = self.decode_step.clone();
+            return Ok(result);
+        }
         if result.summary.has_decoder_config && self.decoder_init.is_none() {
             self.decoder_init = Some(preflight_h264_decoder_init(&result.summary));
         }
@@ -3307,6 +3313,83 @@ mod tests {
         assert!(!second_session.output_subtype.trim().is_empty());
         assert!(!second_session.last_status.trim().is_empty());
         assert!(!second_session.reason.trim().is_empty());
+    }
+
+    #[test]
+    fn native_session_does_not_submit_queue_rejected_delta_frames() {
+        let mut session = W8NativeVideoSession::default();
+        session.running = true;
+        session.queue = NativeVideoQueue::new(NativeVideoQueueConfig {
+            target_queue_ms: 16,
+            hard_max_queue_ms: 32,
+            max_frames: 64,
+        });
+        let key_payload =
+            annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce], &[0x65, 0x88]]);
+        let delta_payload = annexb_payload(&[&[0x61, 0x99]]);
+
+        let first = session
+            .push_h264_annexb_frame(1, 0, key_payload.clone())
+            .expect("first keyframe should start native decoder diagnostics");
+        let first_session = first
+            .decoder_session
+            .expect("first keyframe should expose decoder diagnostics");
+        assert_eq!(first.video.reason, "queued");
+        assert_eq!(first_session.submitted_frames, 1);
+
+        let rejected = session
+            .push_h264_annexb_frame(2, 100, delta_payload.clone())
+            .expect("backlogged delta should still return a video result");
+        let rejected_session = rejected
+            .decoder_session
+            .expect("rejected delta should keep previous decoder diagnostics visible");
+
+        assert!(!rejected.video.accepted);
+        assert_eq!(rejected.video.reason, "need-keyframe");
+        assert_eq!(rejected.video.dropped_frames, 2);
+        assert!(rejected.video.waiting_for_keyframe);
+        assert_eq!(
+            rejected_session.submitted_frames,
+            first_session.submitted_frames
+        );
+        assert_eq!(
+            session
+                .decoder_session
+                .summary
+                .as_ref()
+                .expect("decoder diagnostics should remain active")
+                .submitted_frames,
+            first_session.submitted_frames
+        );
+
+        let skipped = session
+            .push_h264_annexb_frame(3, 116, delta_payload)
+            .expect("waiting-keyframe delta should be skipped safely");
+        let skipped_session = skipped
+            .decoder_session
+            .expect("skipped delta should keep previous decoder diagnostics visible");
+
+        assert!(!skipped.video.accepted);
+        assert_eq!(skipped.video.reason, "waiting-keyframe");
+        assert_eq!(skipped.video.dropped_frames, 1);
+        assert_eq!(
+            skipped_session.submitted_frames,
+            first_session.submitted_frames
+        );
+
+        let recovered = session
+            .push_h264_annexb_frame(4, 132, key_payload)
+            .expect("next keyframe should recover and enter decoder");
+        let recovered_session = recovered
+            .decoder_session
+            .expect("recovered keyframe should update decoder diagnostics");
+
+        assert!(recovered.video.accepted);
+        assert_eq!(recovered.video.reason, "keyframe-recovered");
+        assert_eq!(
+            recovered_session.submitted_frames,
+            first_session.submitted_frames + 1
+        );
     }
 
     #[cfg(windows)]

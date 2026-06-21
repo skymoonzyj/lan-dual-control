@@ -1,6 +1,6 @@
 # W8 Windows 桌面控制端视频侧计划
 
-最后更新：2026-06-21
+最后更新：2026-06-22
 
 ## 背景
 
@@ -31,6 +31,7 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 - 原生队列默认目标约 80ms，硬上限约 180ms。
 - 队列积压且已有较新关键帧时，直接丢旧跳到最新关键帧。
 - 队列积压但没有可用新关键帧时，清掉 delta 积压并进入等待关键帧状态，避免继续攒旧帧。
+- 队列返回 `accepted=false` 的 H.264 delta 不再提交给持久 MF/D3D11 decoder；`need-keyframe` / `waiting-keyframe` 只更新队列丢帧和等待关键帧诊断，保留上一条 decoder 摘要，下一条 `keyframe-recovered` 才继续进入原生解码线程。
 - 该 MVP 已推进到 MF worker、D3D11 latest-frame texture、BGRA8 present texture、真实 HWND swapchain 预检、BGRA8 latest-frame -> HWND swapchain `Present`、NV12 -> BGRA8 `VideoProcessorBlt` -> HWND swapchain `Present`、NV12 窗口 client resize 后的 `ResizeBuffers` / present texture 重建、stream-change 后输出重选 / native surface 重建、device-lost 后 native surface / present target 重建，以及 `W8NativeVideo=` 长跑摘要出口。后续要让它成为最终体验路径，还需要真实 Mac 长时间观感验证。
 
 ## 关键接口
@@ -65,6 +66,7 @@ Tauri 原生命令：
 - Rust decoder init 测试必须覆盖：缺 SPS/PPS 不尝试初始化，带 SPS/PPS 时尝试设置输入类型并汇总输出 subtype。
 - Rust decode step 测试必须覆盖：缺 SPS/PPS/IDR 不尝试步进，带 SPS/PPS/IDR 时创建 MF sample 并汇总 `ProcessInput/ProcessOutput` 状态。
 - Rust decoder session 测试必须覆盖：首个 decoder config 建立会话摘要，后续 H.264 push 累计 submitted/accepted/decoded 计数，并返回输出 subtype 和最近状态。
+- Rust decoder session 低延迟测试必须覆盖：被队列拒绝的 delta 不提交给 decoder，不增加 `submittedFrames`，且下一条恢复关键帧会继续推进 decoder session。
 - Rust decoder worker 测试必须覆盖：会话摘要声明 `workerThread=true`、`workerMode=dedicated-native-decoder-thread`、`workerStatus=active`，并且 Tauri state 不直接持有非 Send 的 `IMFTransform`。
 - Rust decoded frame handoff 测试必须覆盖：会话摘要声明 `frameHandoffActive=true`、`frameHandoffMode=native-latest-frame-handoff`，还没产出 decoded sample 时返回 `waiting-decoded-frame`，产出 sample 后能记录 latest-frame 格式和字节数。
 - Rust native surface target 测试必须覆盖：会话摘要声明 `nativeSurfaceReady=true`、`nativeSurfaceMode=d3d11-latest-frame-texture-target`、目标尺寸 `1920x1080`、格式与 decoder 输出 subtype 对齐。
