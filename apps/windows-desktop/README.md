@@ -33,6 +33,28 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 
 安装包阶段后续单独处理，避免被 WiX/NSIS 下载和系统权限问题卡住。
 
+## W10 桌面控制入口
+
+真实 Windows 控 Mac 优先使用桌面入口，而不是浏览器预览链接：
+
+```text
+Start-Windows-Desktop-Control-Mac.cmd
+```
+
+如果新机器或 fresh clone 还没有 release exe，先运行：
+
+```text
+Build-Windows-Desktop-Control-Mac.cmd
+```
+
+只想确认本机是否已有可打开的桌面 exe，可运行：
+
+```powershell
+node scripts\windows\start-windows-desktop-control-mac.mjs --dryRun --boardSummary
+```
+
+该摘要会输出 `WindowsDesktopEntry=`、`USABLE_NEXT=open_windows_desktop`、release exe 路径和构建命令；它不请求密码、不认证、不发送输入事件。真实 Mac H.264 长跑时，在桌面 app 里本机输入 Mac 当前临时密码连接，再复制诊断或上板，重点看 `W8NativeVideo=` 的 `presenting`、`presentGap`、`presentFrames`、`decoded`、`streamChange`、`deviceLost` 和 `errors`。
+
 ## 当前范围
 
 - 已接入现有中文控制端界面。

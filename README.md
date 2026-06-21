@@ -41,6 +41,20 @@
 
 ## 当前状态
 
+Windows 控 Mac 的推荐主入口已经切到桌面端：
+
+```text
+Start-Windows-Desktop-Control-Mac.cmd
+```
+
+如果 fresh clone 没有 release exe，先运行：
+
+```text
+Build-Windows-Desktop-Control-Mac.cmd
+```
+
+浏览器/Web 入口仍保留给诊断和自动化验证；真实视频体验验收优先看桌面端复制诊断里的 `W8NativeVideo=`。
+
 已加入第一版 Windows 控制端静态原型，位置：
 
 - [Windows 控制端原型](apps/windows-client/README.md)

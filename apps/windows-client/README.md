@@ -80,6 +80,22 @@
 
 ## 运行方式
 
+### 推荐入口：Windows 桌面控制端
+
+真实 Windows 控 Mac 优先走 Tauri 桌面 app：
+
+```text
+Start-Windows-Desktop-Control-Mac.cmd
+```
+
+fresh clone 或 release exe 缺失时先运行：
+
+```text
+Build-Windows-Desktop-Control-Mac.cmd
+```
+
+浏览器/Web 入口继续保留给页面诊断、自动化 guard 和对照复测；W8/W10 的真实体验验收以桌面端复制诊断里的 `W8NativeVideo=` 为主。
+
 ### 双击入口：根目录启动器
 
 在仓库根目录双击：

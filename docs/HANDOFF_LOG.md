@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W10 Windows 桌面控制端一键入口
+开发端：Windows Codex
+本轮目标：按通讯板 W10 要求，给用户一个 Windows 桌面控制端入口/可测包，不再把浏览器 Web 复测当最终体验门槛。
+完成内容：新增 `scripts/windows/start-windows-desktop-control-mac.mjs`，支持 `--dryRun --json`、`--dryRun --boardSummary`、`--build`、`--noOpen` 和 `--exePath`；默认指向 Tauri release exe `apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe`。新增根目录 `Start-Windows-Desktop-Control-Mac.cmd` 和 `Build-Windows-Desktop-Control-Mac.cmd`，前者打开桌面 app，后者构建 release exe 但不自动打开。摘要固定输出 `WindowsDesktopEntry=`、`USABLE_NEXT=open_windows_desktop`、`LongRun=desktop-connect-copy-diagnostics` 和 `WebGate=diagnostic-only`。
+修改文件：scripts/windows/start-windows-desktop-control-mac.mjs；scripts/windows/test-windows-desktop-control-mac-entry.mjs；Start-Windows-Desktop-Control-Mac.cmd；Build-Windows-Desktop-Control-Mac.cmd；apps/windows-desktop/README.md；apps/windows-client/README.md；README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于入口脚本不存在；实现后 `test-windows-desktop-control-mac-entry` 验证 help、ready/missing-exe dry-run JSON、boardSummary 和两个根目录 cmd 转发。提交前还会跑脚本语法、help、dryRun、boardSummary、旧 Web 入口回归、diff check 和冲突扫描。
+遗留问题：本轮没有替用户做带认证的真实 Mac 桌面长跑；下一次需要用户在桌面 app 里本机输入 Mac 当前临时密码连接，然后复制诊断或上板，看 `W8NativeVideo=` 的 `presenting/presentGap/presentFrames/decoded/streamChange/deviceLost/errors`。
+下一步建议：白天真实长跑优先走 `Start-Windows-Desktop-Control-Mac.cmd`；如果 fresh clone 没有 release exe，先运行 `Build-Windows-Desktop-Control-Mac.cmd`。Web/browser 只作诊断附件，不作为 W8/W10 主 gate。
+是否改了协议：否。
+是否需要另一端配合：后续真实长跑需要 Mac host 在线；本轮不需要 Mac 改代码。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端原生呈现进度摘要
 开发端：Windows Codex
 本轮目标：继续只做视频侧，让真实 Mac H.264 长跑上板后能直接判断原生窗口 Present 是否跟上解码。
