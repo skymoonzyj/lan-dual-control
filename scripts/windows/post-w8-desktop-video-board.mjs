@@ -15,7 +15,7 @@ function printHelp() {
   node scripts/windows/post-w8-desktop-video-board.mjs [options]
 
 Options:
-  --text <text>     Text that contains one W8NativeVideo= line.
+  --text <text>     Text that contains one W8NativeVideo= line and optional W2W3Retest= line.
   --file <path>     Read text from a local file that contains W8NativeVideo=.
   --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
@@ -28,9 +28,10 @@ Options:
 Description:
   Safely posts Windows desktop-control W8 native video evidence after the user
   copies desktop diagnostics. It accepts a redacted W8NativeVideo= line,
-  generates W8NativeGate= next-step evidence, rejects password/token/control
-  event markers before posting, and never authenticates a host or asks for a
-  password.
+  generates W8NativeGate= next-step evidence, and can derive W8ArrivalBacklog=
+  from an optional W2W3Retest= line in the same pasted diagnostics. It rejects
+  password/token/control event markers before posting and never authenticates a
+  host or asks for a password.
 `);
 }
 
@@ -105,6 +106,16 @@ function normalizeW8NativeVideoLine(line) {
     .trim();
 }
 
+function normalizeRetestLine(line) {
+  return String(line || "")
+    .replace(/\s*;\s*W8NativeVideo=.*$/i, "")
+    .replace(/\s*;\s*(?:fps|audio|surface|h264Errors|error)=.*$/i, "")
+    .replace(/\s+No password was printed or sent to Agent Link Board; no input\/inject was performed\.?.*$/i, "")
+    .replace(/\s+Source=[^\r\n]+$/i, "")
+    .replace(/\s+Safety=no-password-on-board,no-input-inject\.?.*$/i, "")
+    .trim();
+}
+
 function extractW8NativeVideoLine(input) {
   const matches = [...String(input).matchAll(/W8NativeVideo=[^\r\n]+/g)]
     .map((match) => normalizeW8NativeVideoLine(match[0]))
@@ -117,6 +128,17 @@ function extractW8NativeVideoLine(input) {
     throw new Error("W8NativeVideo= line is missing present= or status= evidence.");
   }
   return w8NativeVideoLine;
+}
+
+function extractOptionalRetestLine(input) {
+  const matches = [...String(input).matchAll(/W2W3Retest=[^\r\n]+/g)]
+    .map((match) => normalizeRetestLine(match[0]))
+    .filter(Boolean);
+  const retestLine = matches.at(-1) || "";
+  if (!retestLine) return "";
+  const unsafeMarker = findUnsafeMarker(retestLine);
+  if (unsafeMarker) throw new Error("unsafe W2W3Retest input rejected before posting");
+  return retestLine;
 }
 
 function parseSummaryFields(line) {
@@ -140,6 +162,10 @@ function numericField(fields, key) {
 
 function w8NativeGateStatus(summary) {
   return String(summary || "").match(/\bW8NativeGate=status=([^\s]+)/)?.[1] || "";
+}
+
+function summaryStatus(prefix, summary) {
+  return String(summary || "").match(new RegExp(`\\b${prefix}=status=([^\\s]+)`))?.[1] || "";
 }
 
 function makeW8NativeGateSummary(w8NativeVideoLine) {
@@ -198,6 +224,107 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
   ].join(" ");
 }
 
+function numericFromText(text, patterns) {
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (!match) continue;
+    const value = Number.parseInt(match[1], 10);
+    if (Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+function classifyW8ArrivalSource({ blocked, localMaxMs, remoteMediaMaxMs, queueMs, staleDrops, liveBacklogRequests, reason }) {
+  if (!blocked) return "stable";
+  if (remoteMediaMaxMs >= 1000 && remoteMediaMaxMs >= Math.max(1000, Math.round(localMaxMs * 0.8))) {
+    return "remote-media-gap";
+  }
+  if (localMaxMs >= 1000 && (!remoteMediaMaxMs || remoteMediaMaxMs < 1000)) {
+    return "windows-arrival-gap";
+  }
+  if (queueMs >= 180 || staleDrops > 0 || liveBacklogRequests > 0 || /backlog|queue|wait|recovery/i.test(reason)) {
+    return "windows-queue-backlog";
+  }
+  if (localMaxMs >= 1000) return "windows-arrival-gap";
+  return "unknown";
+}
+
+function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
+  if (!retestLine || w8NativeGateStatus(w8NativeGateSummary) !== "arrival-backlog-next") return "";
+  const text = String(retestLine || "");
+  const fields = parseSummaryFields(text);
+  const queueMs = numericField(fields, "queueMs") || numericFromText(text, [/本机队列\s*(\d+)\s*ms/u, /\bqueue\s*(\d+)\s*ms\b/i]);
+  const staleDrops =
+    numericField(fields, "staleDrops") ||
+    numericField(fields, "droppedStale") ||
+    numericFromText(text, [/本地过期丢帧\s*(\d+)/u]);
+  const liveBacklogRequests =
+    numericField(fields, "liveBacklogRequests") ||
+    numericField(fields, "liveBacklogReq") ||
+    numericFromText(text, [/追实时请求\s*(\d+)/u]);
+  const localAvgMs =
+    numericField(fields, "localAvgMs") ||
+    numericField(fields, "avgGapMs") ||
+    numericFromText(text, [/(?:^|[·,，]\s*)平均间隔\s*(\d+)\s*ms/u]);
+  const localMaxMs =
+    numericField(fields, "localMaxMs") ||
+    numericField(fields, "maxGapMs") ||
+    numericField(fields, "arrivalMs") ||
+    numericFromText(text, [/(?:^|[·,，]\s*)最大间隔\s*(\d+)\s*ms/u]);
+  const remoteMediaAvgMs =
+    numericField(fields, "remoteMediaAvgMs") ||
+    numericField(fields, "remoteAvgMs") ||
+    numericFromText(text, [/远端媒体平均间隔\s*(\d+)\s*ms/u]);
+  const remoteMediaMaxMs =
+    numericField(fields, "remoteMediaMaxMs") ||
+    numericField(fields, "remoteMaxMs") ||
+    numericFromText(text, [/远端媒体最大间隔\s*(\d+)\s*ms/u]);
+  const maxGapMs =
+    numericField(fields, "maxGapMs") ||
+    numericField(fields, "arrivalMs") ||
+    localMaxMs;
+  const visibilityRecovery =
+    numericField(fields, "visibilityRecovery") ||
+    numericField(fields, "visibilityRecoveryCount") ||
+    numericFromText(text, [/可见恢复\s*(\d+)/u]);
+  const reason =
+    String(fields.reason || text.match(/原因\s*([^\s,，·]+)/u)?.[1] || "unknown")
+      .trim()
+      .replace(/\s+/g, "_");
+  const blocked =
+    queueMs >= 180 ||
+    staleDrops > 0 ||
+    liveBacklogRequests > 0 ||
+    maxGapMs >= 1000 ||
+    /backlog|queue|wait|recovery/i.test(reason);
+  const status = blocked ? "blocked" : "stable-candidate";
+  const arrivalSource = classifyW8ArrivalSource({
+    blocked,
+    localMaxMs,
+    remoteMediaMaxMs,
+    queueMs,
+    staleDrops,
+    liveBacklogRequests,
+    reason,
+  });
+  const next = blocked && arrivalSource === "remote-media-gap" ? "inspect-remote-media-cadence" : blocked ? "investigate-windows-arrival-backlog" : "continue-long-run-observation";
+  return [
+    `W8ArrivalBacklog=status=${status}`,
+    `queueMs=${queueMs}`,
+    `staleDrops=${staleDrops}`,
+    `liveBacklogRequests=${liveBacklogRequests}`,
+    `maxGapMs=${maxGapMs}`,
+    `localAvgMs=${localAvgMs}`,
+    `localMaxMs=${localMaxMs}`,
+    `remoteMediaAvgMs=${remoteMediaAvgMs}`,
+    `remoteMediaMaxMs=${remoteMediaMaxMs}`,
+    `arrivalSource=${arrivalSource}`,
+    `visibilityRecovery=${visibilityRecovery}`,
+    `reason=${reason || "unknown"}`,
+    `next=${next}`,
+  ].join(" ");
+}
+
 async function postMessage(args, text) {
   const url = new URL("/api/message", args.server);
   const response = await fetch(url, {
@@ -220,10 +347,11 @@ async function postMessage(args, text) {
   return true;
 }
 
-function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary) {
+function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary = "") {
   return [
     w8NativeVideoLine,
     w8NativeGateSummary,
+    w8ArrivalBacklogSummary,
     "Source=DesktopControl/copied-diagnostics.",
     "Safety=no-password-on-board,no-input-inject.",
   ].filter(Boolean).join("\n");
@@ -234,6 +362,7 @@ function makeBoardSummary(payload) {
     `W8DesktopVideoPost=${payload.send ? "sent" : "dry-run"}`,
     `w8NativeVideo=${payload.w8NativeVideoLine ? "present" : "missing"}`,
     payload.w8NativeGateSummary ? `w8NativeGate=${w8NativeGateStatus(payload.w8NativeGateSummary) || "present"}` : "w8NativeGate=missing",
+    payload.w8ArrivalBacklogSummary ? `w8ArrivalBacklog=${summaryStatus("W8ArrivalBacklog", payload.w8ArrivalBacklogSummary) || "present"}` : "w8ArrivalBacklog=missing",
     "Safety=no-password-on-board,no-input-inject.",
   ].join(" ");
 }
@@ -247,18 +376,22 @@ async function main() {
 
   const input = readInput(args);
   const w8NativeVideoLine = extractW8NativeVideoLine(input);
+  const retestLine = extractOptionalRetestLine(input);
   const w8NativeGateSummary = makeW8NativeGateSummary(w8NativeVideoLine);
+  const w8ArrivalBacklogSummary = makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary);
   const payload = {
     ok: true,
     send: Boolean(args.send),
     sentW8NativeVideo: false,
+    retestLine,
     w8NativeVideoLine,
     w8NativeGateSummary,
+    w8ArrivalBacklogSummary,
     boardSummary: "",
   };
 
   if (args.send) {
-    await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary));
+    await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary));
     payload.sentW8NativeVideo = true;
   }
 

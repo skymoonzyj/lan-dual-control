@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8Post 可选 arrival/backlog 生成
+开发端：Windows Codex
+本轮目标：继续按通讯板 W8 最新验收口径，让桌面复制诊断直发入口在有足够信息时不只发 `W8NativeGate=`，也能给出 `W8ArrivalBacklog=` 和 `arrivalSource`。
+完成内容：`post-w8-desktop-video-board` 现在可选提取同一段输入里的最后一条 `W2W3Retest=`。当 `W8NativeGate=status=arrival-backlog-next` 时，会同步生成 `W8ArrivalBacklog=`，字段包含 `queueMs/staleDrops/liveBacklogRequests/maxGapMs/localAvgMs/localMaxMs/remoteMediaAvgMs/remoteMediaMaxMs/arrivalSource/visibilityRecovery/reason/next`；如果只有 `W8NativeVideo=`，仍保持只发 gate。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `W8ArrivalBacklog=` 缺失；实现后 `node scripts/windows/test-post-w8-desktop-video-board.mjs` 转绿，新增用例覆盖 optional `W2W3Retest=` 生成 `arrivalSource=windows-arrival-gap` 并随同一条 W8 消息上板。
+遗留问题：这仍是无密上板/判读增强，没有跑真实带密码桌面长跑，不宣称真实卡顿已修。真实体验仍要看用户现场画面、`presentFrames/decoded/presentGap/errors` 和队列/间隔。
+下一步建议：真实桌面长跑后，如果复制诊断同时带 `W8NativeVideo=` 与 `W2W3Retest=`，直接用 W8Post 上板即可得到 gate + arrival/backlog；如果只带 `W8NativeVideo=`，必要时再补完整复测或手工粘贴队列/间隔摘要。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 桌面复制诊断直发通讯板
 开发端：Windows Codex
 本轮目标：按通讯板 W8 最新口径，补一个不依赖旧 W2/W3 复测行的桌面诊断上板入口，让真实 Windows 桌面端长跑后可直接粘贴 `W8NativeVideo=` 并生成 `W8NativeGate=`。
