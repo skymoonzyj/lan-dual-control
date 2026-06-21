@@ -6055,26 +6055,26 @@ async function verifyH264LatencyQueueGuard(session) {
         const liveBacklogExportText = getVideoPerformanceExportStatus(liveBacklogNow + 100);
         const liveBacklogKeyFrameRequest =
           liveBacklogRequest?.requested === true &&
-          liveBacklogRequest?.dropFrame === true &&
-          liveBacklogRequest?.droppedFrames === 5 &&
+          liveBacklogRequest?.dropFrame === false &&
+          liveBacklogRequest?.droppedFrames === 0 &&
           liveBacklogRepeat?.requested === false &&
-          closeCalls === closeCallsBeforeLiveBacklogRequest + 1 &&
-          state.h264Decoder === null &&
-          state.h264DecoderQueue.length === 0 &&
-          state.h264DecoderNeedsKeyFrame === true &&
-          state.h264DecoderStatus === "waiting-keyframe" &&
-          state.h264SkippedDeltaFrames === 1 &&
+          closeCalls === closeCallsBeforeLiveBacklogRequest &&
+          state.h264Decoder !== null &&
+          state.h264DecoderQueue.length === 4 &&
+          state.h264DecoderNeedsKeyFrame === false &&
+          state.h264DecoderStatus === "decoding" &&
+          state.h264SkippedDeltaFrames === 0 &&
           state.h264LiveBacklogRecoveryCount === 1 &&
-          state.videoDroppedStaleFrames === staleDropsBeforeLiveBacklogRequest + 5 &&
-          state.videoLastDropReason === "live-backlog-wait-keyframe" &&
+          state.videoDroppedStaleFrames === staleDropsBeforeLiveBacklogRequest &&
+          state.videoLastDropReason === "live-backlog-keyframe-request" &&
           liveBacklogSettings.length === 1 &&
           liveBacklogSettings[0]?.preferredVideoCodec === "h264" &&
           liveBacklogSettings[0]?.preferredVideoEncoding === "annexb" &&
           liveBacklogExportText.includes("追实时请求 1 次") &&
-          liveBacklogExportText.includes("本地过期丢帧 5") &&
-          liveBacklogExportText.includes("跳过 delta 1") &&
-          liveBacklogExportText.includes("需要关键帧") &&
-          liveBacklogExportText.includes("原因 live-backlog-wait-keyframe");
+          !liveBacklogExportText.includes("本地过期丢帧 5") &&
+          !liveBacklogExportText.includes("跳过 delta 1") &&
+          !liveBacklogExportText.includes("需要关键帧") &&
+          liveBacklogExportText.includes("原因 live-backlog-keyframe-request");
 
         if (typeof maybeRecoverH264VideoFallback !== "function") {
           return { ok: false, reason: "missing H.264 fallback recovery helper" };
