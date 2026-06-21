@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 视频 live backlog 立即丢旧追实时
+开发端：Windows Codex
+本轮目标：按用户要求主要完成视频侧修改，继续收口 W2 后台/切 app 后 H.264 本机队列积压导致的延迟堆积。
+完成内容：Windows client 的 `maybeRequestH264LiveBacklogKeyFrame` 现在在 live backlog 触发时不再继续保留旧队列并喂 delta，而是立即关闭/清空本机 H.264/WebCodecs 旧队列，丢当前 delta，发送 H.264/annexb display settings 请求关键帧，并进入 `waiting-keyframe`；诊断原因改为 `live-backlog-wait-keyframe`，同时保留 `追实时请求`、本地过期丢帧、跳过 delta、需要关键帧等证据。关键帧到达后从最新关键帧继续解码，减少后台恢复后继续吞旧帧造成的秒级积压。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5216 --debugPort 9356 --timeoutMs 45000` 先失败于 `liveBacklogRequest.dropFrame=false`、队列仍保留；新增 `--onlyH264LatencyQueueGuard` 后，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --onlyH264LatencyQueueGuard --clientPort 5220 --debugPort 9360 --timeoutMs 45000` 通过，输出 `H.264 latency queue guard ... liveBacklogReq=yes liveBacklogJump=yes`。
+遗留问题：仍需要用户真实最小化/切 app/切回复测确认 FPS/队列是否明显改善；当前完整 diagnosticsOnly 会被独立的音频/重连 guard 拦住，本轮未改音频。若仍低 FPS 且远端媒体间隔正常，继续查 Windows 浏览器/WebCodecs/canvas 调度。
+下一步建议：双方拉最新后，真实复测重点看 `live-backlog-wait-keyframe`、`追实时请求`、本机队列和关键帧到达后的 FPS 回落；不把问题回退到 Mac 产帧，除非 Windows `recv/key/sps/pps/idr` 缺失。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；需要 Mac host 在线和用户后续真实复测。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W1 一键复测入口端口占用收口
 开发端：Windows Codex
 本轮目标：响应通讯板 W1“一键入口稳定”，修复恢复总览检测到默认 Windows client/CDP 端口占用时，主复测命令仍指向占用端口的问题。

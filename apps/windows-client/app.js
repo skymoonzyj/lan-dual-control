@@ -9500,15 +9500,24 @@ function maybeRequestH264LiveBacklogKeyFrame({ isKeyFrame = false, frameId = "",
 
   state.h264LiveBacklogRecoveryLastRequestedAt = timestamp;
   state.h264LiveBacklogRecoveryCount = (Number(state.h264LiveBacklogRecoveryCount) || 0) + 1;
-  state.videoDecoderQueueMs = metrics.oldestAgeMs;
-  state.videoLastDropReason = "live-backlog-keyframe-request";
-  updateH264DecoderDiagnostics();
+  const latencyResync = resyncH264DecoderQueueForLatency({
+    isKeyFrame: false,
+    frameId,
+    now: timestamp,
+    reason: "live-backlog-wait-keyframe",
+  });
+  startH264KeyFrameWait(timestamp, { requestedNow: true });
   state.client.sendDisplaySettings(buildDisplaySettingsMessage());
   addLog(
     "H.264 追实时",
-    `本机队列 ${metrics.oldestAgeMs} ms 超过实时窗口 ${targetAgeMs} ms，已请求关键帧 #${frameId || "--"}`,
+    `本机队列 ${metrics.oldestAgeMs} ms 超过实时窗口 ${targetAgeMs} ms，已丢旧帧并请求关键帧 #${frameId || "--"}`,
   );
-  return { dropFrame: false, requested: true, queueMs: metrics.oldestAgeMs, targetAgeMs };
+  return {
+    ...latencyResync,
+    requested: true,
+    queueMs: metrics.oldestAgeMs,
+    targetAgeMs,
+  };
 }
 function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
   if (!shouldResyncH264DecoderQueue(now)) {

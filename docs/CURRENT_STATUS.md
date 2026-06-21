@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 视频 live backlog 立即丢旧追实时
+- Windows 控制端把 H.264 live backlog 策略从“队列超过实时窗口时只请求关键帧”升级为“立即清旧队列、丢当前 delta、请求关键帧并等待最新关键帧”。已出画面后，如果本机 WebCodecs/H.264 队列超过约 6 帧实时窗口但未到 450ms 硬重同步阈值，控制端会标记 `live-backlog-wait-keyframe`，增加 `追实时请求 <n> 次`、`本地过期丢帧`、`跳过 delta` 和 `需要关键帧` 诊断；关键帧到达后直接从最新关键帧继续解码，避免后台/切 app 恢复后继续吞旧 delta 把延迟拖成秒级。本轮新增 `--onlyH264LatencyQueueGuard` 视频专项入口：红灯先证明旧逻辑 `liveBacklogRequest.dropFrame=false` 且队列保留，绿灯后 H.264 专项通过；完整 diagnosticsOnly 当前会被独立音频/重连 guard 拦住，未混入本轮视频提交。不改协议、不改 Mac host、不碰 W6/W7 音频、不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 W1 一键复测入口端口占用收口
 - Windows 恢复总览已把默认 Windows client/CDP 端口占用检测结果用于正式 `WinClientRetest=` 命令生成。以前 `WinClientPorts=occupied(...;stale-diagnostics)` 时，`Next=` / formal checklist 会切到备用端口，但 `WinClientRetest=` / `WinClientRetestPs=` 仍可能保留被旧诊断进程占用的 `--clientPort 5197 --debugPort 9337`；现在这两条真实复测命令也使用 `getPreferredWindowsClientDiagnosticsPorts` 选出的备用端口，例如 `5200/9340` 或自定义备用端口。Node 与 PowerShell 包装回归均覆盖默认占用和自定义占用场景；不请求密码、不认证、不发 input/inject。
 
