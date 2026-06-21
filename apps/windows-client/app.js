@@ -161,6 +161,8 @@ const audioMaximumQueuedSeconds = 0.45;
 const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
 const audioRecoveryUnderrunBufferSeconds = 0.10;
+const audioLowLatencyTargetQueuedSeconds = 0.10;
+const audioLowLatencySoftCapSeconds = 0.12;
 const audioAdaptiveUnderrunWindowSeconds = 2;
 const audioStableUnderrunMinimumPlayedFrames = 8;
 const audioVisibilityRecoveryMinimumHiddenMs = 250;
@@ -630,6 +632,7 @@ const state = {
   audioScheduledSources: [],
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
+  audioLatencyTrimmedFrames: 0,
   audioResyncCount: 0,
   audioUnderrunCount: 0,
   audioStablePrebufferCount: 0,
@@ -3366,6 +3369,7 @@ function resetAudioPlayback() {
   state.audioScheduledSources = [];
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
+  state.audioLatencyTrimmedFrames = 0;
   state.audioResyncCount = 0;
   state.audioUnderrunCount = 0;
   state.audioStablePrebufferCount = 0;
@@ -3483,6 +3487,16 @@ function resyncAudioQueue(reason, now, { dropActive = false } = {}) {
   state.audioNextPlayTime = dropActive
     ? now + audioResyncBufferSeconds
     : Math.max(now + audioResyncBufferSeconds, activeEndAt);
+  return dropped;
+}
+
+function trimAudioQueueToLowLatencyTarget(reason, now) {
+  const { dropped, activeEndAt } = trimFutureScheduledAudioSources(now);
+  if (dropped <= 0) return 0;
+  state.audioLatencyTrimmedFrames = (Number(state.audioLatencyTrimmedFrames) || 0) + dropped;
+  state.audioLastDropReason = reason;
+  state.audioLastBufferReason = reason;
+  state.audioNextPlayTime = Math.max(now + audioLowLatencyTargetQueuedSeconds, activeEndAt);
   return dropped;
 }
 
@@ -3663,6 +3677,8 @@ async function playPcmAudioFrame(frame) {
     );
   } else if (shouldSnapAudioQueueToLive(now, currentNow)) {
     resyncAudioQueue("queue-overflow-snap-live", now, { dropActive: true });
+  } else if (queuedSeconds > audioLowLatencySoftCapSeconds) {
+    trimAudioQueueToLowLatencyTarget("queue-latency-trim-future", now);
   }
   if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
     const lastUnderrunAt = Number(state.audioLastUnderrunAt);
@@ -3730,9 +3746,11 @@ function formatAudioBufferHealthStatusText() {
   const underrunCount = Number(state.audioUnderrunCount) || 0;
   const stablePrebufferCount = Number(state.audioStablePrebufferCount) || 0;
   const visibilityRecoveryCount = Number(state.audioVisibilityRecoveryCount) || 0;
+  const latencyTrimmedCount = Number(state.audioLatencyTrimmedFrames) || 0;
   if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
   if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);
+  if (latencyTrimmedCount > 0) parts.push(`追实时 ${latencyTrimmedCount}`);
   if (visibilityRecoveryCount > 0) parts.push(`可见恢复 ${visibilityRecoveryCount}`);
   return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
@@ -5439,6 +5457,7 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   const underrunCount = Number(state.audioUnderrunCount) || 0;
   const stablePrebufferCount = Number(state.audioStablePrebufferCount) || 0;
   const visibilityRecoveryCount = Number(state.audioVisibilityRecoveryCount) || 0;
+  const latencyTrimmedCount = Number(state.audioLatencyTrimmedFrames) || 0;
   const dropReason = String(state.audioLastDropReason || state.audioLastBufferReason || "").trim();
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getAudioFrameGapStats();
   const remoteMediaGapStats = getAudioRemoteMediaGapStats();
@@ -5474,6 +5493,7 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
   if (underrunCount > 0) parts.push(`补缓冲 ${underrunCount}`);
   if (stablePrebufferCount > 0) parts.push(`稳缓冲 ${stablePrebufferCount}`);
+  if (latencyTrimmedCount > 0) parts.push(`追实时 ${latencyTrimmedCount}`);
   if (visibilityRecoveryCount > 0) parts.push(`可见恢复 ${visibilityRecoveryCount}`);
   if (dropReason) parts.push(`原因 ${dropReason}`);
   if (state.audioLastError) {

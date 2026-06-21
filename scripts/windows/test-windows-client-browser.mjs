@@ -7590,6 +7590,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         visibilityHiddenAt: state.audioVisibilityHiddenAt,
         visibilityRecoveryCount: state.audioVisibilityRecoveryCount,
         visibilityRecoveryLastAt: state.audioVisibilityRecoveryLastAt,
+        latencyTrimmedFrames: state.audioLatencyTrimmedFrames,
         frames: state.audioFrames,
         lastFrameAt: state.audioLastFrameAt,
         waitingSince: state.audioWaitingSince,
@@ -7897,8 +7898,40 @@ async function verifyAudioPlaybackBufferGuards(session) {
           starts[0] >= 50.095 &&
           starts[0] < 50.14;
 
+        state.audioContext = makeFakeContext(60);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 60.08;
+        state.audioPlayedFrames = 20;
+        state.audioDroppedFrames = 0;
+        state.audioResyncCount = 0;
+        state.audioUnderrunCount = 0;
+        state.audioStablePrebufferCount = 0;
+        state.audioLatencyTrimmedFrames = 0;
+        state.audioLastUnderrunAt = 0;
+        state.audioLastDropReason = "";
+        state.audioLastBufferReason = "";
+        state.audioVisibilityHiddenAt = 0;
+        state.audioVisibilityRecoveryCount = 0;
+        state.audioVisibilityRecoveryLastAt = 0;
+        state.audioScheduledSources = [];
+        starts.length = 0;
+        stops.length = 0;
+        for (let index = 0; index < 15; index += 1) {
+          state.audioContext.currentTime = 60 + index * 0.012;
+          await playPcmAudioFrame(makeFrame());
+        }
+        const burstQueueMs = getAudioQueueMs();
+        const burstExportText = getAudioPerformanceExportStatus();
+        const burstArrivalKeepsLowLatency =
+          burstQueueMs <= 140 &&
+          state.audioDroppedFrames === 0 &&
+          (Number(state.audioLatencyTrimmedFrames) || 0) > 0 &&
+          state.audioLastBufferReason === "queue-latency-trim-future" &&
+          burstExportText.includes("追实时") &&
+          !burstExportText.includes("丢 1");
+
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer,
+          ok: preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer && burstArrivalKeepsLowLatency,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -7961,6 +7994,12 @@ async function verifyAudioPlaybackBufferGuards(session) {
           recoveryUnderrunCount: state.audioUnderrunCount,
           recoveryUnderrunStableCount: state.audioStablePrebufferCount,
           recoveryUnderrunReason: state.audioLastBufferReason,
+          burstArrivalKeepsLowLatency,
+          burstQueueMs,
+          burstLatencyTrimmed: state.audioLatencyTrimmedFrames,
+          burstDropped: state.audioDroppedFrames,
+          burstReason: state.audioLastBufferReason,
+          burstExportText,
         };
       } finally {
         if (audioToggle) audioToggle.checked = original.checked;
@@ -7996,6 +8035,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
           delete state.audioVisibilityRecoveryLastAt;
         } else {
           state.audioVisibilityRecoveryLastAt = original.visibilityRecoveryLastAt;
+        }
+        if (original.latencyTrimmedFrames === undefined) {
+          delete state.audioLatencyTrimmedFrames;
+        } else {
+          state.audioLatencyTrimmedFrames = original.latencyTrimmedFrames;
         }
         state.audioFrames = original.frames;
         state.connected = original.connected;
