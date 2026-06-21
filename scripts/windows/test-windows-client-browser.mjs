@@ -24,6 +24,10 @@ const defaults = {
   progressIntervalMs: 10000,
   requireVideoSurface: true,
   requireH264: false,
+  requireAudioStability: false,
+  audioStabilityMinFrames: 12,
+  audioStabilityMaxQueueMs: 100,
+  audioStabilityMaxGapMs: 120,
   injectPcmAudio: false,
   diagnosticsOnly: false,
   expectDiscoveryRuntimeBuildId: "",
@@ -69,6 +73,11 @@ Options:
   --boardSummary                        Print one secret-free Agent Link Board summary line on stdout; progress goes to stderr.
   --noRequireVideoSurface               Do not require a visible decoded video surface.
   --requireH264                         Require H.264/WebCodecs decoded video.
+  --requireAudioStability               Wait for enough low-latency PCM audio evidence before passing connection.
+  --noRequireAudioStability             Do not wait for PCM audio stability evidence.
+  --audioStabilityMinFrames <n>         Minimum received/played PCM frames for audio stability. Default: ${defaults.audioStabilityMinFrames}
+  --audioStabilityMaxQueueMs <ms>       Maximum local PCM queue for audio stability. Default: ${defaults.audioStabilityMaxQueueMs}
+  --audioStabilityMaxGapMs <ms>         Maximum local PCM arrival gap before reporting stutter. Default: ${defaults.audioStabilityMaxGapMs}
   --injectPcmAudio                      Inject a synthetic PCM frame into the page and require playback state.
   --expectDiscoveryRuntimeBuildId <id>  Require /discovery runtime.buildId before connecting.
 
@@ -110,6 +119,16 @@ function parseArgs(argv) {
     if (key === "requireH264") {
       args.requireH264 = true;
       args.requireVideoSurface = true;
+      continue;
+    }
+    if (key === "requireAudioStability") {
+      args.requireAudioStability = true;
+      args.audioStabilityExplicit = true;
+      continue;
+    }
+    if (key === "noRequireAudioStability") {
+      args.requireAudioStability = false;
+      args.audioStabilityExplicit = true;
       continue;
     }
     if (key === "injectPcmAudio") {
@@ -160,6 +179,12 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  args.audioStabilityMinFrames = Math.max(0, Number(args.audioStabilityMinFrames) || defaults.audioStabilityMinFrames);
+  args.audioStabilityMaxQueueMs = Math.max(0, Number(args.audioStabilityMaxQueueMs) || defaults.audioStabilityMaxQueueMs);
+  args.audioStabilityMaxGapMs = Math.max(0, Number(args.audioStabilityMaxGapMs) || defaults.audioStabilityMaxGapMs);
+  if (args.boardSummary && !args.diagnosticsOnly && !args.audioStabilityExplicit) {
+    args.requireAudioStability = true;
+  }
   const progressIntervalMs = Number(args.progressIntervalMs);
   args.progressIntervalMs = Number.isFinite(progressIntervalMs)
     ? Math.max(0, progressIntervalMs)
@@ -317,6 +342,43 @@ function positiveInteger(value) {
   return Math.max(0, Math.round(finiteNumber(value, 0)));
 }
 
+function getAudioStabilityStatus(value = {}, args = {}) {
+  if (!args.requireAudioStability) {
+    return { ok: true, reason: "audio-stability-disabled" };
+  }
+
+  const minFrames = Math.max(0, positiveInteger(args.audioStabilityMinFrames || defaults.audioStabilityMinFrames));
+  const maxQueueMs = Math.max(0, positiveInteger(args.audioStabilityMaxQueueMs || defaults.audioStabilityMaxQueueMs));
+  const maxGapMs = Math.max(0, positiveInteger(args.audioStabilityMaxGapMs || defaults.audioStabilityMaxGapMs));
+  const frames = positiveInteger(value.audioFrames);
+  const played = positiveInteger(value.audioPlayedFrames);
+  const dropped = positiveInteger(value.audioDroppedFrames);
+  const queueMs = positiveInteger(value.audioQueueMs);
+  const observedMaxGapMs = positiveInteger(value.audioMaxGapMs);
+  const stutterCount = positiveInteger(value.audioStutterCount);
+  const minPlayedFrames = Math.max(1, Math.min(minFrames, Math.floor(minFrames * 0.75)));
+  const reasons = [];
+
+  if (minFrames > 0 && frames < minFrames) reasons.push(`audio-frames ${frames}/${minFrames}`);
+  if (minFrames > 0 && played < minPlayedFrames) reasons.push(`audio-played ${played}/${minPlayedFrames}`);
+  if (dropped > 0) reasons.push(`audio-dropped ${dropped}`);
+  if (maxQueueMs > 0 && queueMs > maxQueueMs) reasons.push(`audio-queue ${queueMs}/${maxQueueMs}ms`);
+  if (maxGapMs > 0 && observedMaxGapMs > maxGapMs) reasons.push(`audio-gap ${observedMaxGapMs}/${maxGapMs}ms`);
+  if (stutterCount > 0) reasons.push(`audio-stutter ${stutterCount}`);
+  if (played <= 0 && /等待/.test(String(value.audio || ""))) reasons.push("audio-waiting-playback");
+
+  return {
+    ok: reasons.length === 0,
+    reason: reasons.length ? reasons.join("; ") : "audio-stable",
+    frames,
+    played,
+    dropped,
+    queueMs,
+    maxGapMs: observedMaxGapMs,
+    stutterCount,
+  };
+}
+
 function hasOwnValue(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key) && object[key] !== undefined && object[key] !== null;
 }
@@ -465,6 +527,45 @@ function verifyW2W3RetestH264Summary() {
   return { ok, text, h264 };
 }
 
+function verifyW2W3RetestAudioStabilityGate() {
+  const args = {
+    requireAudioStability: true,
+    audioStabilityMinFrames: 12,
+    audioStabilityMaxQueueMs: 100,
+  };
+  const shortCandidate = getAudioStabilityStatus({
+    audioFrames: 4,
+    audioPlayedFrames: 4,
+    audioDroppedFrames: 0,
+    audioQueueMs: 40,
+    audioMaxGapMs: 45,
+    audioStutterCount: 0,
+  }, args);
+  const stableCandidate = getAudioStabilityStatus({
+    audioFrames: 18,
+    audioPlayedFrames: 18,
+    audioDroppedFrames: 0,
+    audioQueueMs: 44,
+    audioMaxGapMs: 46,
+    audioStutterCount: 0,
+  }, args);
+  const queuedCandidate = getAudioStabilityStatus({
+    audioFrames: 18,
+    audioPlayedFrames: 18,
+    audioDroppedFrames: 0,
+    audioQueueMs: 140,
+    audioMaxGapMs: 46,
+    audioStutterCount: 0,
+  }, args);
+  const ok =
+    !shortCandidate.ok &&
+    shortCandidate.reason.includes("audio-frames") &&
+    stableCandidate.ok &&
+    !queuedCandidate.ok &&
+    queuedCandidate.reason.includes("audio-queue");
+  return { ok, shortCandidate, stableCandidate, queuedCandidate };
+}
+
 function emitBoardSummary(summary) {
   lastBoardSummary = makeBoardSummary(summary);
   if (activeOutputArgs?.boardSummary) {
@@ -526,6 +627,14 @@ function windowsClientSnapshotExpression() {
     const h264MetaQueue = Array.isArray(window.state?.h264DecoderQueue) ? window.state.h264DecoderQueue.length : 0;
     const h264WebCodecsQueue = Number(window.state?.h264Decoder?.decodeQueueSize) || 0;
     const h264DecoderQueue = Math.max(h264MetaQueue, h264WebCodecsQueue);
+    const audioCurrentTime = Number(window.state?.audioContext?.currentTime);
+    const audioNextPlayTime = Number(window.state?.audioNextPlayTime);
+    const audioQueueMs = Number.isFinite(audioCurrentTime) && Number.isFinite(audioNextPlayTime)
+      ? Math.max(0, Math.round((audioNextPlayTime - audioCurrentTime) * 1000))
+      : 0;
+    const audioGapStats = typeof getAudioFrameGapStats === "function"
+      ? getAudioFrameGapStats()
+      : {};
     return {
       status,
       remote,
@@ -555,6 +664,13 @@ function windowsClientSnapshotExpression() {
       h264LastKeyFrameId: window.state?.h264LastKeyFrameId ?? "",
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
+      audioPlayedFrames: window.state?.audioPlayedFrames ?? 0,
+      audioDroppedFrames: window.state?.audioDroppedFrames ?? 0,
+      audioQueueMs,
+      audioAverageGapMs: audioGapStats.averageGapMs ?? 0,
+      audioMaxGapMs: audioGapStats.maxGapMs ?? 0,
+      audioStutterCount: audioGapStats.stutterCount ?? 0,
+      audioMaxStutterGapMs: audioGapStats.maxStutterGapMs ?? 0,
       liveVideo: exportLine("- 现场视频：") || exportLine("- 现场视频统计："),
       liveAudio: exportLine("- 现场声音：") || exportLine("- 现场声音统计："),
       canvasVisible: canvas?.classList.contains("is-visible") || false,
@@ -586,6 +702,9 @@ function snapshotProgressDetails(snapshot, extra = "") {
   }
   if (Number(snapshot.audioFrames) > 0) {
     add("audioFrames", snapshot.audioFrames);
+  }
+  if (snapshot.audioStabilityReason && snapshot.audioStabilityReason !== "audio-stable") {
+    add("audioStable", snapshot.audioStabilityReason);
   }
   if (Number(snapshot.h264DecoderErrors) > 0) {
     add("h264Errors", snapshot.h264DecoderErrors);
@@ -8491,6 +8610,12 @@ async function run() {
     }
     summary.checks.push("w2w3-h264-summary");
     print("OK", `W2W3Retest H.264 summary: ${h264SummaryCheck.h264}`);
+    const audioStabilityGateCheck = verifyW2W3RetestAudioStabilityGate();
+    if (!audioStabilityGateCheck.ok) {
+      throw new Error(`W2W3Retest audio stability gate check failed: ${JSON.stringify(audioStabilityGateCheck)}`);
+    }
+    summary.checks.push("w2w3-audio-stability");
+    print("OK", `W2W3Retest audio stability gate: minFrames=${audioStabilityGateCheck.stableCandidate.frames} maxQueue=${audioStabilityGateCheck.stableCandidate.queueMs}ms`);
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");
     print(
@@ -8591,11 +8716,15 @@ async function run() {
           !args.requireVideoSurface ||
           (/实收\s+(?!-)\d+(?:\.\d+)?\s+FPS/.test(value.metricFps) &&
             /协商\s+\d+\s+Hz/.test(value.metricFps));
+        const audioStability = getAudioStabilityStatus(value, args);
+        value.audioStabilityReason = audioStability.reason;
+        value.audioStability = audioStability;
         if (
           value.status.includes("已连接") &&
           (!args.requireVideoSurface || hasVideoSurface) &&
           (!args.requireH264 || (hasH264Surface && hasNoH264DecodeErrors)) &&
-          hasFpsDiagnostics
+          hasFpsDiagnostics &&
+          audioStability.ok
         ) {
           return value;
         }
@@ -8629,6 +8758,13 @@ async function run() {
     summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
     summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
     summary.checks.push("connection");
+    if (args.requireAudioStability) {
+      summary.checks.push("audio-stability");
+      print(
+        "OK",
+        `Audio stability: frames=${snapshot.audioStability.frames}, played=${snapshot.audioStability.played}, queue=${snapshot.audioStability.queueMs}ms, maxGap=${snapshot.audioStability.maxGapMs}ms, dropped=${snapshot.audioStability.dropped}`,
+      );
+    }
     print("OK", `Remote: ${snapshot.remote}`);
     print("OK", `Diagnostics: ${snapshot.diagnostics}`);
     print("OK", `FPS: ${snapshot.metricFps}`);
