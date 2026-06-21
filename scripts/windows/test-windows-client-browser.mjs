@@ -7705,7 +7705,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const underrunBufferReasonAfterPrebuffer = state.audioLastBufferReason;
         const underrunPrebufferDiagnosed =
           underrunPlayed &&
-          underrunStart >= 10.07 &&
+          underrunStart >= 10.055 &&
+          underrunStart < 10.075 &&
           underrunCountAfterPrebuffer === 1 &&
           underrunBufferReasonAfterPrebuffer === "queue-underrun-prebuffer" &&
           underrunExportText.includes("补缓冲 1") &&
@@ -7775,8 +7776,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           firstFrameWaitExportText.includes("已等待 4s");
         const adaptivePrebuffered =
           adaptiveUnderrunPlayed &&
-          adaptiveUnderrunStart >= 10.315 &&
-          adaptiveUnderrunStart < 10.36 &&
+          adaptiveUnderrunStart >= 10.295 &&
+          adaptiveUnderrunStart < 10.315 &&
           state.audioUnderrunCount === 2 &&
           state.audioStablePrebufferCount === 1 &&
           state.audioLastBufferReason === "queue-underrun-stable-prebuffer" &&
@@ -7812,8 +7813,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioUnderrunCount === 2 &&
           startupUnderrunStableCount === 0 &&
           startupUnderrunReason === "queue-underrun-startup-prebuffer" &&
-          startupUnderrunStart >= 11.075 &&
-          startupUnderrunStart < 11.13 &&
+          startupUnderrunStart >= 11.055 &&
+          startupUnderrunStart < 11.085 &&
           startupUnderrunExportText.includes("原因 queue-underrun-startup-prebuffer") &&
           !startupUnderrunExportText.includes("稳缓冲");
 
@@ -7934,8 +7935,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioUnderrunCount === 2 &&
           state.audioStablePrebufferCount === 1 &&
           state.audioLastBufferReason === "queue-underrun-recovery-prebuffer" &&
-          starts[0] >= 50.095 &&
-          starts[0] < 50.14;
+          starts[0] >= 50.075 &&
+          starts[0] < 50.095;
 
         state.audioContext = makeFakeContext(60);
         state.audioGain = { gain: { value: 0 } };
@@ -7962,7 +7963,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const burstQueueMs = getAudioQueueMs();
         const burstExportText = getAudioPerformanceExportStatus();
         const burstArrivalKeepsLowLatency =
-          burstQueueMs <= 100 &&
+          burstQueueMs <= 80 &&
           state.audioDroppedFrames === 0 &&
           (Number(state.audioLatencyTrimmedFrames) || 0) > 0 &&
           state.audioLastBufferReason === "queue-latency-trim-future" &&
@@ -7994,7 +7995,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const sustainedBurstQueueMs = getAudioQueueMs();
         const sustainedBurstExportText = getAudioPerformanceExportStatus();
         const sustainedBurstKeepsLowLatency =
-          sustainedBurstQueueMs <= 100 &&
+          sustainedBurstQueueMs <= 80 &&
           state.audioDroppedFrames === 0 &&
           state.audioUnderrunCount === 0 &&
           state.audioStablePrebufferCount === 0 &&
