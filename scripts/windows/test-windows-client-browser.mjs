@@ -313,6 +313,10 @@ function compactBoardSummaryText(value, maxLength = 180) {
     .replace(/(--(?:password|token|secret))\s+\S+/gi, "$1 <hidden>");
 }
 
+function compactBoardSummaryToken(value, maxLength = 60) {
+  return compactBoardSummaryText(value, maxLength).replace(/\s+/g, "_");
+}
+
 function stripLiveExportPrefix(value) {
   return String(value ?? "")
     .trim()
@@ -455,7 +459,11 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
   const queueDrops = positiveInteger(value.w8NativeVideoDroppedFrames);
   const errors = positiveInteger(value.w8NativeVideoErrors);
+  const webBypass = positiveInteger(value.h264WebDecodeBypassedForNativeSurface);
   const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
+  const webDecode = String(value.h264DecoderStatus || value.videoDecoderStatus || "").trim();
+  const webBypassReason = String(value.h264WebDecodeBypassReason || "").trim();
+  const webBypassFrame = String(value.h264WebDecodeBypassLastFrameId || "").trim();
   const output = String(value.w8NativeVideoDecoderSessionOutputSubtype || "").trim();
   const present = String(value.w8NativeVideoNativePresentStatus || "").trim();
   const presentMode = String(value.w8NativeVideoNativePresentMode || "").trim();
@@ -502,6 +510,12 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   parts.push("ui=html-shell");
   parts.push(`mainSurface=${isWindowPresenting ? "native-hwnd" : hasNativePipeline ? "native-pending" : "unknown"}`);
   parts.push("canvasRole=diagnostic-fallback");
+  if (webDecode) parts.push(`webDecode=${compactBoardSummaryToken(webDecode, 60)}`);
+  if (webBypass > 0) {
+    parts.push(`webBypass=${webBypass}`);
+    if (webBypassReason) parts.push(`webBypassReason=${compactBoardSummaryToken(webBypassReason, 80)}`);
+    if (webBypassFrame) parts.push(`webBypassFrame=${compactBoardSummaryToken(webBypassFrame, 40)}`);
+  }
   if (status) parts.push(`status=${status}`);
   if (present) parts.push(`present=${present}`);
   if (presentFrames > 0) parts.push(`presentFrames=${presentFrames}`);
@@ -516,7 +530,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     parts.push(`queueDrops=${queueDrops}`);
     parts.push(`queueDropScope=${queueDropScope}`);
     if (queueReason) {
-      parts.push(`queueReason=${compactBoardSummaryText(queueReason, 60).replace(/\s+/g, "_")}`);
+      parts.push(`queueReason=${compactBoardSummaryToken(queueReason, 60)}`);
     }
   }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
@@ -531,7 +545,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   parts.push(`deviceLost=${reasonText.includes("device-lost") ? "yes" : "no"}`);
   parts.push(`errors=${errors}`);
   if (errors > 0 && lastError) {
-    parts.push(`lastError=${compactBoardSummaryText(lastError, 80).replace(/\s+/g, "_")}`);
+    parts.push(`lastError=${compactBoardSummaryToken(lastError, 80)}`);
   }
   return parts.join(" ");
 }
@@ -554,7 +568,7 @@ function makeBoardSummary(summary) {
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
-    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 420)}`);
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 560)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -660,6 +674,10 @@ function verifyW2W3RetestAudioStabilityGate() {
 
 function verifyW8NativeVideoRetestSummary() {
   const w8NativeVideo = makeW8NativeVideoRetestSummary({
+    h264DecoderStatus: "native-main-surface",
+    h264WebDecodeBypassedForNativeSurface: 24,
+    h264WebDecodeBypassReason: "native-main-surface-presenting",
+    h264WebDecodeBypassLastFrameId: 188,
     w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
     w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
     w8NativeVideoNativePresentFrames: 188,
@@ -724,6 +742,10 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("ui=html-shell") &&
     text.includes("mainSurface=native-hwnd") &&
     text.includes("canvasRole=diagnostic-fallback") &&
+    text.includes("webDecode=native-main-surface") &&
+    text.includes("webBypass=24") &&
+    text.includes("webBypassReason=native-main-surface-presenting") &&
+    text.includes("webBypassFrame=188") &&
     text.includes("presenting=yes") &&
     text.includes("presentGap=0") &&
     w8NativeVideoBehind.includes("mainSurface=native-pending") &&

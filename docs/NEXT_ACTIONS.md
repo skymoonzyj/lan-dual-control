@@ -1,8 +1,9 @@
 # 下一步行动
 
-最后更新：2026-06-21
+最后更新：2026-06-22
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- W8 视频侧最新上板口径：`W8NativeVideo=` 现在会直接携带 `webDecode=<status>`、`webBypass=<n>`、`webBypassReason=<reason>` 和 `webBypassFrame=<id>`。下一次真实桌面长跑若同时看到 `mainSurface=native-hwnd presenting=yes`、`webDecode=native-main-surface webBypass>0`、`presentGap` 可接受且 `errors=0`，表示 WebCodecs/canvas 已退到诊断备用，不应再把 Web 解码队列作为主画面 blocker；后续继续看原生 Present 增长、真实体感、远端媒体间隔和 arrival/backlog。若没有 `webBypass` 或 `webDecode` 仍是 Web 解码状态，再回查 Windows client 是否运行最新构建或原生接管 gate 是否没成立。
 - W8 视频侧最新实现：Windows 控制端在原生 HWND 主画面已经 `presented` 后，会继续把 H.264 帧送入 Rust 原生队列，但旁路 WebCodecs/canvas 解码队列，并在复制/导出诊断显示 `WebCodecs 旁路 原生主画面 <n>` / `解码 原生主画面`。下一次真实桌面长跑若看到 `mainSurface=native-hwnd presenting=yes` 且这个旁路计数增长，后续 arrival/backlog 判断应优先看原生 Present、真实体感、远端媒体间隔和网络/到达节奏，不要把 Web 备用队列指标当作主画面阻塞。
 - W8 arrival/backlog 最新上板口径：如果真实复测消息里同时看到 `W8NativeGate=status=arrival-backlog-next` 和 `W8ArrivalBacklog=status=blocked queueMs=<n> staleDrops=<n> liveBacklogRequests=<n> maxGapMs=<n> visibilityRecovery=<n> reason=<reason> next=investigate-windows-arrival-backlog`，表示原生主面证据已经足够，剩余 blocker 应继续查 Windows 侧到达/本机队列/live-backlog/可见恢复，不要回 Web gate，也不要要求 Mac 改协议。若 `W8ArrivalBacklog=status=stable-candidate`，再进入更长时间体感、音频/剪贴板/输入安全日志收口。
 - W8 真实长跑上板最新 gate：下一次 `Run-WinClientRetest-And-Post.cmd` 成功发出 `W8NativeVideo=` 时，`post-w2w3-retest-board` 会自动追加 `W8NativeGate=`。如果看到 `W8NativeGate=status=arrival-backlog-next mainSurface=native-hwnd presenting=yes ... next=investigate-arrival-backlog`，说明“HTML 控制壳 + 原生视频主面”这关已有证据，下一步继续查真实体感、arrival、本机队列、live-backlog，而不是回 Web gate；如果是 `native-present-next`、`native-error-next` 或 `evidence-incomplete`，先继续查原生 Present/swapchain/errors 或重跑带最新诊断的桌面端。

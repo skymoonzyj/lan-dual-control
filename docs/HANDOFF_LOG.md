@@ -17,6 +17,18 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 Windows 原生主面旁路证据上板
+开发端：Windows Codex
+本轮目标：继续视频侧收口，让真实长跑上板摘要直接显示 WebCodecs/canvas 是否已经在原生主面后被旁路。
+完成内容：`makeW8NativeVideoRetestSummary` 现在会把页面 snapshot 中的 `h264DecoderStatus`、`h264WebDecodeBypassedForNativeSurface`、`h264WebDecodeBypassReason` 和 `h264WebDecodeBypassLastFrameId` 压进 `W8NativeVideo=`，字段为 `webDecode=<status>`、`webBypass=<n>`、`webBypassReason=<reason>`、`webBypassFrame=<id>`；W8 摘要压缩上限从 420 放宽到 560，避免旁路字段加入后截断 `streamChange/deviceLost/errors`。`test-post-w2w3-retest-board` 样例同步覆盖发板助手会保留这些字段。
+修改文件：scripts/windows/test-windows-client-browser.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 W8 摘要缺少 `webDecode/webBypass/webBypassReason/webBypassFrame`；实现后 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --onlyH264LatencyQueueGuard --timeoutMs 45000` 转绿，并跑 `node scripts/windows/test-post-w2w3-retest-board.mjs` 确认上板 helper 保留旁路字段。
+遗留问题：本轮未跑带密码真实桌面长跑，不宣称真实卡顿已彻底修复；后续仍需现场看 `W8NativeGate/W8ArrivalBacklog`、`presentFrames/decoded/presentGap/errors`、旁路计数增长和体感。
+下一步建议：下一次真实桌面长跑若看到 `mainSurface=native-hwnd presenting=yes webDecode=native-main-surface webBypass>0 errors=0`，不要回 Web gate，继续查原生 Present 增长、远端媒体间隔和 Windows arrival/backlog；若没有旁路字段，先确认 Windows client 是否运行最新构建。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
 ## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 原生主面后 WebCodecs 旁路
 开发端：Windows Codex

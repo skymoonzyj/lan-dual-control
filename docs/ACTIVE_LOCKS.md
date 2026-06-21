@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-21
+最后更新：2026-06-22
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-client-browser.mjs`, `scripts/windows/test-post-w2w3-retest-board.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-22 本轮 | W8 Windows 原生主面旁路证据上板：`W8NativeVideo=` 新增 `webDecode/webBypass/webBypassReason/webBypassFrame`，并放宽摘要上限，方便真实长跑直接判断 WebCodecs/canvas 是否已退为诊断备用；发板 helper 回归样例保留旁路字段。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | W8 Windows 原生主面后 WebCodecs 旁路：原生 HWND Present 已成立时继续推送 Rust 原生队列，但旁路 WebCodecs/canvas 解码队列并清理 Web backlog/stale/live-backlog 统计；诊断显示 `WebCodecs 旁路 原生主画面`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。 |
 | Windows Codex | `scripts/windows/post-w2w3-retest-board.mjs`, `scripts/windows/run-winclient-retest-and-post.mjs`, `scripts/windows/test-post-w2w3-retest-board.mjs`, `scripts/windows/test-run-winclient-retest-and-post.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | W8 Windows arrival/backlog 上板摘要：当 `W8NativeGate=status=arrival-backlog-next` 时，从 `W2W3Retest=` 自动生成 `W8ArrivalBacklog=`，提取本机队列、过期丢帧、追实时请求、最大间隔、可见恢复和 reason，超阈值时指向 `investigate-windows-arrival-backlog`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。 |
 | Windows Codex | `scripts/windows/post-w2w3-retest-board.mjs`, `scripts/windows/run-winclient-retest-and-post.mjs`, `scripts/windows/test-post-w2w3-retest-board.mjs`, `scripts/windows/test-run-winclient-retest-and-post.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-21 本轮 | W8 Windows 原生主面 gate 上板：`post-w2w3-retest-board` 从 `W8NativeVideo=` 自动生成 `W8NativeGate=`，当 `mainSurface=native-hwnd` / `presenting=yes` / `presentGap` 可接受 / `errors=0` 时给出 `arrival-backlog-next`，否则指向 native present/errors 或重跑新诊断。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。 |
