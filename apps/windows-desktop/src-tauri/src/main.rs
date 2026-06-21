@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod w8_native_video;
+mod w9_native_audio;
 
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -2207,6 +2208,7 @@ fn main() {
         .manage(ClipboardFileTransferState::default())
         .manage(ClipboardFileReadState::default())
         .manage(w8_native_video::W8NativeVideoState::default())
+        .manage(w9_native_audio::W9NativeAudioState::default())
         .invoke_handler(tauri::generate_handler![
             write_files_to_clipboard,
             begin_clipboard_file_write,
@@ -2233,7 +2235,11 @@ fn main() {
             w8_native_video::push_w8_native_video_frame,
             w8_native_video::push_w8_native_h264_annexb_frame,
             w8_native_video::get_w8_native_video_snapshot,
-            w8_native_video::stop_w8_native_video_session
+            w8_native_video::stop_w8_native_video_session,
+            w9_native_audio::start_w9_native_audio_session,
+            w9_native_audio::push_w9_native_pcm_f32_frame,
+            w9_native_audio::get_w9_native_audio_snapshot,
+            w9_native_audio::stop_w9_native_audio_session
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {

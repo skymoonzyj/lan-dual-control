@@ -5,7 +5,12 @@ use cpal::{
     FromSample, Sample, SampleFormat, SizedSample, Stream, StreamConfig,
 };
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    mpsc::{self, Receiver, Sender},
+    Arc, Mutex,
+};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy)]
 pub struct NativeAudioPlaybackConfig {
@@ -52,43 +57,33 @@ pub struct NativeAudioPlaybackBuffer {
 }
 
 pub struct NativeAudioOutput {
-    buffer: Arc<Mutex<NativeAudioPlaybackBuffer>>,
-    _stream: Stream,
+    command_tx: Sender<NativeAudioWorkerCommand>,
+    config: NativeAudioPlaybackConfig,
+    worker: Option<JoinHandle<()>>,
+}
+
+enum NativeAudioWorkerCommand {
+    Push(
+        Vec<f32>,
+        Sender<Result<NativeAudioPlaybackPushResult, String>>,
+    ),
+    Stats(Sender<Result<NativeAudioPlaybackStats, String>>),
+    Stop,
 }
 
 impl NativeAudioOutput {
     pub fn start_default(config: NativeAudioPlaybackConfig) -> Result<Self, String> {
-        let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .ok_or_else(|| "W9 原生音频播放失败：未找到默认输出设备".to_string())?;
-        let supported_config = device
-            .default_output_config()
-            .map_err(|error| format!("W9 原生音频播放失败：读取默认输出格式失败：{error}"))?;
-        let stream_config = StreamConfig {
-            channels: supported_config.channels(),
-            sample_rate: supported_config.sample_rate(),
-            buffer_size: cpal::BufferSize::Default,
-        };
-        let playback_config = NativeAudioPlaybackConfig {
-            sample_rate: stream_config.sample_rate.0,
-            channels: stream_config.channels,
-            ..config
-        };
-        let buffer = Arc::new(Mutex::new(NativeAudioPlaybackBuffer::new(playback_config)));
-        let stream = build_output_stream(
-            supported_config.sample_format(),
-            &device,
-            &stream_config,
-            buffer.clone(),
-        )?;
-        stream
-            .play()
-            .map_err(|error| format!("W9 原生音频播放失败：启动输出流失败：{error}"))?;
+        let (command_tx, command_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let worker = thread::spawn(move || run_audio_worker(config, command_rx, ready_tx));
+        let playback_config = ready_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "W9 原生音频播放失败：输出线程启动超时".to_string())??;
 
         Ok(Self {
-            buffer,
-            _stream: stream,
+            command_tx,
+            config: playback_config,
+            worker: Some(worker),
         })
     }
 
@@ -96,20 +91,110 @@ impl NativeAudioOutput {
         &self,
         samples: &[f32],
     ) -> Result<NativeAudioPlaybackPushResult, String> {
-        let mut guard = self
-            .buffer
-            .lock()
-            .map_err(|_| "W9 原生音频播放缓冲锁定失败".to_string())?;
-        Ok(guard.push_interleaved_f32(samples))
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.command_tx
+            .send(NativeAudioWorkerCommand::Push(samples.to_vec(), reply_tx))
+            .map_err(|_| "W9 原生音频播放线程已停止".to_string())?;
+        reply_rx
+            .recv_timeout(Duration::from_secs(2))
+            .map_err(|_| "W9 原生音频播放 push 超时".to_string())?
     }
 
     pub fn stats(&self) -> Result<NativeAudioPlaybackStats, String> {
-        let guard = self
-            .buffer
-            .lock()
-            .map_err(|_| "W9 原生音频播放缓冲锁定失败".to_string())?;
-        Ok(guard.stats())
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.command_tx
+            .send(NativeAudioWorkerCommand::Stats(reply_tx))
+            .map_err(|_| "W9 原生音频播放线程已停止".to_string())?;
+        reply_rx
+            .recv_timeout(Duration::from_secs(2))
+            .map_err(|_| "W9 原生音频播放状态读取超时".to_string())?
     }
+
+    pub fn config(&self) -> NativeAudioPlaybackConfig {
+        self.config
+    }
+}
+
+impl Drop for NativeAudioOutput {
+    fn drop(&mut self) {
+        let _ = self.command_tx.send(NativeAudioWorkerCommand::Stop);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn run_audio_worker(
+    config: NativeAudioPlaybackConfig,
+    command_rx: Receiver<NativeAudioWorkerCommand>,
+    ready_tx: Sender<Result<NativeAudioPlaybackConfig, String>>,
+) {
+    let result = create_audio_worker(config);
+    let Ok((stream, buffer, playback_config)) = result else {
+        let _ = ready_tx.send(result.map(|(_, _, config)| config));
+        return;
+    };
+    if let Err(error) = stream.play() {
+        let _ = ready_tx.send(Err(format!("W9 原生音频播放失败：启动输出流失败：{error}")));
+        return;
+    }
+    let _ = ready_tx.send(Ok(playback_config));
+    while let Ok(command) = command_rx.recv() {
+        match command {
+            NativeAudioWorkerCommand::Push(samples, reply_tx) => {
+                let result = buffer
+                    .lock()
+                    .map_err(|_| "W9 原生音频播放缓冲锁定失败".to_string())
+                    .map(|mut guard| guard.push_interleaved_f32(&samples));
+                let _ = reply_tx.send(result);
+            }
+            NativeAudioWorkerCommand::Stats(reply_tx) => {
+                let result = buffer
+                    .lock()
+                    .map_err(|_| "W9 原生音频播放缓冲锁定失败".to_string())
+                    .map(|guard| guard.stats());
+                let _ = reply_tx.send(result);
+            }
+            NativeAudioWorkerCommand::Stop => break,
+        }
+    }
+}
+
+fn create_audio_worker(
+    config: NativeAudioPlaybackConfig,
+) -> Result<
+    (
+        Stream,
+        Arc<Mutex<NativeAudioPlaybackBuffer>>,
+        NativeAudioPlaybackConfig,
+    ),
+    String,
+> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| "W9 原生音频播放失败：未找到默认输出设备".to_string())?;
+    let supported_config = device
+        .default_output_config()
+        .map_err(|error| format!("W9 原生音频播放失败：读取默认输出格式失败：{error}"))?;
+    let stream_config = StreamConfig {
+        channels: supported_config.channels(),
+        sample_rate: supported_config.sample_rate(),
+        buffer_size: cpal::BufferSize::Default,
+    };
+    let playback_config = NativeAudioPlaybackConfig {
+        sample_rate: stream_config.sample_rate.0,
+        channels: stream_config.channels,
+        ..config
+    };
+    let buffer = Arc::new(Mutex::new(NativeAudioPlaybackBuffer::new(playback_config)));
+    let stream = build_output_stream(
+        supported_config.sample_format(),
+        &device,
+        &stream_config,
+        buffer.clone(),
+    )?;
+    Ok((stream, buffer, playback_config))
 }
 
 fn build_output_stream(
