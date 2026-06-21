@@ -5376,6 +5376,12 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoDecoderSessionWorkerThread: state.w8NativeVideoDecoderSessionWorkerThread,
         w8NativeVideoDecoderSessionWorkerMode: state.w8NativeVideoDecoderSessionWorkerMode,
         w8NativeVideoDecoderSessionWorkerStatus: state.w8NativeVideoDecoderSessionWorkerStatus,
+        w8NativeVideoFrameHandoffActive: state.w8NativeVideoFrameHandoffActive,
+        w8NativeVideoFrameHandoffMode: state.w8NativeVideoFrameHandoffMode,
+        w8NativeVideoFrameHandoffStatus: state.w8NativeVideoFrameHandoffStatus,
+        w8NativeVideoLatestFrameFormat: state.w8NativeVideoLatestFrameFormat,
+        w8NativeVideoLatestFrameBytes: state.w8NativeVideoLatestFrameBytes,
+        w8NativeVideoLatestFrameId: state.w8NativeVideoLatestFrameId,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5518,6 +5524,11 @@ async function verifyH264KeyFrameDetection(session) {
                           workerThread: true,
                           workerMode: "dedicated-native-decoder-thread",
                           workerStatus: "active",
+                          frameHandoffActive: true,
+                          frameHandoffMode: "native-latest-frame-handoff",
+                          frameHandoffStatus: "waiting-decoded-frame",
+                          latestFrameFormat: "NV12",
+                          latestFrameBytes: 0,
                           reason: "ready; persistent decoder session active",
                         }
                       : null,
@@ -5610,6 +5621,12 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDecoderSessionWorkerThread = false;
         state.w8NativeVideoDecoderSessionWorkerMode = "";
         state.w8NativeVideoDecoderSessionWorkerStatus = "";
+        state.w8NativeVideoFrameHandoffActive = false;
+        state.w8NativeVideoFrameHandoffMode = "";
+        state.w8NativeVideoFrameHandoffStatus = "";
+        state.w8NativeVideoLatestFrameFormat = "";
+        state.w8NativeVideoLatestFrameBytes = 0;
+        state.w8NativeVideoLatestFrameId = null;
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5677,6 +5694,10 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerMode ===
             "dedicated-native-decoder-thread" &&
           state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerStatus === "active" &&
+          state.hostDiagnostics?.w8NativeVideoFrameHandoffActive === true &&
+          state.hostDiagnostics?.w8NativeVideoFrameHandoffMode === "native-latest-frame-handoff" &&
+          state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus === "waiting-decoded-frame" &&
+          state.hostDiagnostics?.w8NativeVideoLatestFrameFormat === "NV12" &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
           exportText.includes("原生解码配置 avc1.420029") &&
@@ -5691,7 +5712,10 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生会话输入 1") &&
           exportText.includes("原生会话解码 0") &&
           exportText.includes("原生会话状态 need-more-input") &&
-          exportText.includes("原生解码线程 active");
+          exportText.includes("原生解码线程 active") &&
+          exportText.includes("原生帧交接 active") &&
+          exportText.includes("原生最新帧 NV12") &&
+          exportText.includes("原生帧状态 waiting-decoded-frame");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5748,6 +5772,14 @@ async function verifyH264KeyFrameDetection(session) {
             state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerMode,
           w8NativeVideoDecoderSessionWorkerStatus:
             state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerStatus,
+          w8NativeVideoFrameHandoffActive:
+            state.hostDiagnostics?.w8NativeVideoFrameHandoffActive,
+          w8NativeVideoFrameHandoffMode:
+            state.hostDiagnostics?.w8NativeVideoFrameHandoffMode,
+          w8NativeVideoFrameHandoffStatus:
+            state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus,
+          w8NativeVideoLatestFrameFormat:
+            state.hostDiagnostics?.w8NativeVideoLatestFrameFormat,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5822,6 +5854,12 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDecoderSessionWorkerThread = original.w8NativeVideoDecoderSessionWorkerThread;
         state.w8NativeVideoDecoderSessionWorkerMode = original.w8NativeVideoDecoderSessionWorkerMode;
         state.w8NativeVideoDecoderSessionWorkerStatus = original.w8NativeVideoDecoderSessionWorkerStatus;
+        state.w8NativeVideoFrameHandoffActive = original.w8NativeVideoFrameHandoffActive;
+        state.w8NativeVideoFrameHandoffMode = original.w8NativeVideoFrameHandoffMode;
+        state.w8NativeVideoFrameHandoffStatus = original.w8NativeVideoFrameHandoffStatus;
+        state.w8NativeVideoLatestFrameFormat = original.w8NativeVideoLatestFrameFormat;
+        state.w8NativeVideoLatestFrameBytes = original.w8NativeVideoLatestFrameBytes;
+        state.w8NativeVideoLatestFrameId = original.w8NativeVideoLatestFrameId;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;

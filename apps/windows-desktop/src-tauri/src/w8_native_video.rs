@@ -169,6 +169,12 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub worker_thread: bool,
     pub worker_mode: String,
     pub worker_status: String,
+    pub frame_handoff_active: bool,
+    pub frame_handoff_mode: String,
+    pub frame_handoff_status: String,
+    pub latest_frame_format: String,
+    pub latest_frame_bytes: u64,
+    pub latest_frame_id: Option<u64>,
     pub reason: String,
 }
 
@@ -672,13 +678,23 @@ impl W8NativeVideoDecoderSessionState {
         if let Some(current) = self.summary.as_mut() {
             current.submitted_frames += 1;
             if let Some(process_result) = process_result {
+                let process_status = process_result.status.clone();
+                let process_output_byte_len = process_result.output_byte_len;
                 if process_result.input_accepted {
                     current.accepted_input_frames += 1;
                 }
                 if process_result.output_produced {
                     current.decoded_frames += 1;
+                    current.latest_frame_id = Some(current.submitted_frames);
+                    current.latest_frame_bytes = process_output_byte_len;
+                    current.latest_frame_format = current.output_subtype.clone();
+                    current.frame_handoff_status = "latest-frame-ready".to_string();
+                } else if process_result.input_accepted && current.frame_handoff_active {
+                    current.frame_handoff_status = "waiting-decoded-frame".to_string();
+                } else if current.frame_handoff_active {
+                    current.frame_handoff_status = process_status.clone();
                 }
-                current.last_status = process_result.status;
+                current.last_status = process_status;
                 current.reason = process_result.reason;
                 current.ready = current.active && current.accepted_input_frames > 0;
             }
@@ -705,6 +721,12 @@ impl W8NativeVideoDecoderSessionState {
             worker_thread: false,
             worker_mode: "none".to_string(),
             worker_status: "starting".to_string(),
+            frame_handoff_active: false,
+            frame_handoff_mode: "none".to_string(),
+            frame_handoff_status: "starting".to_string(),
+            latest_frame_format: "pending".to_string(),
+            latest_frame_bytes: 0,
+            latest_frame_id: None,
             reason: "starting persistent decoder session".to_string(),
         };
 
@@ -718,12 +740,17 @@ impl W8NativeVideoDecoderSessionState {
                     started.worker_thread = true;
                     started.worker_mode = "dedicated-native-decoder-thread".to_string();
                     started.worker_status = "active".to_string();
+                    started.frame_handoff_active = true;
+                    started.frame_handoff_mode = "native-latest-frame-handoff".to_string();
+                    started.frame_handoff_status = "waiting-decoded-frame".to_string();
+                    started.latest_frame_format = started.output_subtype.clone();
                     started.reason = "ready; dedicated native decoder worker active".to_string();
                     self.worker = Some(worker);
                 }
                 Err(error) => {
                     started.last_status = "start-blocked".to_string();
                     started.worker_status = "start-blocked".to_string();
+                    started.frame_handoff_status = "start-blocked".to_string();
                     started.reason = format!("blocked: {error}");
                     self.worker = None;
                 }
@@ -749,6 +776,7 @@ impl W8NativeVideoDecoderSessionState {
             W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
                 output_produced: false,
+                output_byte_len: 0,
                 status: "worker-inactive".to_string(),
                 reason: "blocked: dedicated native decoder worker is not active".to_string(),
             }
@@ -758,6 +786,7 @@ impl W8NativeVideoDecoderSessionState {
             W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
                 output_produced: false,
+                output_byte_len: 0,
                 status: "inactive".to_string(),
                 reason: "blocked: persistent decoder session is not active".to_string(),
             }
@@ -768,6 +797,7 @@ impl W8NativeVideoDecoderSessionState {
 struct W8NativeVideoDecoderSessionProcess {
     input_accepted: bool,
     output_produced: bool,
+    output_byte_len: u64,
     status: String,
     reason: String,
 }
@@ -847,6 +877,7 @@ impl W8NativeVideoDecoderWorker {
             return W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
                 output_produced: false,
+                output_byte_len: 0,
                 status: "worker-send-blocked".to_string(),
                 reason: format!("blocked: native decoder worker command send failed: {error}"),
             };
@@ -857,6 +888,7 @@ impl W8NativeVideoDecoderWorker {
             Err(error) => W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
                 output_produced: false,
+                output_byte_len: 0,
                 status: "worker-timeout".to_string(),
                 reason: format!("blocked: native decoder worker response timed out: {error}"),
             },
@@ -1275,6 +1307,7 @@ impl W8MfH264DecoderWorkerRuntime {
                 return W8NativeVideoDecoderSessionProcess {
                     input_accepted: false,
                     output_produced: false,
+                    output_byte_len: 0,
                     status: "sample-create-blocked".to_string(),
                     reason: format!("blocked: {error}"),
                 };
@@ -1285,6 +1318,7 @@ impl W8MfH264DecoderWorkerRuntime {
             return W8NativeVideoDecoderSessionProcess {
                 input_accepted: false,
                 output_produced: false,
+                output_byte_len: 0,
                 status: "process-input-blocked".to_string(),
                 reason: format!("blocked: native worker ProcessInput failed: {error}"),
             };
@@ -1296,6 +1330,7 @@ impl W8MfH264DecoderWorkerRuntime {
                 return W8NativeVideoDecoderSessionProcess {
                     input_accepted: true,
                     output_produced: false,
+                    output_byte_len: 0,
                     status: "output-sample-blocked".to_string(),
                     reason: format!("blocked: {error}"),
                 };
@@ -1315,6 +1350,16 @@ impl W8MfH264DecoderWorkerRuntime {
             &mut process_status,
         );
         let output_produced = output_result.is_ok() && output_buffer.pSample.is_some();
+        let output_byte_len = if output_produced {
+            output_buffer
+                .pSample
+                .as_ref()
+                .and_then(|sample| sample.GetTotalLength().ok())
+                .map(u64::from)
+                .unwrap_or(0)
+        } else {
+            0
+        };
         let status = match output_result {
             Ok(()) if output_produced => "decoded-output".to_string(),
             Ok(()) => "no-output".to_string(),
@@ -1349,6 +1394,7 @@ impl W8MfH264DecoderWorkerRuntime {
         W8NativeVideoDecoderSessionProcess {
             input_accepted: true,
             output_produced,
+            output_byte_len,
             status,
             reason,
         }
@@ -1948,6 +1994,23 @@ mod tests {
         assert_eq!(second_session.submitted_frames, 2);
         assert!(second_session.worker_thread);
         assert_eq!(second_session.worker_status, "active");
+        assert!(second_session.frame_handoff_active);
+        assert_eq!(
+            second_session.frame_handoff_mode,
+            "native-latest-frame-handoff"
+        );
+        assert!(
+            matches!(
+                second_session.frame_handoff_status.as_str(),
+                "waiting-decoded-frame" | "latest-frame-ready"
+            ),
+            "unexpected frame handoff status: {}",
+            second_session.frame_handoff_status
+        );
+        assert_eq!(
+            second_session.latest_frame_format,
+            second_session.output_subtype
+        );
         assert!(second_session.accepted_input_frames <= second_session.submitted_frames);
         assert!(second_session.decoded_frames <= second_session.accepted_input_frames);
         assert!(!second_session.output_subtype.trim().is_empty());

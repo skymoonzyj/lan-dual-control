@@ -38,7 +38,7 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 - 已接入现有中文控制端界面。
 - 已支持本地模拟和 WebSocket 局域网连接方式。
 - 已支持分辨率、刷新率、码率、声音、剪贴板等控制项。
-- 已开始 W8 桌面视频主线：Rust 原生侧新增 `w8_native_video` 实时队列和 Tauri 命令，先把 H.264 Annex B 入站 NAL 识别、SPS/PPS 解码配置提取、Media Foundation / D3D11 解码能力探测、MF H.264 decoder init preflight、MF sample decode step preflight、持续 decoder session 诊断摘要、专用 native decoder worker 线程、关键帧追实时、delta 积压清理和队列快照从 Web 渲染循环里抽出来；桌面壳前端现在会在收到 H.264 Annex B base64 payload 时并行推给原生队列，并把原生队列帧数、队列毫秒、丢旧帧、最近原因、`原生解码配置 avc1...`、`原生解码器 ready|blocked`、`D3D11 11_x`、`原生解码初始化 ready|blocked`、`原生输出 ...`、`原生解码步进 ready|blocked`、`原生步进状态 ...`、`原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...`、`原生会话状态 ...`、`原生解码线程 active|blocked` 和 `原生线程状态 ...` 并入诊断。当前是视频接收识别 / 队列 / decoder config / decoder probe / init preflight / decode step preflight / session diagnostics / worker thread 接口 MVP，还没有宣称完成原生画面绘制。
+- 已开始 W8 桌面视频主线：Rust 原生侧新增 `w8_native_video` 实时队列和 Tauri 命令，先把 H.264 Annex B 入站 NAL 识别、SPS/PPS 解码配置提取、Media Foundation / D3D11 解码能力探测、MF H.264 decoder init preflight、MF sample decode step preflight、持续 decoder session 诊断摘要、专用 native decoder worker 线程、decoded frame handoff/latest-frame 摘要、关键帧追实时、delta 积压清理和队列快照从 Web 渲染循环里抽出来；桌面壳前端现在会在收到 H.264 Annex B base64 payload 时并行推给原生队列，并把原生队列帧数、队列毫秒、丢旧帧、最近原因、`原生解码配置 avc1...`、`原生解码器 ready|blocked`、`D3D11 11_x`、`原生解码初始化 ready|blocked`、`原生输出 ...`、`原生解码步进 ready|blocked`、`原生步进状态 ...`、`原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...`、`原生会话状态 ...`、`原生解码线程 active|blocked`、`原生线程状态 ...`、`原生帧交接 active|blocked`、`原生最新帧 ...` 和 `原生帧状态 ...` 并入诊断。当前是视频接收识别 / 队列 / decoder config / decoder probe / init preflight / decode step preflight / session diagnostics / worker thread / latest-frame handoff 接口 MVP，还没有宣称完成原生画面绘制。
 - 已增加桌面原生命令：远端文件接收完成后可分块保存到本机临时目录，并写入 Windows 系统文件剪贴板。
 - 已增加桌面原生命令：用户在资源管理器复制普通文件或压缩包后，Windows 控制端按 `Ctrl+V` 可读取系统文件剪贴板路径，并按现有 `clipboard_file_*` 通道分块发送到被控端；文件夹暂不递归发送。
 - 已增加“本机被控”桌面入口：可在桌面壳里体检 Windows host 环境，勾选“媒体基线”后会把 `--probeMedia` 纳入体检并显示 `media=ok|partial|failed`，也可预览防火墙放行命令、用隐藏密码启动/停止 Windows 被控端，并通过 `start-windows-host --status --json --checkBoard` 只读查看真实 `/discovery`、runtime build、视频/音频/输入/剪贴板能力、Agent Link Board 当前呼叫和启动日志。
@@ -63,10 +63,10 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 - `probe_w8_native_video_decoder` 只读探测本机 D3D11 hardware device 与 Media Foundation H.264 decoder MFT，返回 `ready/reason/D3D11 feature level/decoder counts`。
 - `start_w8_native_video_session` / `stop_w8_native_video_session` 管理桌面视频会话状态。
 - `push_w8_native_video_frame` 接收视频帧元数据并执行低延迟队列策略。
-- `push_w8_native_h264_annexb_frame` 接收 base64 Annex B H.264 payload，识别 NAL type、SPS、PPS、IDR，并从 SPS/PPS 提取 `hasDecoderConfig` 和 `codecString`，例如 `avc1.420029`；首个带 SPS/PPS 的帧会触发 MF H.264 decoder init preflight，返回 `decoderInit` 摘要；首个带 SPS/PPS/IDR 的帧还会把完整 access unit 包成 MF sample，调用 `ProcessInput` 并尝试 `ProcessOutput`，返回 `decodeStep` 摘要；同时维护 `decoderSession` 诊断摘要，累计原生会话提交帧、接受输入帧、decoded frame、输出 subtype 和最近状态。真正长期持有 `IMFTransform` 的 runtime 位于专用 `lan-dual-w8-mf-decoder` worker 线程，Tauri state 只保存可 Send 的通道/线程句柄和摘要；随后把关键帧元数据送入原生队列，桌面壳前端会按视频帧到达顺序串行调用该命令，避免原生队列乱序。
+- `push_w8_native_h264_annexb_frame` 接收 base64 Annex B H.264 payload，识别 NAL type、SPS、PPS、IDR，并从 SPS/PPS 提取 `hasDecoderConfig` 和 `codecString`，例如 `avc1.420029`；首个带 SPS/PPS 的帧会触发 MF H.264 decoder init preflight，返回 `decoderInit` 摘要；首个带 SPS/PPS/IDR 的帧还会把完整 access unit 包成 MF sample，调用 `ProcessInput` 并尝试 `ProcessOutput`，返回 `decodeStep` 摘要；同时维护 `decoderSession` 诊断摘要，累计原生会话提交帧、接受输入帧、decoded frame、输出 subtype 和最近状态。真正长期持有 `IMFTransform` 的 runtime 位于专用 `lan-dual-w8-mf-decoder` worker 线程，Tauri state 只保存可 Send 的通道/线程句柄和摘要；worker 还会返回 decoded frame handoff/latest-frame 摘要，记录是否已进入 handoff、最新帧格式、字节数和状态；随后把关键帧元数据送入原生队列，桌面壳前端会按视频帧到达顺序串行调用该命令，避免原生队列乱序。
 - `get_w8_native_video_snapshot` 返回队列帧数、队列毫秒、丢帧、关键帧请求和最近原因。
 
-当前策略是：低延迟正常帧保留；积压时若有较新关键帧，丢旧并跳到该关键帧；没有可用关键帧时清掉 delta 积压并等待关键帧，避免旧帧继续堆积。下一步把 worker 线程里的 decoded frame 交给 native surface 做最新帧绘制，逐步替换 WebCodecs/canvas 作为最终体验路径。
+当前策略是：低延迟正常帧保留；积压时若有较新关键帧，丢旧并跳到该关键帧；没有可用关键帧时清掉 delta 积压并等待关键帧，避免旧帧继续堆积。下一步把 worker 线程里的 latest-frame handoff 接到 native surface 做最新帧绘制，逐步替换 WebCodecs/canvas 作为最终体验路径。
 
 ## 远端文件剪贴板
 

@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 decoded frame handoff 诊断底座
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在上一轮专用 native decoder worker 后，让 worker 输出 decoded frame handoff / latest-frame 摘要，为下一步 D3D11/native surface 绘制提供可验证入口。
+完成内容：`decoderSession` 新增 `frameHandoffActive/frameHandoffMode/frameHandoffStatus/latestFrameFormat/latestFrameBytes/latestFrameId`；worker `ProcessOutput` 产出 decoded sample 时记录最新帧格式、字节数和序号，未产出时显示 `waiting-decoded-frame`。Windows 控制端诊断/复制导出新增 `原生帧交接 active|blocked`、`原生最新帧 ...` 和 `原生帧状态 ...`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `frame_handoff_* / latest_frame_*` 字段，前端专项失败于缺 `原生帧交接 active` / `原生最新帧 NV12` / `原生帧状态 waiting-decoded-frame`；绿灯后验证通过：W8 Rust 专项 13 项通过、桌面端 `cargo test` 全量 6+23+doc 通过、`cargo check` 通过、H.264 页面专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`git diff --check` 通过、冲突扫描无命中。
+遗留问题：本轮仍没有创建 D3D11/native surface，也没有替换 WebCodecs/canvas；latest-frame 目前是诊断与接线入口。
+下一步建议：继续 W8：把 latest-frame handoff 接到 D3D11/native surface 绘制，并处理 stream-change、surface resize、device lost 等恢复路径。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续 native surface 真连验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 native decoder worker thread
 开发端：Windows Codex
 本轮目标：继续只做视频侧，把上一轮 session diagnostics 推进到专用 native decoder worker 线程，让长期 MF decoder 不再停留在同步 preflight 层。

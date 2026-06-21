@@ -641,6 +641,12 @@ const state = {
   w8NativeVideoDecoderSessionWorkerThread: false,
   w8NativeVideoDecoderSessionWorkerMode: "",
   w8NativeVideoDecoderSessionWorkerStatus: "",
+  w8NativeVideoFrameHandoffActive: false,
+  w8NativeVideoFrameHandoffMode: "",
+  w8NativeVideoFrameHandoffStatus: "",
+  w8NativeVideoLatestFrameFormat: "",
+  w8NativeVideoLatestFrameBytes: 0,
+  w8NativeVideoLatestFrameId: null,
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -795,6 +801,12 @@ const state = {
     w8NativeVideoDecoderSessionWorkerThread: false,
     w8NativeVideoDecoderSessionWorkerMode: "",
     w8NativeVideoDecoderSessionWorkerStatus: "",
+    w8NativeVideoFrameHandoffActive: false,
+    w8NativeVideoFrameHandoffMode: "",
+    w8NativeVideoFrameHandoffStatus: "",
+    w8NativeVideoLatestFrameFormat: "",
+    w8NativeVideoLatestFrameBytes: 0,
+    w8NativeVideoLatestFrameId: null,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1054,6 +1066,12 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDecoderSessionWorkerThread: false,
     w8NativeVideoDecoderSessionWorkerMode: "",
     w8NativeVideoDecoderSessionWorkerStatus: "",
+    w8NativeVideoFrameHandoffActive: false,
+    w8NativeVideoFrameHandoffMode: "",
+    w8NativeVideoFrameHandoffStatus: "",
+    w8NativeVideoLatestFrameFormat: "",
+    w8NativeVideoLatestFrameBytes: 0,
+    w8NativeVideoLatestFrameId: null,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1443,6 +1461,13 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDecoderSessionWorkerStatus = String(
     diagnostics.w8NativeVideoDecoderSessionWorkerStatus || "",
   ).trim();
+  const nativeFrameHandoffActive = Boolean(diagnostics.w8NativeVideoFrameHandoffActive);
+  const nativeFrameHandoffMode = String(diagnostics.w8NativeVideoFrameHandoffMode || "").trim();
+  const nativeFrameHandoffStatus = String(
+    diagnostics.w8NativeVideoFrameHandoffStatus || "",
+  ).trim();
+  const nativeLatestFrameFormat = String(diagnostics.w8NativeVideoLatestFrameFormat || "").trim();
+  const nativeLatestFrameBytes = Number(diagnostics.w8NativeVideoLatestFrameBytes);
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1538,6 +1563,19 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeDecoderSessionWorkerStatus) {
     parts.push(`原生线程状态 ${nativeDecoderSessionWorkerStatus}`);
+  }
+  if (nativeFrameHandoffMode || nativeFrameHandoffActive) {
+    parts.push(`原生帧交接 ${nativeFrameHandoffActive ? "active" : "blocked"}`);
+  }
+  if (nativeLatestFrameFormat) {
+    const latestFrameText =
+      Number.isFinite(nativeLatestFrameBytes) && nativeLatestFrameBytes > 0
+        ? `${nativeLatestFrameFormat} / ${Math.round(nativeLatestFrameBytes)} bytes`
+        : nativeLatestFrameFormat;
+    parts.push(`原生最新帧 ${latestFrameText}`);
+  }
+  if (nativeFrameHandoffStatus) {
+    parts.push(`原生帧状态 ${nativeFrameHandoffStatus}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -5879,6 +5917,30 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoDecoderSessionWorkerStatus ||
       "",
   ).trim();
+  const nativeFrameHandoffActive = Boolean(
+    state.w8NativeVideoFrameHandoffActive ||
+      state.hostDiagnostics?.w8NativeVideoFrameHandoffActive,
+  );
+  const nativeFrameHandoffMode = String(
+    state.w8NativeVideoFrameHandoffMode ||
+      state.hostDiagnostics?.w8NativeVideoFrameHandoffMode ||
+      "",
+  ).trim();
+  const nativeFrameHandoffStatus = String(
+    state.w8NativeVideoFrameHandoffStatus ||
+      state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus ||
+      "",
+  ).trim();
+  const nativeLatestFrameFormat = String(
+    state.w8NativeVideoLatestFrameFormat ||
+      state.hostDiagnostics?.w8NativeVideoLatestFrameFormat ||
+      "",
+  ).trim();
+  const nativeLatestFrameBytes =
+    Number(
+      state.w8NativeVideoLatestFrameBytes ||
+        state.hostDiagnostics?.w8NativeVideoLatestFrameBytes,
+    ) || 0;
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5959,6 +6021,17 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`原生解码线程 ${nativeDecoderSessionWorkerThread ? "active" : "blocked"}`);
   }
   if (nativeDecoderSessionWorkerStatus) parts.push(`原生线程状态 ${nativeDecoderSessionWorkerStatus}`);
+  if (nativeFrameHandoffMode || nativeFrameHandoffActive) {
+    parts.push(`原生帧交接 ${nativeFrameHandoffActive ? "active" : "blocked"}`);
+  }
+  if (nativeLatestFrameFormat) {
+    const latestFrameText =
+      nativeLatestFrameBytes > 0
+        ? `${nativeLatestFrameFormat} / ${Math.round(nativeLatestFrameBytes)} bytes`
+        : nativeLatestFrameFormat;
+    parts.push(`原生最新帧 ${latestFrameText}`);
+  }
+  if (nativeFrameHandoffStatus) parts.push(`原生帧状态 ${nativeFrameHandoffStatus}`);
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
@@ -7408,6 +7481,12 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDecoderSessionWorkerThread = false;
   state.w8NativeVideoDecoderSessionWorkerMode = "";
   state.w8NativeVideoDecoderSessionWorkerStatus = "";
+  state.w8NativeVideoFrameHandoffActive = false;
+  state.w8NativeVideoFrameHandoffMode = "";
+  state.w8NativeVideoFrameHandoffStatus = "";
+  state.w8NativeVideoLatestFrameFormat = "";
+  state.w8NativeVideoLatestFrameBytes = 0;
+  state.w8NativeVideoLatestFrameId = null;
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7495,6 +7574,18 @@ function updateW8NativeVideoDiagnostics({
     state.w8NativeVideoDecoderSessionWorkerThread = decoderSession.workerThread === true;
     state.w8NativeVideoDecoderSessionWorkerMode = String(decoderSession.workerMode || "").trim();
     state.w8NativeVideoDecoderSessionWorkerStatus = String(decoderSession.workerStatus || "").trim();
+    state.w8NativeVideoFrameHandoffActive = decoderSession.frameHandoffActive === true;
+    state.w8NativeVideoFrameHandoffMode = String(decoderSession.frameHandoffMode || "").trim();
+    state.w8NativeVideoFrameHandoffStatus = String(decoderSession.frameHandoffStatus || "").trim();
+    state.w8NativeVideoLatestFrameFormat = String(decoderSession.latestFrameFormat || "").trim();
+    state.w8NativeVideoLatestFrameBytes = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.latestFrameBytes) || 0),
+    );
+    state.w8NativeVideoLatestFrameId =
+      decoderSession.latestFrameId === null || decoderSession.latestFrameId === undefined
+        ? null
+        : String(decoderSession.latestFrameId);
   }
 
   updateHostDiagnostics({
@@ -7527,6 +7618,12 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDecoderSessionWorkerThread: state.w8NativeVideoDecoderSessionWorkerThread,
     w8NativeVideoDecoderSessionWorkerMode: state.w8NativeVideoDecoderSessionWorkerMode,
     w8NativeVideoDecoderSessionWorkerStatus: state.w8NativeVideoDecoderSessionWorkerStatus,
+    w8NativeVideoFrameHandoffActive: state.w8NativeVideoFrameHandoffActive,
+    w8NativeVideoFrameHandoffMode: state.w8NativeVideoFrameHandoffMode,
+    w8NativeVideoFrameHandoffStatus: state.w8NativeVideoFrameHandoffStatus,
+    w8NativeVideoLatestFrameFormat: state.w8NativeVideoLatestFrameFormat,
+    w8NativeVideoLatestFrameBytes: state.w8NativeVideoLatestFrameBytes,
+    w8NativeVideoLatestFrameId: state.w8NativeVideoLatestFrameId,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,
