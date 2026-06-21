@@ -23,12 +23,12 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 - 真正长期持有 `IMFTransform` 的 runtime 已放进专用 `lan-dual-w8-mf-decoder` worker 线程；Tauri 全局状态只保存可 Send 的命令通道/线程句柄和摘要，后续 access unit 通过 worker 命令队列进入同一个 MF decoder。
 - decoder session 会同步返回 decoded frame handoff / latest-frame 摘要：`frameHandoffActive/frameHandoffMode/frameHandoffStatus/latestFrameFormat/latestFrameBytes/latestFrameId`。有 decoded sample 时记录最新帧格式、长度和序号；还没产出 decoded sample 时显示 `waiting-decoded-frame`，不宣称已经完成 native surface 绘制。
 - worker 启动时会创建 D3D11 latest-frame texture target：`nativeSurfaceReady/nativeSurfaceMode/nativeSurfaceStatus/nativeSurfaceFormat/nativeSurfaceWidth/nativeSurfaceHeight/nativeSurfaceReason`。`ProcessOutput` 产出 decoded `IMFSample` 后，会把 sample 合并成 contiguous buffer，并用 D3D11 `UpdateSubresource` 写入 latest-frame texture；`decoderSession` 同步返回 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`。
-- worker 同时会创建 `1920x1080` BGRA8 native present texture target：`nativePresentReady/nativePresentMode/nativePresentStatus/nativePresentFormat/nativePresentWidth/nativePresentHeight/nativePresentFrames/nativePresentLastFrameId/nativePresentReason`。会话启动时如果拿到真实 Tauri 窗口 HWND，worker 会在同一个 D3D11 device 上创建持久 `IDXGISwapChain1`；BGRA8 输出可从 latest-frame texture `CopyResource` 到 present texture，再复制到 swapchain back buffer 并调用 `Present`，状态为 `latest-frame-swapchain-presented`。NV12 输出会标记 `waiting-nv12-renderer`，等待后续 NV12 shader/native renderer 转换后接真实窗口。
+- worker 同时会创建 `1920x1080` BGRA8 native present texture target：`nativePresentReady/nativePresentMode/nativePresentStatus/nativePresentFormat/nativePresentWidth/nativePresentHeight/nativePresentFrames/nativePresentLastFrameId/nativePresentReason`。会话启动时如果拿到真实 Tauri 窗口 HWND，worker 会在同一个 D3D11 device 上创建持久 `IDXGISwapChain1`；BGRA8 输出可从 latest-frame texture `CopyResource` 到 present texture，再复制到 swapchain back buffer 并调用 `Present`，状态为 `latest-frame-swapchain-presented`。常见 NV12 输出会通过 D3D11 `VideoProcessorBlt` 转入 BGRA8 present texture，再进入同一个 HWND swapchain，状态为 `latest-frame-nv12-converted-presented`。
 - 桌面壳现在会在 W8 会话启动后对真实 Tauri 窗口 HWND 做 D3D11 swapchain 预检：`probe_w8_native_video_window_swapchain` 会读取窗口 client 尺寸，并尝试创建 BGRA8 / 2 buffers / flip-discard `CreateSwapChainForHwnd`；Windows 控制端诊断/导出会显示 `原生窗口交换链 ready|blocked`、尺寸、格式、状态和参数。
 - 原生队列默认目标约 80ms，硬上限约 180ms。
 - 队列积压且已有较新关键帧时，直接丢旧跳到最新关键帧。
 - 队列积压但没有可用新关键帧时，清掉 delta 积压并进入等待关键帧状态，避免继续攒旧帧。
-- 该 MVP 已推进到 MF worker、D3D11 latest-frame texture、BGRA8 present texture、真实 HWND swapchain 预检，以及 BGRA8 latest-frame -> HWND swapchain `Present`。由于当前 Mac H.264 常见输出仍是 NV12，真实体验主线还需要 NV12 shader/native renderer 转换后才能替换 WebCodecs/canvas。
+- 该 MVP 已推进到 MF worker、D3D11 latest-frame texture、BGRA8 present texture、真实 HWND swapchain 预检，以及 BGRA8 latest-frame -> HWND swapchain `Present` 和 NV12 -> BGRA8 `VideoProcessorBlt` -> HWND swapchain `Present`。后续要让它成为最终体验路径，还需要补 stream-change、resize/device-lost 恢复和真实 Mac 长时间观感验证。
 
 ## 关键接口
 
@@ -47,10 +47,10 @@ Tauri 原生命令：
 
 ## 下一步
 
-1. 为常见 NV12 输出补 shader/native renderer 转换路径，避免停在 `waiting-nv12-renderer`。
-2. 把 Mac host H.264 WebSocket 接收路径从浏览器渲染循环迁到桌面原生侧或独立 native renderer，并调用 `push_w8_native_h264_annexb_frame`。
-3. 完善 decoded sample 到 surface 的失败原因和恢复策略，例如 stream-change 后重新选择输出类型、surface resize、device lost。
-4. 让窗口最小化 / 后台 / 切 app 时的 native renderer 仍按实时队列丢旧保新，并对 swapchain resize/device-lost 做重建。
+1. 完善 decoded sample 到 surface 的失败原因和恢复策略，例如 stream-change 后重新选择输出类型、surface resize、device lost。
+2. 让窗口最小化 / 后台 / 切 app 时的 native renderer 仍按实时队列丢旧保新，并对 swapchain resize/device-lost 做重建。
+3. 对真实 Mac H.264 长时间运行做观感和诊断验证，确认 `nativePresentStatus` 持续为 `latest-frame-nv12-converted-presented` 或 `latest-frame-swapchain-presented`。
+4. 把 Mac host H.264 WebSocket 接收路径继续收束到桌面原生侧，逐步降低 WebCodecs/canvas 在最终体验里的权重。
 5. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
 6. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。
 
@@ -66,7 +66,7 @@ Tauri 原生命令：
 - Rust decoded frame handoff 测试必须覆盖：会话摘要声明 `frameHandoffActive=true`、`frameHandoffMode=native-latest-frame-handoff`，还没产出 decoded sample 时返回 `waiting-decoded-frame`，产出 sample 后能记录 latest-frame 格式和字节数。
 - Rust native surface target 测试必须覆盖：会话摘要声明 `nativeSurfaceReady=true`、`nativeSurfaceMode=d3d11-latest-frame-texture-target`、目标尺寸 `1920x1080`、格式与 decoder 输出 subtype 对齐。
 - Rust native surface copy 测试必须覆盖：contiguous decoded `IMFSample` 能写入 D3D11 latest-frame texture，并记录 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`。
-- Rust native present target 测试必须覆盖：会话摘要声明 `nativePresentReady=true`、目标尺寸 `1920x1080`、格式 `BGRA8`；无 HWND 时 BGRA8 latest-frame texture 可 staged 到 present texture，带 HWND 时 BGRA8 latest-frame 可进入 `d3d11-hwnd-swapchain` 并返回 `latest-frame-swapchain-presented`，NV12 输出明确标记等待 renderer。
+- Rust native present target 测试必须覆盖：会话摘要声明 `nativePresentReady=true`、目标尺寸 `1920x1080`、格式 `BGRA8`；无 HWND 时 BGRA8 latest-frame texture 可 staged 到 present texture，带 HWND 时 BGRA8 latest-frame 可进入 `d3d11-hwnd-swapchain` 并返回 `latest-frame-swapchain-presented`；NV12 latest-frame 可通过 D3D11 `VideoProcessorBlt` 转入 BGRA8 present texture，并在带 HWND 时返回 `latest-frame-nv12-converted-presented`。
 - Rust HWND swapchain 预检测试必须覆盖：swapchain 描述使用 BGRA8、2 buffers、single-sample、flip-discard 和 client 尺寸兜底；Windows 控制端诊断/导出必须出现 `原生窗口交换链 ...`。
 - 桌面端 `cargo check` 必须通过。
 - 后续接入真实渲染后，真实最小化 / 切 app / 切回测试要看本机视频队列是否保持在 80-180ms 附近，而不是继续堆到 600ms+。

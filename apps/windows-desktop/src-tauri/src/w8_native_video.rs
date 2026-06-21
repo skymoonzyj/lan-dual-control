@@ -15,13 +15,19 @@ use windows::Win32::Graphics::Direct3D::{
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
-    D3D11_BIND_DECODER, D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE,
-    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    ID3D11VideoContext, ID3D11VideoDevice, D3D11_BIND_DECODER, D3D11_BIND_RENDER_TARGET,
+    D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
+    D3D11_TEX2D_VPIV, D3D11_TEX2D_VPOV, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0,
+    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0,
+    D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
+    D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12,
-    DXGI_SAMPLE_DESC,
+    DXGI_RATIONAL, DXGI_SAMPLE_DESC,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::{
@@ -1749,9 +1755,13 @@ unsafe fn stage_latest_frame_for_native_present(
     frame_id: u64,
 ) -> Result<(), String> {
     if !target.summary.format.eq_ignore_ascii_case("BGRA8") {
-        target.summary.native_present_status = "waiting-nv12-renderer".to_string();
+        if target.summary.format.eq_ignore_ascii_case("NV12") {
+            convert_nv12_latest_frame_for_native_present(target, frame_id)?;
+            return Ok(());
+        }
+        target.summary.native_present_status = "unsupported-native-present-format".to_string();
         target.summary.native_present_reason = format!(
-            "ready; latest {} frame is staged; waiting for NV12 shader/native renderer",
+            "blocked: latest {} frame cannot be presented without a native renderer",
             target.summary.format
         );
         return Ok(());
@@ -1782,6 +1792,160 @@ unsafe fn stage_latest_frame_for_native_present(
     target.summary.native_present_reason = format!(
         "ready; copied BGRA8 latest-frame texture into BGRA8 present texture target; frames={present_frames}"
     );
+    Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn convert_nv12_latest_frame_for_native_present(
+    target: &mut W8NativeSurfaceTargetRuntime,
+    frame_id: u64,
+) -> Result<(), String> {
+    convert_nv12_latest_frame_to_bgra_present_texture(target)?;
+
+    let present_resource: ID3D11Resource = target
+        ._present_texture
+        .cast()
+        .map_err(|error| format!("present texture cast to resource failed: {error}"))?;
+    if target._swapchain.is_some() {
+        present_bgra_texture_to_hwnd_swapchain(target, frame_id, &present_resource)?;
+        target.summary.native_present_status = "latest-frame-nv12-converted-presented".to_string();
+        target.summary.native_present_reason = format!(
+            "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture and Present copied it into HWND swapchain; frames={}",
+            target.summary.native_present_frames
+        );
+        return Ok(());
+    }
+
+    let present_frames = target.summary.native_present_frames.saturating_add(1);
+    target.summary.native_present_status = "latest-frame-nv12-converted-staged".to_string();
+    target.summary.native_present_frames = present_frames;
+    target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_reason = format!(
+        "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture target; frames={present_frames}"
+    );
+    Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn convert_nv12_latest_frame_to_bgra_present_texture(
+    target: &mut W8NativeSurfaceTargetRuntime,
+) -> Result<(), String> {
+    let video_device: ID3D11VideoDevice = target
+        ._device
+        .cast()
+        .map_err(|error| format!("D3D11 device does not expose ID3D11VideoDevice: {error}"))?;
+    let video_context: ID3D11VideoContext = target
+        ._context
+        .cast()
+        .map_err(|error| format!("D3D11 context does not expose ID3D11VideoContext: {error}"))?;
+
+    let frame_rate = DXGI_RATIONAL {
+        Numerator: 60,
+        Denominator: 1,
+    };
+    let content_desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
+        InputFrameFormat: D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+        InputFrameRate: frame_rate,
+        InputWidth: target.summary.width.max(1),
+        InputHeight: target.summary.height.max(1),
+        OutputFrameRate: frame_rate,
+        OutputWidth: target.summary.native_present_width.max(1),
+        OutputHeight: target.summary.native_present_height.max(1),
+        Usage: D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
+    };
+    let enumerator = video_device
+        .CreateVideoProcessorEnumerator(&content_desc)
+        .map_err(|error| format!("CreateVideoProcessorEnumerator failed: {error}"))?;
+    let processor = video_device
+        .CreateVideoProcessor(&enumerator, 0)
+        .map_err(|error| format!("CreateVideoProcessor failed: {error}"))?;
+
+    let input_resource: ID3D11Resource = target
+        ._texture
+        .cast()
+        .map_err(|error| format!("latest-frame texture cast to resource failed: {error}"))?;
+    let input_desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
+        FourCC: 0,
+        ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,
+        Anonymous: D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0 {
+            Texture2D: D3D11_TEX2D_VPIV {
+                MipSlice: 0,
+                ArraySlice: 0,
+            },
+        },
+    };
+    let mut input_view = None;
+    video_device
+        .CreateVideoProcessorInputView(
+            &input_resource,
+            &enumerator,
+            &input_desc,
+            Some(&mut input_view),
+        )
+        .map_err(|error| format!("CreateVideoProcessorInputView NV12 failed: {error}"))?;
+    let input_view = input_view
+        .ok_or_else(|| "CreateVideoProcessorInputView returned no NV12 input view".to_string())?;
+
+    let output_resource: ID3D11Resource = target
+        ._present_texture
+        .cast()
+        .map_err(|error| format!("present texture cast to resource failed: {error}"))?;
+    let output_desc = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC {
+        ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
+        Anonymous: D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0 {
+            Texture2D: D3D11_TEX2D_VPOV { MipSlice: 0 },
+        },
+    };
+    let mut output_view = None;
+    video_device
+        .CreateVideoProcessorOutputView(
+            &output_resource,
+            &enumerator,
+            &output_desc,
+            Some(&mut output_view),
+        )
+        .map_err(|error| format!("CreateVideoProcessorOutputView BGRA8 failed: {error}"))?;
+    let output_view = output_view.ok_or_else(|| {
+        "CreateVideoProcessorOutputView returned no BGRA8 output view".to_string()
+    })?;
+
+    let source_rect = RECT {
+        left: 0,
+        top: 0,
+        right: target.summary.width.max(1) as i32,
+        bottom: target.summary.height.max(1) as i32,
+    };
+    let destination_rect = RECT {
+        left: 0,
+        top: 0,
+        right: target.summary.native_present_width.max(1) as i32,
+        bottom: target.summary.native_present_height.max(1) as i32,
+    };
+    video_context.VideoProcessorSetStreamFrameFormat(
+        &processor,
+        0,
+        D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+    );
+    video_context.VideoProcessorSetStreamSourceRect(&processor, 0, true, Some(&source_rect));
+    video_context.VideoProcessorSetStreamDestRect(&processor, 0, true, Some(&destination_rect));
+    video_context.VideoProcessorSetOutputTargetRect(&processor, true, Some(&destination_rect));
+
+    let mut stream = D3D11_VIDEO_PROCESSOR_STREAM::default();
+    stream.Enable = true.into();
+    stream.OutputIndex = 0;
+    stream.InputFrameOrField = 0;
+    stream.PastFrames = 0;
+    stream.FutureFrames = 0;
+    stream.pInputSurface = ManuallyDrop::new(Some(input_view));
+    let blt_result = video_context
+        .VideoProcessorBlt(&processor, &output_view, 0, std::slice::from_ref(&stream))
+        .map_err(|error| format!("VideoProcessorBlt NV12->BGRA8 failed: {error}"));
+    let _ = ManuallyDrop::into_inner(core::mem::replace(
+        &mut stream.pInputSurface,
+        ManuallyDrop::new(None),
+    ));
+    blt_result?;
+    target._context.Flush();
     Ok(())
 }
 
@@ -2884,7 +3048,11 @@ mod tests {
         unsafe {
             MFStartup(MF_VERSION, MFSTARTUP_LITE).expect("MFStartup should succeed");
             let result = (|| -> Result<(), String> {
-                let mut target = create_d3d11_latest_frame_texture_target("NV12")?;
+                let window = HiddenPresentTestWindow::create(1280, 720)?;
+                let mut target = create_d3d11_latest_frame_texture_target_for_window(
+                    "NV12",
+                    Some(window.config()),
+                )?;
                 let expected_bytes =
                     (target.summary.width as usize * target.summary.height as usize * 3) / 2;
                 let frame_bytes = vec![0x7f; expected_bytes];
@@ -2902,19 +3070,20 @@ mod tests {
                 assert_eq!(target.summary.presented_frames, 1);
                 assert_eq!(target.summary.last_frame_id, Some(7));
                 assert!(target.summary.native_present_ready);
-                assert_eq!(
-                    target.summary.native_present_mode,
-                    "d3d11-bgra8-present-texture-target"
-                );
+                assert_eq!(target.summary.native_present_mode, "d3d11-hwnd-swapchain");
                 assert_eq!(target.summary.native_present_format, "BGRA8");
                 assert_eq!(target.summary.native_present_width, 1920);
                 assert_eq!(target.summary.native_present_height, 1080);
                 assert_eq!(
                     target.summary.native_present_status,
-                    "waiting-nv12-renderer"
+                    "latest-frame-nv12-converted-presented"
                 );
-                assert_eq!(target.summary.native_present_frames, 0);
-                assert_eq!(target.summary.native_present_last_frame_id, None);
+                assert_eq!(target.summary.native_present_frames, 1);
+                assert_eq!(target.summary.native_present_last_frame_id, Some(7));
+                assert!(target
+                    .summary
+                    .native_present_reason
+                    .contains("VideoProcessorBlt"));
                 Ok(())
             })();
             let shutdown = MFShutdown();
