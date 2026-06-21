@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端原生视频队列接线
+开发端：Windows Codex
+本轮目标：按用户最新要求主要完成视频侧修改，并按通讯板纠偏不继续 W9 音频，把 Windows 桌面控制端 H.264 收帧路径接到 W8 原生队列。
+完成内容：Windows 控制端前端在桌面壳运行时会检测 Tauri invoke；收到 H.264 Annex B base64 payload 后，按到达顺序串行启动 W8 原生视频会话并调用 `push_w8_native_h264_annexb_frame`，把同一批 payload 并行送入 Rust `w8_native_video` 队列。普通浏览器预览版没有 Tauri invoke 时保持原 WebCodecs/canvas 路径。诊断和复制/导出报告新增 W8 `原生队列` 帧数、队列毫秒、原生丢旧帧、最近原因和错误。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；apps/windows-desktop/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `nativeCalls=[]`，确认前端没有调用 W8 原生队列；首轮实现又暴露并行推送乱序（42 先于 41），随后加入串行推送队列；绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --onlyH264LatencyQueueGuard --timeoutMs 45000` 通过，确认 H.264 keyframe guard 和 latency queue guard 均正常。
+遗留问题：本轮仍是接线和诊断，不是完整原生播放器；还没有接 Media Foundation / D3D11 解码和原生画面绘制。
+下一步建议：Windows 主线继续 W8：在 `w8_native_video` 原生队列后接 native decoder/renderer，逐步把最终画面从 WebCodecs/canvas 切到桌面原生路径；Mac 端先保持 host 在线，不需要改协议。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实 native renderer 联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 H.264 入站识别
 开发端：Windows Codex
 本轮目标：继续 W8 视频侧，把 Mac host 当前 Annex B H.264 payload 的入站识别先迁入 Windows 桌面原生侧，为后续 native receiver / decoder 铺路。

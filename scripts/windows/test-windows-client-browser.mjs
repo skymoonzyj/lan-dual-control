@@ -5343,10 +5343,21 @@ async function verifyH264KeyFrameDetection(session) {
         remoteFrameHeight: state.remoteFrameHeight,
         requestedFps: state.requestedFps,
         negotiatedFps: state.negotiatedFps,
+        activeHost: state.activeHost,
+        activePort: state.activePort,
+        w8NativeVideoSessionStarted: state.w8NativeVideoSessionStarted,
+        w8NativeVideoSessionPromise: state.w8NativeVideoSessionPromise,
+        w8NativeVideoPushPromise: state.w8NativeVideoPushPromise,
+        w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
+        w8NativeVideoErrors: state.w8NativeVideoErrors,
+        w8NativeVideoLastError: state.w8NativeVideoLastError,
+        w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
         hostDiagnostics: { ...(state.hostDiagnostics || {}) },
+        tauriDescriptor: Object.getOwnPropertyDescriptor(window, "__TAURI__"),
         videoDecoderDescriptor: Object.getOwnPropertyDescriptor(window, "VideoDecoder"),
         encodedVideoChunkDescriptor: Object.getOwnPropertyDescriptor(window, "EncodedVideoChunk"),
       };
+      const nativeCalls = [];
 
       class FakeVideoDecoder {
         static async isConfigSupported() {
@@ -5377,6 +5388,52 @@ async function verifyH264KeyFrameDetection(session) {
       }
 
       try {
+        Object.defineProperty(window, "__TAURI__", {
+          configurable: true,
+          value: {
+            core: {
+              invoke: async (command, payload = {}) => {
+                nativeCalls.push({ command, payload });
+                if (command === "start_w8_native_video_session") {
+                  return {
+                    running: true,
+                    host: payload?.request?.host || "",
+                    port: payload?.request?.port || 0,
+                    requestedFps: payload?.request?.requestedFps || 60,
+                    rendererMode: "native-video-queue-mvp",
+                    queue: {
+                      queuedFrames: 0,
+                      queueMs: 0,
+                      acceptedFrames: 0,
+                      droppedFrames: 0,
+                      keyframeRequests: 0,
+                      waitingForKeyframe: false,
+                      maxObservedQueueMs: 0,
+                      lastFrameId: null,
+                      lastReason: "idle",
+                    },
+                  };
+                }
+                if (command === "push_w8_native_h264_annexb_frame") {
+                  const id = Number(payload?.request?.id) || 0;
+                  return {
+                    video: {
+                      accepted: true,
+                      droppedFrames: 0,
+                      queueMs: id === 42 ? 16 : 0,
+                      waitingForKeyframe: false,
+                      reason: "queued",
+                    },
+                    summary: id === 42
+                      ? { nalTypes: [7, 8, 5], hasSps: true, hasPps: true, hasIdr: true, isKeyframe: true, byteLen: 23 }
+                      : { nalTypes: [1], hasSps: false, hasPps: false, hasIdr: false, isKeyframe: false, byteLen: 7 },
+                  };
+                }
+                throw new Error("unexpected invoke " + command);
+              },
+            },
+          },
+        });
         Object.defineProperty(window, "VideoDecoder", {
           configurable: true,
           value: FakeVideoDecoder,
@@ -5412,6 +5469,15 @@ async function verifyH264KeyFrameDetection(session) {
         state.videoLastDropReason = "";
         state.requestedFps = 60;
         state.negotiatedFps = 60;
+        state.activeHost = "192.168.31.122";
+        state.activePort = "43770";
+        state.w8NativeVideoSessionStarted = false;
+        state.w8NativeVideoSessionPromise = null;
+        state.w8NativeVideoPushPromise = null;
+        state.w8NativeVideoFramesPushed = 0;
+        state.w8NativeVideoErrors = 0;
+        state.w8NativeVideoLastError = "";
+        state.w8NativeVideoLastSnapshot = null;
         state.hostDiagnostics = {};
 
         await renderH264VideoFrame({
@@ -5432,8 +5498,25 @@ async function verifyH264KeyFrameDetection(session) {
           frameId: 42,
           keyFrame: false,
         });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const exportText = getVideoPerformanceExportStatus();
+        const nativeStartCalls = nativeCalls.filter((call) => call.command === "start_w8_native_video_session");
+        const nativePushCalls = nativeCalls.filter((call) => call.command === "push_w8_native_h264_annexb_frame");
+        const nativeQueueRecorded =
+          nativeStartCalls.length === 1 &&
+          nativePushCalls.length === 2 &&
+          nativeStartCalls[0].payload?.request?.host === "192.168.31.122" &&
+          nativeStartCalls[0].payload?.request?.port === 43770 &&
+          nativePushCalls[0].payload?.request?.id === 41 &&
+          nativePushCalls[1].payload?.request?.id === 42 &&
+          nativePushCalls[1].payload?.request?.dataBase64 === makeBase64(annexbKey) &&
+          state.w8NativeVideoFramesPushed === 2 &&
+          state.hostDiagnostics?.w8NativeVideoFramesPushed === 2 &&
+          state.hostDiagnostics?.w8NativeVideoQueueMs === 16 &&
+          exportText.includes("原生队列 2") &&
+          exportText.includes("原生队列 16 ms");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5454,11 +5537,16 @@ async function verifyH264KeyFrameDetection(session) {
             isH264KeyFramePayload(annexbKey, "annexb-base64") &&
             !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
             isH264KeyFramePayload(avcKey, "avc") &&
-            h264EvidenceRecorded,
+            h264EvidenceRecorded &&
+            nativeQueueRecorded,
           annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
           annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
           avcKey: isH264KeyFramePayload(avcKey, "avc"),
           h264EvidenceRecorded,
+          nativeQueueRecorded,
+          nativeCalls,
+          w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
+          w8NativeVideoQueueMs: state.hostDiagnostics?.w8NativeVideoQueueMs,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5500,7 +5588,21 @@ async function verifyH264KeyFrameDetection(session) {
         state.remoteFrameHeight = original.remoteFrameHeight;
         state.requestedFps = original.requestedFps;
         state.negotiatedFps = original.negotiatedFps;
+        state.activeHost = original.activeHost;
+        state.activePort = original.activePort;
+        state.w8NativeVideoSessionStarted = original.w8NativeVideoSessionStarted;
+        state.w8NativeVideoSessionPromise = original.w8NativeVideoSessionPromise;
+        state.w8NativeVideoPushPromise = original.w8NativeVideoPushPromise;
+        state.w8NativeVideoFramesPushed = original.w8NativeVideoFramesPushed;
+        state.w8NativeVideoErrors = original.w8NativeVideoErrors;
+        state.w8NativeVideoLastError = original.w8NativeVideoLastError;
+        state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;
         state.hostDiagnostics = original.hostDiagnostics;
+        if (original.tauriDescriptor) {
+          Object.defineProperty(window, "__TAURI__", original.tauriDescriptor);
+        } else {
+          delete window.__TAURI__;
+        }
         if (original.videoDecoderDescriptor) {
           Object.defineProperty(window, "VideoDecoder", original.videoDecoderDescriptor);
         } else {
@@ -7773,6 +7875,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
         frameTimingSamples: Array.isArray(state.audioFrameTimingSamples)
           ? state.audioFrameTimingSamples.map((sample) => ({ ...sample }))
           : undefined,
+        tauri: window.__TAURI__,
+        nativeAudioRunning: state.nativeAudioRunning,
+        nativeAudioSampleRate: state.nativeAudioSampleRate,
+        nativeAudioChannels: state.nativeAudioChannels,
+        nativeAudioSnapshot: state.nativeAudioSnapshot,
       };
       const starts = [];
       const stops = [];
@@ -7819,6 +7926,85 @@ async function verifyAudioPlaybackBufferGuards(session) {
       try {
         if (audioToggle) audioToggle.checked = true;
         if (volumeRange) volumeRange.value = "80";
+        const nativeAudioInvokes = [];
+        const nativeFrame = makeFrame();
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command, args = {}) => {
+              nativeAudioInvokes.push({ command, args });
+              if (command === "start_w9_native_audio_session") {
+                return {
+                  running: true,
+                  sampleRate: args?.request?.sampleRate || 48000,
+                  channels: args?.request?.channels || 2,
+                  queueMs: 0,
+                  pushedFrames: 0,
+                  playedFrames: 0,
+                  trimmedFrames: 0,
+                  underruns: 0,
+                  lastReason: "native-playback-started",
+                };
+              }
+              if (command === "push_w9_native_pcm_f32_frame") {
+                return {
+                  running: true,
+                  sampleRate: args?.request?.sampleRate || 48000,
+                  channels: args?.request?.channels || 2,
+                  queueMs: 24,
+                  pushedFrames: 960,
+                  playedFrames: 0,
+                  trimmedFrames: 0,
+                  underruns: 0,
+                  lastReason: "native-playback-queued",
+                };
+              }
+              if (command === "stop_w9_native_audio_session") {
+                return {
+                  running: false,
+                  sampleRate: 48000,
+                  channels: 2,
+                  queueMs: 0,
+                  pushedFrames: 0,
+                  playedFrames: 0,
+                  trimmedFrames: 0,
+                  underruns: 0,
+                  lastReason: "native-playback-stopped",
+                };
+              }
+              throw new Error("unexpected native audio command " + command);
+            },
+          },
+        };
+        state.audioContext = makeFakeContext(70);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 70.4;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 0;
+        state.audioResyncCount = 0;
+        state.audioLastDropReason = "";
+        state.audioLastBufferReason = "";
+        state.audioScheduledSources = [];
+        starts.length = 0;
+        stops.length = 0;
+        const nativeAudioPlayed = await playPcmAudioFrame(nativeFrame);
+        const nativeAudioBridgeUsed =
+          nativeAudioPlayed &&
+          starts.length === 0 &&
+          nativeAudioInvokes.length === 2 &&
+          nativeAudioInvokes[0].command === "start_w9_native_audio_session" &&
+          nativeAudioInvokes[0].args?.request?.sampleRate === 48000 &&
+          nativeAudioInvokes[0].args?.request?.channels === 2 &&
+          nativeAudioInvokes[1].command === "push_w9_native_pcm_f32_frame" &&
+          nativeAudioInvokes[1].args?.request?.sampleRate === 48000 &&
+          nativeAudioInvokes[1].args?.request?.channels === 2 &&
+          typeof nativeAudioInvokes[1].args?.request?.dataBase64 === "string" &&
+          nativeAudioInvokes[1].args.request.dataBase64.length > 0 &&
+          state.audioPlayedFrames === 1 &&
+          state.audioLastBufferReason === "native-playback-queued" &&
+          getAudioQueueMs() === 24;
+
+        window.__TAURI__ = original.tauri;
+
         state.audioContext = makeFakeContext(10);
         state.audioGain = { gain: { value: 0 } };
         state.audioNextPlayTime = 9;
@@ -8141,7 +8327,14 @@ async function verifyAudioPlaybackBufferGuards(session) {
           !sustainedBurstExportText.includes("补缓冲");
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer && burstArrivalKeepsLowLatency && sustainedBurstKeepsLowLatency,
+          ok: nativeAudioBridgeUsed && preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer && burstArrivalKeepsLowLatency && sustainedBurstKeepsLowLatency,
+          nativeAudioBridgeUsed,
+          nativeAudioPlayed,
+          nativeAudioInvokes,
+          nativeAudioStarts: starts.length,
+          nativeAudioPlayedFrames: state.audioPlayedFrames,
+          nativeAudioLastBufferReason: state.audioLastBufferReason,
+          nativeAudioQueueMs: getAudioQueueMs(),
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -8220,6 +8413,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
           sustainedBurstExportText,
         };
       } finally {
+        if (original.tauri === undefined) {
+          delete window.__TAURI__;
+        } else {
+          window.__TAURI__ = original.tauri;
+        }
         if (audioToggle) audioToggle.checked = original.checked;
         if (volumeRange) volumeRange.value = original.volume;
         state.audioContext = original.context;
@@ -8280,6 +8478,26 @@ async function verifyAudioPlaybackBufferGuards(session) {
           delete state.audioFrameTimingSamples;
         } else {
           state.audioFrameTimingSamples = original.frameTimingSamples;
+        }
+        if (original.nativeAudioRunning === undefined) {
+          delete state.nativeAudioRunning;
+        } else {
+          state.nativeAudioRunning = original.nativeAudioRunning;
+        }
+        if (original.nativeAudioSampleRate === undefined) {
+          delete state.nativeAudioSampleRate;
+        } else {
+          state.nativeAudioSampleRate = original.nativeAudioSampleRate;
+        }
+        if (original.nativeAudioChannels === undefined) {
+          delete state.nativeAudioChannels;
+        } else {
+          state.nativeAudioChannels = original.nativeAudioChannels;
+        }
+        if (original.nativeAudioSnapshot === undefined) {
+          delete state.nativeAudioSnapshot;
+        } else {
+          state.nativeAudioSnapshot = original.nativeAudioSnapshot;
         }
       }
     })()`,

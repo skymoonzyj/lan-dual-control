@@ -610,6 +610,14 @@ const state = {
   h264ReceivedIdr: 0,
   h264LastNalTypes: "",
   h264LastKeyFrameId: "",
+  w8NativeVideoSessionStarted: false,
+  w8NativeVideoSessionPromise: null,
+  w8NativeVideoPushPromise: null,
+  w8NativeVideoFramesPushed: 0,
+  w8NativeVideoDroppedFrames: 0,
+  w8NativeVideoErrors: 0,
+  w8NativeVideoLastError: "",
+  w8NativeVideoLastSnapshot: null,
   h264FallbackActive: false,
   h264FallbackReason: "",
   h264FallbackRecoveryDueAt: 0,
@@ -645,6 +653,10 @@ const state = {
   audioLastError: "",
   audioLastStatusUpdateAt: 0,
   audioLastRenderedDroppedFrames: 0,
+  nativeAudioRunning: false,
+  nativeAudioSampleRate: 0,
+  nativeAudioChannels: 0,
+  nativeAudioSnapshot: null,
   recentConnections: [],
   localHostRunning: false,
   localHostOnline: false,
@@ -729,6 +741,12 @@ const state = {
     h264ReceivedIdr: 0,
     h264LastNalTypes: "",
     h264LastKeyFrameId: "",
+    w8NativeVideoFramesPushed: 0,
+    w8NativeVideoQueueMs: 0,
+    w8NativeVideoDroppedFrames: 0,
+    w8NativeVideoLastReason: "",
+    w8NativeVideoErrors: 0,
+    w8NativeVideoLastError: "",
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -957,6 +975,12 @@ function getEmptyHostDiagnostics() {
     h264ReceivedIdr: 0,
     h264LastNalTypes: "",
     h264LastKeyFrameId: "",
+    w8NativeVideoFramesPushed: 0,
+    w8NativeVideoQueueMs: 0,
+    w8NativeVideoDroppedFrames: 0,
+    w8NativeVideoLastReason: "",
+    w8NativeVideoErrors: 0,
+    w8NativeVideoLastError: "",
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -1303,6 +1327,12 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const receivedPps = Number(diagnostics.h264ReceivedPps);
   const receivedIdr = Number(diagnostics.h264ReceivedIdr);
   const lastNalTypes = String(diagnostics.h264LastNalTypes || "").trim();
+  const nativeFrames = Number(diagnostics.w8NativeVideoFramesPushed);
+  const nativeQueueMs = Number(diagnostics.w8NativeVideoQueueMs);
+  const nativeDroppedFrames = Number(diagnostics.w8NativeVideoDroppedFrames);
+  const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
+  const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
+  const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
   const parts = [status, codec].filter(Boolean);
 
   if (Number.isFinite(decodedFrames) && decodedFrames > 0) {
@@ -1323,6 +1353,24 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (lastNalTypes) {
     parts.push(`NAL ${lastNalTypes}`);
+  }
+  if (Number.isFinite(nativeFrames) && nativeFrames > 0) {
+    parts.push(`原生队列 ${nativeFrames}`);
+  }
+  if (Number.isFinite(nativeQueueMs) && nativeQueueMs > 0) {
+    parts.push(`原生队列 ${Math.round(nativeQueueMs)}ms`);
+  }
+  if (Number.isFinite(nativeDroppedFrames) && nativeDroppedFrames > 0) {
+    parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
+  }
+  if (nativeLastReason) {
+    parts.push(`原生原因 ${nativeLastReason}`);
+  }
+  if (Number.isFinite(nativeErrors) && nativeErrors > 0) {
+    parts.push(`原生错误 ${nativeErrors}`);
+  }
+  if (nativeLastError) {
+    parts.push(`原生最近错误 ${nativeLastError.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (Number.isFinite(queue) && queue > 0) {
     parts.push(`队列 ${queue}`);
@@ -3196,6 +3244,7 @@ function resetVideoFrameStats() {
   state.videoFrameClockSkewed = false;
   state.requestedFps = 0;
   state.negotiatedFps = 0;
+  resetW8NativeVideoState();
   elements.metricLatency.textContent = "-- ms";
 }
 
@@ -3416,6 +3465,7 @@ function buildAudioSettingsMessage() {
 }
 
 function resetAudioPlayback() {
+  void stopNativeAudioPlayback("reset-audio-playback");
   stopScheduledAudioSources();
   if (state.audioContext) {
     state.audioContext.close().catch(() => {});
@@ -3441,6 +3491,10 @@ function resetAudioPlayback() {
   state.audioWaitingSince = 0;
   state.audioLastStatusUpdateAt = 0;
   state.audioLastRenderedDroppedFrames = 0;
+  state.nativeAudioRunning = false;
+  state.nativeAudioSampleRate = 0;
+  state.nativeAudioChannels = 0;
+  state.nativeAudioSnapshot = null;
   syncFloatingControlStatus();
 }
 
@@ -3617,6 +3671,12 @@ function primeAudioPlayback() {
     return;
   }
 
+  if (canUseDesktopNativeAudioPlayback()) {
+    elements.audioText.textContent = `声音：原生播放待音频帧 · ${elements.audioVolumeRange.value}%`;
+    syncFloatingControlStatus();
+    return;
+  }
+
   void ensureAudioPlayback(48000)
     .then(() => {
       if (state.audioContext?.state === "running") {
@@ -3699,6 +3759,114 @@ function decodePcmAudioFrame(frame) {
   return { samples, channels, sampleRate, frameCount, layout };
 }
 
+function canUseDesktopNativeAudioPlayback() {
+  return Boolean(getTauriInvoke());
+}
+
+function updateNativeAudioSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  state.nativeAudioSnapshot = snapshot;
+  state.nativeAudioRunning = Boolean(snapshot.running);
+  state.nativeAudioSampleRate = Number(snapshot.sampleRate) || state.nativeAudioSampleRate || 0;
+  state.nativeAudioChannels = Number(snapshot.channels) || state.nativeAudioChannels || 0;
+  const reason = String(snapshot.lastReason || "").trim();
+  if (reason) {
+    state.audioLastBufferReason = reason;
+  }
+}
+
+async function stopNativeAudioPlayback(reason = "native-audio-stop") {
+  const invoke = getTauriInvoke();
+  const wasRunning = Boolean(state.nativeAudioRunning);
+  state.nativeAudioRunning = false;
+  state.nativeAudioSampleRate = 0;
+  state.nativeAudioChannels = 0;
+  state.nativeAudioSnapshot = null;
+  if (!invoke || !wasRunning) return false;
+  try {
+    const snapshot = await invoke("stop_w9_native_audio_session");
+    updateNativeAudioSnapshot(snapshot);
+    state.nativeAudioRunning = false;
+    return true;
+  } catch (error) {
+    state.audioLastError = error?.message || String(error);
+    state.audioLastBufferReason = reason;
+    addLog("原生声音停止失败", state.audioLastError);
+    return false;
+  }
+}
+
+async function ensureNativeAudioPlayback(decoded) {
+  const invoke = getTauriInvoke();
+  if (!invoke) return null;
+
+  const sampleRate = Math.max(8000, Math.min(192000, Number(decoded.sampleRate) || 48000));
+  const channels = Math.max(1, Math.min(8, Number(decoded.channels) || 2));
+  const needsStart =
+    !state.nativeAudioRunning ||
+    Number(state.nativeAudioSampleRate) !== sampleRate ||
+    Number(state.nativeAudioChannels) !== channels;
+
+  if (needsStart) {
+    if (state.nativeAudioRunning) {
+      await stopNativeAudioPlayback("native-audio-format-change");
+    }
+    const snapshot = await invoke("start_w9_native_audio_session", {
+      request: {
+        sampleRate,
+        channels,
+        targetQueueMs: Math.round(audioLowLatencyTargetQueuedSeconds * 1000),
+        maxLiveQueueMs: Math.round(audioResyncBufferSeconds * 1000),
+      },
+    });
+    updateNativeAudioSnapshot(snapshot);
+    state.nativeAudioRunning = true;
+    state.nativeAudioSampleRate = sampleRate;
+    state.nativeAudioChannels = channels;
+  }
+
+  return invoke;
+}
+
+function makeNativeInterleavedF32Samples(decoded) {
+  const volume = Math.max(0, Math.min(1, (Number(elements.audioVolumeRange.value) || 0) / 100));
+  const samples = new Float32Array(decoded.frameCount * decoded.channels);
+  for (let frameIndex = 0; frameIndex < decoded.frameCount; frameIndex += 1) {
+    for (let channel = 0; channel < decoded.channels; channel += 1) {
+      const sourceIndex = decoded.layout === "planar"
+        ? channel * decoded.frameCount + frameIndex
+        : frameIndex * decoded.channels + channel;
+      const value = Number(decoded.samples[sourceIndex]) || 0;
+      samples[frameIndex * decoded.channels + channel] = Math.max(-1, Math.min(1, value * volume));
+    }
+  }
+  return samples;
+}
+
+function encodeF32leBase64(samples) {
+  return arrayBufferToBase64(samples.buffer.slice(samples.byteOffset, samples.byteOffset + samples.byteLength));
+}
+
+async function playNativePcmAudioFrame(frame, decoded) {
+  const invoke = await ensureNativeAudioPlayback(decoded);
+  if (!invoke) return false;
+
+  const samples = makeNativeInterleavedF32Samples(decoded);
+  const snapshot = await invoke("push_w9_native_pcm_f32_frame", {
+    request: {
+      dataBase64: encodeF32leBase64(samples),
+      sampleRate: decoded.sampleRate,
+      channels: decoded.channels,
+    },
+  });
+  updateNativeAudioSnapshot(snapshot);
+  state.audioPlayedFrames += 1;
+  if (!String(state.audioLastBufferReason || "").trim()) {
+    state.audioLastBufferReason = "native-playback-queued";
+  }
+  return true;
+}
+
 async function playPcmAudioFrame(frame) {
   if (!elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
     return false;
@@ -3707,6 +3875,10 @@ async function playPcmAudioFrame(frame) {
   const decoded = decodePcmAudioFrame(frame);
   if (!decoded) {
     return false;
+  }
+
+  if (canUseDesktopNativeAudioPlayback()) {
+    return playNativePcmAudioFrame(frame, decoded);
   }
 
   const audioContext = await ensureAudioPlayback(decoded.sampleRate);
@@ -5434,6 +5606,13 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const receivedPps = Number(state.h264ReceivedPps || state.hostDiagnostics?.h264ReceivedPps) || 0;
   const receivedIdr = Number(state.h264ReceivedIdr || state.hostDiagnostics?.h264ReceivedIdr) || 0;
   const lastNalTypes = String(state.h264LastNalTypes || state.hostDiagnostics?.h264LastNalTypes || "").trim();
+  const nativeFrames = Number(state.w8NativeVideoFramesPushed || state.hostDiagnostics?.w8NativeVideoFramesPushed) || 0;
+  const nativeQueueMs = Number(state.hostDiagnostics?.w8NativeVideoQueueMs) || 0;
+  const nativeDroppedFrames =
+    Number(state.w8NativeVideoDroppedFrames || state.hostDiagnostics?.w8NativeVideoDroppedFrames) || 0;
+  const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
+  const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
+  const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const remoteMediaGapStats = getVideoRemoteMediaGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
@@ -5477,6 +5656,12 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`SPS/PPS/IDR ${receivedSps}/${receivedPps}/${receivedIdr}`);
   }
   if (lastNalTypes) parts.push(`NAL ${lastNalTypes}`);
+  if (nativeFrames > 0) parts.push(`原生队列 ${nativeFrames}`);
+  if (nativeQueueMs > 0) parts.push(`原生队列 ${Math.round(nativeQueueMs)} ms`);
+  if (nativeDroppedFrames > 0) parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
+  if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
+  if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
+  if (nativeLastError) parts.push(`原生最近错误 ${nativeLastError.replace(/\s+/g, " ").slice(0, 80)}`);
   if (decoderQueue > 0) parts.push(`解码队列 ${decoderQueue}`);
   if (decoderQueueMs > 0) parts.push(`本机队列 ${Math.round(decoderQueueMs)} ms`);
   if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
@@ -5500,6 +5685,12 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
 }
 
 function getAudioQueueMs() {
+  if (state.nativeAudioRunning && canUseDesktopNativeAudioPlayback()) {
+    const nativeQueueMs = Number(state.nativeAudioSnapshot?.queueMs);
+    if (Number.isFinite(nativeQueueMs)) {
+      return Math.max(0, Math.round(nativeQueueMs));
+    }
+  }
   const currentTime = Number(state.audioContext?.currentTime);
   const nextPlayTime = Number(state.audioNextPlayTime);
   if (!Number.isFinite(currentTime) || !Number.isFinite(nextPlayTime)) return 0;
@@ -6880,6 +7071,150 @@ async function handleFileClipboardButtonClick() {
 
 function getTauriInvoke() {
   return window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke || null;
+}
+
+function resetW8NativeVideoState() {
+  state.w8NativeVideoSessionStarted = false;
+  state.w8NativeVideoSessionPromise = null;
+  state.w8NativeVideoPushPromise = null;
+  state.w8NativeVideoFramesPushed = 0;
+  state.w8NativeVideoDroppedFrames = 0;
+  state.w8NativeVideoErrors = 0;
+  state.w8NativeVideoLastError = "";
+  state.w8NativeVideoLastSnapshot = null;
+}
+
+function getW8NativeVideoPort() {
+  const port = Number(state.activePort || elements.portInput.value);
+  return Number.isFinite(port) && port > 0 ? Math.trunc(port) : undefined;
+}
+
+function getW8NativeVideoFps() {
+  const fps = Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value);
+  return Number.isFinite(fps) && fps > 0 ? Math.max(1, Math.min(240, Math.trunc(fps))) : 60;
+}
+
+function updateW8NativeVideoDiagnostics({
+  snapshot = state.w8NativeVideoLastSnapshot,
+  pushResult = null,
+  error = "",
+} = {}) {
+  const queue = snapshot?.queue || {};
+  const video = pushResult?.video || {};
+  const queueMs = Number.isFinite(Number(video.queueMs))
+    ? Number(video.queueMs)
+    : Number(queue.queueMs) || 0;
+  const droppedNow = Number(video.droppedFrames) || 0;
+  if (droppedNow > 0) {
+    state.w8NativeVideoDroppedFrames += droppedNow;
+  }
+  const reason = String(video.reason || queue.lastReason || "").trim();
+  if (error) {
+    state.w8NativeVideoLastError = String(error).replace(/\s+/g, " ").slice(0, 120);
+  }
+
+  updateHostDiagnostics({
+    w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
+    w8NativeVideoQueueMs: Math.max(0, Math.round(queueMs)),
+    w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
+    w8NativeVideoLastReason: reason,
+    w8NativeVideoErrors: state.w8NativeVideoErrors,
+    w8NativeVideoLastError: state.w8NativeVideoLastError,
+  });
+}
+
+async function ensureW8NativeVideoSession() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return null;
+  if (state.w8NativeVideoSessionStarted) {
+    return state.w8NativeVideoLastSnapshot;
+  }
+  if (state.w8NativeVideoSessionPromise) {
+    return state.w8NativeVideoSessionPromise;
+  }
+
+  const request = {
+    host: state.activeHost || elements.hostInput.value.trim() || undefined,
+    port: getW8NativeVideoPort(),
+    requestedFps: getW8NativeVideoFps(),
+    rendererMode: "native-video-queue-mvp",
+    targetQueueMs: 80,
+    hardMaxQueueMs: 180,
+    maxFrames: 96,
+  };
+
+  state.w8NativeVideoSessionPromise = invoke("start_w8_native_video_session", { request })
+    .then((snapshot) => {
+      state.w8NativeVideoSessionStarted = true;
+      state.w8NativeVideoLastSnapshot = snapshot || null;
+      state.w8NativeVideoLastError = "";
+      updateW8NativeVideoDiagnostics({ snapshot });
+      return snapshot || null;
+    })
+    .catch((error) => {
+      state.w8NativeVideoErrors += 1;
+      updateW8NativeVideoDiagnostics({ error: error?.message || String(error) });
+      if (state.w8NativeVideoErrors <= 3) {
+        addLog("W8 原生视频", state.w8NativeVideoLastError || "原生视频会话启动失败");
+      }
+      return null;
+    })
+    .finally(() => {
+      state.w8NativeVideoSessionPromise = null;
+    });
+
+  return state.w8NativeVideoSessionPromise;
+}
+
+async function pushW8NativeH264AnnexBFrameNow(frame, dataBase64) {
+  const invoke = getTauriInvoke();
+  if (!invoke || !dataBase64) return null;
+
+  const session = await ensureW8NativeVideoSession();
+  if (!session && !state.w8NativeVideoSessionStarted) {
+    return null;
+  }
+
+  try {
+    const id = Math.max(0, Math.trunc(Number(frame.frameId ?? state.videoFrames) || 0));
+    const receivedAtMs = Math.max(0, Math.round(Number(performance.now()) || 0));
+    const result = await invoke("push_w8_native_h264_annexb_frame", {
+      request: {
+        id,
+        receivedAtMs,
+        dataBase64,
+      },
+    });
+    state.w8NativeVideoFramesPushed += 1;
+    state.w8NativeVideoLastError = "";
+    state.w8NativeVideoLastSnapshot = {
+      ...(state.w8NativeVideoLastSnapshot || {}),
+      queue: {
+        ...((state.w8NativeVideoLastSnapshot || {}).queue || {}),
+        queuedFrames: Math.max(0, Math.round(Number(result?.video?.queueLength) || Number(result?.video?.queuedFrames) || 0)),
+        queueMs: Number(result?.video?.queueMs) || 0,
+        lastReason: result?.video?.reason || "",
+      },
+    };
+    updateW8NativeVideoDiagnostics({ pushResult: result });
+    return result;
+  } catch (error) {
+    state.w8NativeVideoErrors += 1;
+    updateW8NativeVideoDiagnostics({ error: error?.message || String(error) });
+    if (state.w8NativeVideoErrors <= 3) {
+      addLog("W8 原生视频", state.w8NativeVideoLastError || "H.264 帧推送失败");
+    }
+    return null;
+  }
+}
+
+function pushW8NativeH264AnnexBFrame(frame, dataBase64) {
+  const previousPush = state.w8NativeVideoPushPromise || Promise.resolve();
+  const queuedPush = previousPush
+    .catch(() => null)
+    .then(() => pushW8NativeH264AnnexBFrameNow(frame, dataBase64));
+  state.w8NativeVideoPushPromise = queuedPush.catch(() => null);
+  return queuedPush;
 }
 
 function canUseDesktopFileClipboard() {
@@ -9941,6 +10276,7 @@ async function renderH264VideoFrame(frame) {
     const nalTypes = getH264PayloadNalTypes(payloadBytes, frame.encoding);
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFrameNalTypes(nalTypes);
     recordH264ReceiveEvidence({ frame, nalTypes, isKeyFrame });
+    void pushW8NativeH264AnnexBFrame(frame, frame.payload);
     const latencyResync = maybeResyncH264DecoderQueueForLatency({
       isKeyFrame,
       frameId: frame.frameId ?? state.videoFrames,
