@@ -22,12 +22,12 @@ function printHelp() {
   node scripts/windows/post-w2w3-retest-board.mjs [options]
 
 Options:
-  --text <text>     Text that contains one W2W3Retest= line.
+  --text <text>     Text that contains one W2W3Retest= line and optional W8NativeVideo= line.
   --file <path>     Read text from a local file that contains W2W3Retest=.
   --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
   --from <name>     Agent Link sender name. Default: ${defaults.from}
-  --send            Post W2W3Retest= and W2H264BoardDiagnosis= to the board.
+  --send            Post W2W3Retest=/W8NativeVideo= and W2H264BoardDiagnosis= to the board.
   --noDiagnose      Only post W2W3Retest=; do not run diagnosis.
   --json            Print machine-readable JSON.
   --boardSummary    Print one secret-safe summary line.
@@ -35,10 +35,11 @@ Options:
 
 Description:
   Safely posts the real Windows client W2/W3 retest result after the user runs
-  Run-WinClientRetest.cmd locally. It accepts only a redacted W2W3Retest= line,
-  rejects password/token/control-event markers before posting, and can run
-  the read-only W2 H.264 diagnosis helper immediately after posting. It never
-  asks for passwords, authenticates a host, or sends real control events.
+  Run-WinClientRetest.cmd locally. It accepts a redacted W2W3Retest= line and
+  an optional W8NativeVideo= line for native-present long-run evidence, rejects
+  password/token/control-event markers before posting, and can run the read-only
+  W2 H.264 diagnosis helper immediately after posting. It never asks for
+  passwords, authenticates a host, or sends real control events.
 `);
 }
 
@@ -111,9 +112,21 @@ function findUnsafeMarker(text) {
 
 function normalizeRetestLine(line) {
   return String(line || "")
+    .replace(/\s*;\s*W8NativeVideo=.*$/i, "")
+    .replace(/\s*;\s*(?:fps|audio|surface|h264Errors|error)=.*$/i, "")
     .replace(/\s+No password was printed or sent to Agent Link Board; no input\/inject was performed\.?.*$/i, "")
     .replace(/\s+Source=Run-WinClientRetest\/local-hidden-password-prompt\..*$/i, "")
     .replace(/\s+Safety=no-password-on-board,no-input-inject\..*$/i, "")
+    .trim();
+}
+
+function normalizeW8NativeVideoLine(line) {
+  return String(line || "")
+    .replace(/\s*;\s*(?:fps|audio|surface|h264Errors|error)=.*$/i, "")
+    .replace(/\s+No password was printed or sent to Agent Link Board; no input\/inject was performed\.?.*$/i, "")
+    .replace(/\s+Source=Run-WinClientRetest\/local-hidden-password-prompt\..*$/i, "")
+    .replace(/\s+Safety=no-password-on-board,no-input-inject\..*$/i, "")
+    .replace(/[.。]\s*$/u, "")
     .trim();
 }
 
@@ -127,6 +140,20 @@ function extractRetestLine(input) {
     throw new Error("W2W3Retest= line is missing required video= or h264= evidence.");
   }
   return retestLine;
+}
+
+function extractW8NativeVideoLine(input) {
+  const matches = [...String(input).matchAll(/W8NativeVideo=[^\r\n]+/g)]
+    .map((match) => normalizeW8NativeVideoLine(match[0]))
+    .filter(Boolean);
+  const w8NativeVideoLine = matches.at(-1) || "";
+  if (!w8NativeVideoLine) return "";
+  const unsafeMarker = findUnsafeMarker(w8NativeVideoLine);
+  if (unsafeMarker) throw new Error("unsafe W8 native video input rejected before posting");
+  if (!/\bpresent=/.test(w8NativeVideoLine) && !/\bstatus=/.test(w8NativeVideoLine)) {
+    throw new Error("W8NativeVideo= line is missing present= or status= evidence.");
+  }
+  return w8NativeVideoLine;
 }
 
 async function postMessage(args, text) {
@@ -185,7 +212,15 @@ function makeRetestMessage(retestLine) {
     retestLine,
     "Source=Run-WinClientRetest/local-hidden-password-prompt.",
     "Safety=no-password-on-board,no-input-inject.",
-  ].join(" ");
+  ].filter(Boolean).join("\n");
+}
+
+function makeW8NativeVideoMessage(w8NativeVideoLine) {
+  return [
+    w8NativeVideoLine,
+    "Source=Run-WinClientRetest/native-video-summary.",
+    "Safety=no-password-on-board,no-input-inject.",
+  ].join("\n");
 }
 
 function makeDiagnosisMessage(diagnosis) {
@@ -196,6 +231,7 @@ function makeBoardSummary(payload) {
   return [
     `W2W3RetestPost=${payload.send ? "sent" : "dry-run"}`,
     `retest=${payload.retestLine ? "present" : "missing"}`,
+    `w8NativeVideo=${payload.w8NativeVideoLine ? "present" : "missing"}`,
     payload.diagnosisBoardSummary ? `diagnosis=${payload.diagnosisBoardSummary}` : "diagnosis=skipped",
     "Safety=no-password-on-board,no-input-inject.",
   ].join(" ");
@@ -208,19 +244,27 @@ async function main() {
     return;
   }
 
-  const retestLine = extractRetestLine(readInput(args));
+  const input = readInput(args);
+  const retestLine = extractRetestLine(input);
+  const w8NativeVideoLine = extractW8NativeVideoLine(input);
   const payload = {
     ok: true,
     send: Boolean(args.send),
     sentRetest: false,
+    sentW8NativeVideo: false,
     sentDiagnosis: false,
     retestLine,
+    w8NativeVideoLine,
     diagnosisBoardSummary: "",
   };
 
   if (args.send) {
     await postMessage(args, makeRetestMessage(retestLine));
     payload.sentRetest = true;
+    if (w8NativeVideoLine) {
+      await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine));
+      payload.sentW8NativeVideo = true;
+    }
     const diagnosis = runDiagnosis(args);
     payload.diagnosisBoardSummary = diagnosis.boardSummary || "";
     if (payload.diagnosisBoardSummary) {

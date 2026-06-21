@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端长跑复测摘要
+开发端：Windows Codex
+本轮目标：继续只做视频侧，把真实 Mac H.264 长跑需要看的 W8 原生 Present / stream-change / device-lost 证据纳入脱敏上板链路。
+完成内容：`test-windows-client-browser --boardSummary` 新增 `W8NativeVideo=` 摘要，读取页面 snapshot 中的 `decoderSession/nativePresent/nativeSurface/windowSwapchain` 字段，输出 `status/present/presentFrames/decoded/output/surface/copy/handoff/swapchain/streamChange/deviceLost/errors`。`post-w2w3-retest-board` 可从真实复测日志中提取可选 `W8NativeVideo=`，并作为单独消息上板；`run-winclient-retest-and-post` 会把子复测输出里的 W8 行传给上板助手。W8 行和旧 `W2W3Retest=` 分开发送，避免 W8 的 `decoded/present` 字段污染 `W2H264BoardDiagnosis=`。
+修改文件：scripts/windows/test-windows-client-browser.mjs；scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/run-winclient-retest-and-post.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 `W8NativeVideo=` 未进入 board summary、上板助手 help/抽取缺 W8、包装器未把 W8 传给上板助手；实现后对应专项回归转绿。完整验证见本轮提交前命令记录。
+遗留问题：还没有替用户跑带密码的真实长跑；下一次需要用户在当前终端隐藏输入 Mac 临时密码，运行正式复测后看通讯板里 `W8NativeVideo=` 是否有 `presentFrames>0`、`errors=0`，以及 `streamChange/deviceLost` 后是否继续增长。
+下一步建议：真实 Mac H.264 长跑：运行 `Run-WinClientRetest-And-Post.cmd`，连接后保持一段时间并观察画面；上板后先看 `W8NativeVideo=`，再看旧 `W2W3Retest=` 和 `W2H264BoardDiagnosis=`。
+是否改了协议：否。
+是否需要另一端配合：后续真实长跑需要 Mac host 在线；本轮不需要 Mac 改代码。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 D3D11 device-lost rebuild
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 stream-change 输出重选后，补上 D3D11/DXGI device lost 类错误时的 native surface / present target 重建。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端长跑复测摘要
+- Windows 主线继续只做视频侧，不碰 Mac/协议/认证/密码/input。`test-windows-client-browser --boardSummary` 现在会把页面 snapshot 里的 W8 原生视频诊断压成脱敏 `W8NativeVideo=` 一行，字段包含 `status`、`present`、`presentFrames`、`decoded`、`output`、`surface`、`copy`、`handoff`、`swapchain`、`streamChange`、`deviceLost` 和 `errors`。`run-winclient-retest-and-post` / `post-w2w3-retest-board` 会从真实复测输出中提取可选 `W8NativeVideo=`，和旧 `W2W3Retest=`、`W2H264BoardDiagnosis=` 分开发到通讯板，避免 W8 的 `decoded/present` 字段污染旧 W2 H.264 对照诊断。下一次真实 Mac H.264 长跑时，看通讯板里的 `W8NativeVideo=present=latest-frame-nv12-converted-presented|latest-frame-swapchain-presented`、`presentFrames>0`、`streamChange=yes/no`、`deviceLost=yes/no` 和 `errors=0`。
+
 ## 2026-06-21 W8 Windows 桌面控制端 D3D11 device-lost rebuild
 - Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在会识别 D3D11/DXGI device lost 类错误，包括 `DXGI_ERROR_DEVICE_REMOVED`、`DXGI_ERROR_DEVICE_RESET`、`DXGI_ERROR_DEVICE_HUNG` 和常见 HRESULT 字符串。decoded sample 写入 / native Present 路径如果遇到这类错误，不再只报 `surface-copy-blocked`；worker 会按当前 output subtype 和已有窗口目标重建 D3D11 latest-frame surface、BGRA8 present texture 和可用 HWND swapchain 目标，并把 `decoderSession` 刷新为 `device-lost-rebuilt`。如果重建失败，会显示 `device-lost-rebuild-blocked`，方便现场区分“已恢复”和“需要重启/重建更高层会话”。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；下一步做真实 Mac H.264 长跑观感验证，重点看 device-lost 后是否继续出帧。
 

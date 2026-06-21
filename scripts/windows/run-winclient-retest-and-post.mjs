@@ -32,8 +32,9 @@ Options:
 Description:
   One-click wrapper for the Windows client real retest flow. It runs the same
   foreground retest as Run-WinClientRetest.cmd, captures only the final
-  W2W3Retest= evidence line, then calls scripts/windows/post-w2w3-retest-board.mjs
-  to publish the redacted result and the read-only W2 H.264 diagnosis.
+  W2W3Retest= evidence line plus optional W8NativeVideo= native-present
+  evidence, then calls scripts/windows/post-w2w3-retest-board.mjs to publish
+  the redacted result and the read-only W2 H.264 diagnosis.
 
   It never puts credentials in command arguments or on Agent Link Board. All
   other options are forwarded to the underlying retest PowerShell wrapper, for
@@ -206,13 +207,27 @@ function extractRetestLine(text) {
   const line = matches.at(-1) || "";
   if (!line) return "";
   if (!/\bvideo=/.test(line) || !/\bh264=/.test(line)) return "";
-  return line;
+  return line
+    .replace(/\s*;\s*W8NativeVideo=.*$/i, "")
+    .replace(/\s*;\s*(?:fps|audio|surface|h264Errors|error)=.*$/i, "")
+    .trim();
 }
 
-function runPostHelper(args, retestLine) {
+function extractW8NativeVideoLine(text) {
+  const matches = [...String(text || "").matchAll(/W8NativeVideo=[^\r\n]+/g)].map((match) => match[0].trim());
+  const line = matches.at(-1) || "";
+  if (!line) return "";
+  return line
+    .replace(/\s*;\s*(?:fps|audio|surface|h264Errors|error)=.*$/i, "")
+    .replace(/\s+No password was printed or sent to Agent Link Board; no input\/inject was performed\.?.*$/i, "")
+    .replace(/[.。]\s*$/u, "")
+    .trim();
+}
+
+function runPostHelper(args, retestLine, w8NativeVideoLine = "") {
   const tempDir = mkdtempSync(join(tmpdir(), "lan-dual-w2w3-retest-"));
   const retestFile = join(tempDir, "w2w3-retest.txt");
-  writeFileSync(retestFile, `${retestLine}\n`, "utf8");
+  writeFileSync(retestFile, `${[retestLine, w8NativeVideoLine].filter(Boolean).join("\n")}\n`, "utf8");
   const postArgs = [
     "scripts/windows/post-w2w3-retest-board.mjs",
     "--file", retestFile,
@@ -273,7 +288,8 @@ async function main() {
     return;
   }
 
-  const post = runPostHelper(args, retestLine);
+  const w8NativeVideoLine = extractW8NativeVideoLine(`${retest.stdout}\n${retest.stderr}`);
+  const post = runPostHelper(args, retestLine, w8NativeVideoLine);
   process.exitCode = post.status ?? 1;
 }
 

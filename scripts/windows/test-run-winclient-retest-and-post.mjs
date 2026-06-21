@@ -15,6 +15,7 @@ const defaults = {
 
 const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 h264Frames=300 h264Delta=297 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000 keyGapFramesLast=58 keyGapMsLast=966 keyTailFrames=12 keyTailMs=200 firstKeyParam=yes lastKeyParam=yes keyParamMiss=0";
 const retestLine = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe recv=68 key=1 sps=1 pps=1 idr=1 lastNal=1, audio=queue 120 ms";
+const w8NativeLine = "W8NativeVideo=status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -275,15 +276,17 @@ async function checkSuccessfulRetestPostsRetestAndDiagnosis(args) {
   await withFakeBoard(async (board) => {
     const result = await runNode(["--server", board.url], args, {
       LAN_DUAL_PASSWORD: "super-secret",
-      LAN_DUAL_WINCLIENT_RETEST_COMMAND_JSON: fakeRetestCommand(`if (process.env.LAN_DUAL_PASSWORD) console.log("child saw LAN_DUAL_PASSWORD=" + process.env.LAN_DUAL_PASSWORD); console.log(${JSON.stringify(retestLine)});`),
+      LAN_DUAL_WINCLIENT_RETEST_COMMAND_JSON: fakeRetestCommand(`if (process.env.LAN_DUAL_PASSWORD) console.log("child saw LAN_DUAL_PASSWORD=" + process.env.LAN_DUAL_PASSWORD); console.log(${JSON.stringify(retestLine)}); console.log(${JSON.stringify(w8NativeLine)});`),
     });
     assert(result.exitCode === 0, `retest-and-post should pass\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, retestLine, "retest-and-post stdout");
+    assertIncludes(result.stdout, w8NativeLine, "retest-and-post stdout");
     assertIncludes(result.stdout, "W2W3RetestPost=sent", "retest-and-post stdout");
-    assert(board.messages.length === 2, `expected two board messages, got ${board.messages.length}: ${JSON.stringify(board.messages)}`);
+    assert(board.messages.length === 3, `expected three board messages, got ${board.messages.length}: ${JSON.stringify(board.messages)}`);
     assertIncludes(board.messages[0].text, retestLine, "posted retest message");
-    assertIncludes(board.messages[1].text, "W2H264BoardDiagnosis=status=blocked", "posted diagnosis message");
-    assertIncludes(board.messages[1].text, "reason=windows-decode-path", "posted diagnosis message");
+    assertIncludes(board.messages[1].text, w8NativeLine, "posted W8 native video message");
+    assertIncludes(board.messages[2].text, "W2H264BoardDiagnosis=status=blocked", "posted diagnosis message");
+    assertIncludes(board.messages[2].text, "reason=windows-decode-path", "posted diagnosis message");
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "successful retest-and-post");
     console.log("[OK] WinClient retest-and-post sends retest and diagnosis after a successful run");
   });

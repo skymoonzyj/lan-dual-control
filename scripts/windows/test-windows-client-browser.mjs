@@ -447,6 +447,69 @@ function makeH264RetestSummary(value = {}) {
   return parts.join(" ");
 }
 
+function makeW8NativeVideoRetestSummary(value = {}) {
+  const framesPushed = positiveInteger(value.w8NativeVideoFramesPushed);
+  const decoded = positiveInteger(value.w8NativeVideoDecoderSessionDecodedFrames);
+  const accepted = positiveInteger(value.w8NativeVideoDecoderSessionAcceptedInputFrames);
+  const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
+  const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
+  const errors = positiveInteger(value.w8NativeVideoErrors);
+  const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
+  const output = String(value.w8NativeVideoDecoderSessionOutputSubtype || "").trim();
+  const present = String(value.w8NativeVideoNativePresentStatus || "").trim();
+  const presentMode = String(value.w8NativeVideoNativePresentMode || "").trim();
+  const surface = String(value.w8NativeVideoNativeSurfaceStatus || "").trim();
+  const copy = String(value.w8NativeVideoNativeSurfaceCopyStatus || "").trim();
+  const handoff = String(value.w8NativeVideoFrameHandoffStatus || "").trim();
+  const swapchain = String(value.w8NativeVideoWindowSwapchainStatus || "").trim();
+  const codec = String(value.w8NativeVideoCodecString || "").trim();
+  const lastError = String(value.w8NativeVideoLastError || "").trim();
+  const reasonText = [
+    status,
+    output,
+    present,
+    presentMode,
+    surface,
+    copy,
+    handoff,
+    swapchain,
+    value.w8NativeVideoDecoderSessionReason,
+    value.w8NativeVideoNativePresentReason,
+    value.w8NativeVideoNativeSurfaceReason,
+    lastError,
+  ].join(" ").toLowerCase();
+  const hasEvidence =
+    framesPushed > 0 ||
+    decoded > 0 ||
+    accepted > 0 ||
+    presentFrames > 0 ||
+    surfaceFrames > 0 ||
+    Boolean(status || present || surface || copy || handoff || swapchain || codec || lastError);
+
+  if (!hasEvidence) return "";
+
+  const parts = [];
+  if (status) parts.push(`status=${status}`);
+  if (present) parts.push(`present=${present}`);
+  if (presentFrames > 0) parts.push(`presentFrames=${presentFrames}`);
+  if (decoded > 0 || status) parts.push(`decoded=${decoded}`);
+  if (accepted > 0) parts.push(`accepted=${accepted}`);
+  if (framesPushed > 0) parts.push(`pushed=${framesPushed}`);
+  if (output) parts.push(`output=${output}`);
+  if (codec) parts.push(`codec=${codec}`);
+  if (surface) parts.push(`surface=${surface}`);
+  if (copy) parts.push(`copy=${copy}`);
+  if (handoff) parts.push(`handoff=${handoff}`);
+  if (swapchain) parts.push(`swapchain=${swapchain}`);
+  parts.push(`streamChange=${reasonText.includes("stream-change") ? "yes" : "no"}`);
+  parts.push(`deviceLost=${reasonText.includes("device-lost") ? "yes" : "no"}`);
+  parts.push(`errors=${errors}`);
+  if (errors > 0 && lastError) {
+    parts.push(`lastError=${compactBoardSummaryText(lastError, 80).replace(/\s+/g, "_")}`);
+  }
+  return parts.join(" ");
+}
+
 function makeBoardSummary(summary) {
   const checks = Array.from(summary.checks || []);
   const checkText = checks.length ? checks.join(",") : "none";
@@ -464,6 +527,9 @@ function makeBoardSummary(summary) {
   }
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
+  if (summary.w8NativeVideo) {
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 300)}`);
+  }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
   if (summary.surface) details.push(`surface=${summary.surface}`);
@@ -566,6 +632,30 @@ function verifyW2W3RetestAudioStabilityGate() {
   return { ok, shortCandidate, stableCandidate, queuedCandidate };
 }
 
+function verifyW8NativeVideoRetestSummary() {
+  const w8NativeVideo = "status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
+  const text = makeBoardSummary({
+    status: "passed",
+    mode: "connect",
+    target: "192.168.31.122:43770",
+    discoveryTarget: "192.168.31.122:43770",
+    checks: ["connection"],
+    w8NativeVideo,
+    h264Errors: "0",
+  });
+  const ok =
+    text.includes("W8NativeVideo=") &&
+    text.includes("status=device-lost-rebuilt") &&
+    text.includes("present=latest-frame-nv12-converted-presented") &&
+    text.includes("presentFrames=188") &&
+    text.includes("decoded=188") &&
+    text.includes("output=NV12") &&
+    text.includes("streamChange=yes") &&
+    text.includes("deviceLost=yes") &&
+    text.includes("errors=0");
+  return { ok, text, w8NativeVideo };
+}
+
 function emitBoardSummary(summary) {
   lastBoardSummary = makeBoardSummary(summary);
   if (activeOutputArgs?.boardSummary) {
@@ -662,6 +752,31 @@ function windowsClientSnapshotExpression() {
       h264ReceivedIdr: window.state?.h264ReceivedIdr ?? 0,
       h264LastNalTypes: window.state?.h264LastNalTypes ?? "",
       h264LastKeyFrameId: window.state?.h264LastKeyFrameId ?? "",
+      w8NativeVideoFramesPushed: window.state?.w8NativeVideoFramesPushed ?? 0,
+      w8NativeVideoDroppedFrames: window.state?.w8NativeVideoDroppedFrames ?? 0,
+      w8NativeVideoHasDecoderConfig: window.state?.w8NativeVideoHasDecoderConfig ?? false,
+      w8NativeVideoCodecString: window.state?.w8NativeVideoCodecString ?? "",
+      w8NativeVideoDecoderSessionActive: window.state?.w8NativeVideoDecoderSessionActive ?? false,
+      w8NativeVideoDecoderSessionReason: window.state?.w8NativeVideoDecoderSessionReason ?? "",
+      w8NativeVideoDecoderSessionStatus: window.state?.w8NativeVideoDecoderSessionStatus ?? "",
+      w8NativeVideoDecoderSessionOutputSubtype: window.state?.w8NativeVideoDecoderSessionOutputSubtype ?? "",
+      w8NativeVideoDecoderSessionSubmittedFrames: window.state?.w8NativeVideoDecoderSessionSubmittedFrames ?? 0,
+      w8NativeVideoDecoderSessionAcceptedInputFrames: window.state?.w8NativeVideoDecoderSessionAcceptedInputFrames ?? 0,
+      w8NativeVideoDecoderSessionDecodedFrames: window.state?.w8NativeVideoDecoderSessionDecodedFrames ?? 0,
+      w8NativeVideoFrameHandoffStatus: window.state?.w8NativeVideoFrameHandoffStatus ?? "",
+      w8NativeVideoLatestFrameFormat: window.state?.w8NativeVideoLatestFrameFormat ?? "",
+      w8NativeVideoNativeSurfaceStatus: window.state?.w8NativeVideoNativeSurfaceStatus ?? "",
+      w8NativeVideoNativeSurfaceReason: window.state?.w8NativeVideoNativeSurfaceReason ?? "",
+      w8NativeVideoNativeSurfaceCopyStatus: window.state?.w8NativeVideoNativeSurfaceCopyStatus ?? "",
+      w8NativeVideoNativeSurfacePresentedFrames: window.state?.w8NativeVideoNativeSurfacePresentedFrames ?? 0,
+      w8NativeVideoNativePresentMode: window.state?.w8NativeVideoNativePresentMode ?? "",
+      w8NativeVideoNativePresentStatus: window.state?.w8NativeVideoNativePresentStatus ?? "",
+      w8NativeVideoNativePresentFrames: window.state?.w8NativeVideoNativePresentFrames ?? 0,
+      w8NativeVideoNativePresentReason: window.state?.w8NativeVideoNativePresentReason ?? "",
+      w8NativeVideoWindowSwapchainStatus: window.state?.w8NativeVideoWindowSwapchainStatus ?? "",
+      w8NativeVideoWindowSwapchainReason: window.state?.w8NativeVideoWindowSwapchainReason ?? "",
+      w8NativeVideoErrors: window.state?.w8NativeVideoErrors ?? 0,
+      w8NativeVideoLastError: window.state?.w8NativeVideoLastError ?? "",
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
       audioPlayedFrames: window.state?.audioPlayedFrames ?? 0,
@@ -9102,6 +9217,7 @@ async function run() {
     liveVideo: "",
     liveAudio: "",
     h264: "",
+    w8NativeVideo: "",
     h264Errors: "",
     error: "",
   };
@@ -9205,6 +9321,12 @@ async function run() {
       }
       summary.checks.push("w2w3-h264-summary");
       print("OK", `W2W3Retest H.264 summary: ${h264SummaryCheck.h264}`);
+      const w8NativeSummaryCheck = verifyW8NativeVideoRetestSummary();
+      if (!w8NativeSummaryCheck.ok) {
+        throw new Error(`W8 native video summary check failed: ${JSON.stringify(w8NativeSummaryCheck)}`);
+      }
+      summary.checks.push("w8-native-summary");
+      print("OK", `W8 native video summary: ${w8NativeSummaryCheck.w8NativeVideo}`);
       summary.status = "passed";
       emitBoardSummary(summary);
       return;
@@ -9303,6 +9425,12 @@ async function run() {
     }
     summary.checks.push("w2w3-h264-summary");
     print("OK", `W2W3Retest H.264 summary: ${h264SummaryCheck.h264}`);
+    const w8NativeSummaryCheck = verifyW8NativeVideoRetestSummary();
+    if (!w8NativeSummaryCheck.ok) {
+      throw new Error(`W8 native video summary check failed: ${JSON.stringify(w8NativeSummaryCheck)}`);
+    }
+    summary.checks.push("w8-native-summary");
+    print("OK", `W8 native video summary: ${w8NativeSummaryCheck.w8NativeVideo}`);
     const audioStabilityGateCheck = verifyW2W3RetestAudioStabilityGate();
     if (!audioStabilityGateCheck.ok) {
       throw new Error(`W2W3Retest audio stability gate check failed: ${JSON.stringify(audioStabilityGateCheck)}`);
@@ -9448,6 +9576,7 @@ async function run() {
     summary.liveVideo = snapshot.liveVideo || summary.liveVideo;
     summary.liveAudio = snapshot.liveAudio || summary.liveAudio;
     summary.h264 = makeH264RetestSummary(snapshot) || summary.h264;
+    summary.w8NativeVideo = makeW8NativeVideoRetestSummary(snapshot) || summary.w8NativeVideo;
     summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
     summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
     summary.checks.push("connection");
