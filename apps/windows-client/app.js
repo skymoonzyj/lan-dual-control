@@ -630,6 +630,14 @@ const state = {
   w8NativeVideoDecodeStepMode: "",
   w8NativeVideoDecodeStepReason: "",
   w8NativeVideoDecodeStepStatus: "",
+  w8NativeVideoDecoderSessionActive: false,
+  w8NativeVideoDecoderSessionMode: "",
+  w8NativeVideoDecoderSessionReason: "",
+  w8NativeVideoDecoderSessionStatus: "",
+  w8NativeVideoDecoderSessionOutputSubtype: "",
+  w8NativeVideoDecoderSessionSubmittedFrames: 0,
+  w8NativeVideoDecoderSessionAcceptedInputFrames: 0,
+  w8NativeVideoDecoderSessionDecodedFrames: 0,
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -773,6 +781,14 @@ const state = {
     w8NativeVideoDecodeStepMode: "",
     w8NativeVideoDecodeStepReason: "",
     w8NativeVideoDecodeStepStatus: "",
+    w8NativeVideoDecoderSessionActive: false,
+    w8NativeVideoDecoderSessionMode: "",
+    w8NativeVideoDecoderSessionReason: "",
+    w8NativeVideoDecoderSessionStatus: "",
+    w8NativeVideoDecoderSessionOutputSubtype: "",
+    w8NativeVideoDecoderSessionSubmittedFrames: 0,
+    w8NativeVideoDecoderSessionAcceptedInputFrames: 0,
+    w8NativeVideoDecoderSessionDecodedFrames: 0,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1021,6 +1037,14 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDecodeStepMode: "",
     w8NativeVideoDecodeStepReason: "",
     w8NativeVideoDecodeStepStatus: "",
+    w8NativeVideoDecoderSessionActive: false,
+    w8NativeVideoDecoderSessionMode: "",
+    w8NativeVideoDecoderSessionReason: "",
+    w8NativeVideoDecoderSessionStatus: "",
+    w8NativeVideoDecoderSessionOutputSubtype: "",
+    w8NativeVideoDecoderSessionSubmittedFrames: 0,
+    w8NativeVideoDecoderSessionAcceptedInputFrames: 0,
+    w8NativeVideoDecoderSessionDecodedFrames: 0,
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1387,6 +1411,22 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDecodeStepMode = String(diagnostics.w8NativeVideoDecodeStepMode || "").trim();
   const nativeDecodeStepReason = String(diagnostics.w8NativeVideoDecodeStepReason || "").trim();
   const nativeDecodeStepStatus = String(diagnostics.w8NativeVideoDecodeStepStatus || "").trim();
+  const nativeDecoderSessionActive = Boolean(diagnostics.w8NativeVideoDecoderSessionActive);
+  const nativeDecoderSessionMode = String(diagnostics.w8NativeVideoDecoderSessionMode || "").trim();
+  const nativeDecoderSessionReason = String(diagnostics.w8NativeVideoDecoderSessionReason || "").trim();
+  const nativeDecoderSessionStatus = String(diagnostics.w8NativeVideoDecoderSessionStatus || "").trim();
+  const nativeDecoderSessionOutputSubtype = String(
+    diagnostics.w8NativeVideoDecoderSessionOutputSubtype || "",
+  ).trim();
+  const nativeDecoderSessionSubmittedFrames = Number(
+    diagnostics.w8NativeVideoDecoderSessionSubmittedFrames,
+  );
+  const nativeDecoderSessionAcceptedInputFrames = Number(
+    diagnostics.w8NativeVideoDecoderSessionAcceptedInputFrames,
+  );
+  const nativeDecoderSessionDecodedFrames = Number(
+    diagnostics.w8NativeVideoDecoderSessionDecodedFrames,
+  );
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1451,6 +1491,34 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeDecodeStepReason && !nativeDecodeStepReady) {
     parts.push(`原生步进原因 ${nativeDecodeStepReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderSessionMode) {
+    parts.push(`原生解码会话 ${nativeDecoderSessionActive ? "active" : "blocked"}`);
+  }
+  if (nativeDecoderSessionOutputSubtype) {
+    parts.push(`原生会话输出 ${nativeDecoderSessionOutputSubtype}`);
+  }
+  if (Number.isFinite(nativeDecoderSessionSubmittedFrames) && nativeDecoderSessionSubmittedFrames > 0) {
+    parts.push(`原生会话输入 ${nativeDecoderSessionSubmittedFrames}`);
+  }
+  if (
+    Number.isFinite(nativeDecoderSessionAcceptedInputFrames) &&
+    nativeDecoderSessionAcceptedInputFrames > 0
+  ) {
+    parts.push(`原生会话接受 ${nativeDecoderSessionAcceptedInputFrames}`);
+  }
+  if (
+    nativeDecoderSessionMode &&
+    Number.isFinite(nativeDecoderSessionDecodedFrames) &&
+    nativeDecoderSessionDecodedFrames >= 0
+  ) {
+    parts.push(`原生会话解码 ${nativeDecoderSessionDecodedFrames}`);
+  }
+  if (nativeDecoderSessionStatus) {
+    parts.push(`原生会话状态 ${nativeDecoderSessionStatus}`);
+  }
+  if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
+    parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) {
     parts.push(`原生原因 ${nativeLastReason}`);
@@ -5743,6 +5811,38 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeDecodeStepStatus = String(
     state.w8NativeVideoDecodeStepStatus || state.hostDiagnostics?.w8NativeVideoDecodeStepStatus || "",
   ).trim();
+  const nativeDecoderSessionActive = Boolean(
+    state.w8NativeVideoDecoderSessionActive || state.hostDiagnostics?.w8NativeVideoDecoderSessionActive,
+  );
+  const nativeDecoderSessionMode = String(
+    state.w8NativeVideoDecoderSessionMode || state.hostDiagnostics?.w8NativeVideoDecoderSessionMode || "",
+  ).trim();
+  const nativeDecoderSessionReason = String(
+    state.w8NativeVideoDecoderSessionReason || state.hostDiagnostics?.w8NativeVideoDecoderSessionReason || "",
+  ).trim();
+  const nativeDecoderSessionStatus = String(
+    state.w8NativeVideoDecoderSessionStatus || state.hostDiagnostics?.w8NativeVideoDecoderSessionStatus || "",
+  ).trim();
+  const nativeDecoderSessionOutputSubtype = String(
+    state.w8NativeVideoDecoderSessionOutputSubtype ||
+      state.hostDiagnostics?.w8NativeVideoDecoderSessionOutputSubtype ||
+      "",
+  ).trim();
+  const nativeDecoderSessionSubmittedFrames =
+    Number(
+      state.w8NativeVideoDecoderSessionSubmittedFrames ||
+        state.hostDiagnostics?.w8NativeVideoDecoderSessionSubmittedFrames,
+    ) || 0;
+  const nativeDecoderSessionAcceptedInputFrames =
+    Number(
+      state.w8NativeVideoDecoderSessionAcceptedInputFrames ||
+        state.hostDiagnostics?.w8NativeVideoDecoderSessionAcceptedInputFrames,
+    ) || 0;
+  const nativeDecoderSessionDecodedFrames =
+    Number(
+      state.w8NativeVideoDecoderSessionDecodedFrames ||
+        state.hostDiagnostics?.w8NativeVideoDecoderSessionDecodedFrames,
+    ) || 0;
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5808,6 +5908,19 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeDecodeStepStatus) parts.push(`原生步进状态 ${nativeDecodeStepStatus}`);
   if (nativeDecodeStepReason && !nativeDecodeStepReady) {
     parts.push(`原生步进原因 ${nativeDecodeStepReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderSessionMode) {
+    parts.push(`原生解码会话 ${nativeDecoderSessionActive ? "active" : "blocked"}`);
+  }
+  if (nativeDecoderSessionOutputSubtype) parts.push(`原生会话输出 ${nativeDecoderSessionOutputSubtype}`);
+  if (nativeDecoderSessionSubmittedFrames > 0) parts.push(`原生会话输入 ${nativeDecoderSessionSubmittedFrames}`);
+  if (nativeDecoderSessionAcceptedInputFrames > 0) {
+    parts.push(`原生会话接受 ${nativeDecoderSessionAcceptedInputFrames}`);
+  }
+  if (nativeDecoderSessionMode) parts.push(`原生会话解码 ${nativeDecoderSessionDecodedFrames}`);
+  if (nativeDecoderSessionStatus) parts.push(`原生会话状态 ${nativeDecoderSessionStatus}`);
+  if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
+    parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
   if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
@@ -7244,6 +7357,14 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDecodeStepMode = "";
   state.w8NativeVideoDecodeStepReason = "";
   state.w8NativeVideoDecodeStepStatus = "";
+  state.w8NativeVideoDecoderSessionActive = false;
+  state.w8NativeVideoDecoderSessionMode = "";
+  state.w8NativeVideoDecoderSessionReason = "";
+  state.w8NativeVideoDecoderSessionStatus = "";
+  state.w8NativeVideoDecoderSessionOutputSubtype = "";
+  state.w8NativeVideoDecoderSessionSubmittedFrames = 0;
+  state.w8NativeVideoDecoderSessionAcceptedInputFrames = 0;
+  state.w8NativeVideoDecoderSessionDecodedFrames = 0;
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7305,6 +7426,30 @@ function updateW8NativeVideoDiagnostics({
       .slice(0, 160);
     state.w8NativeVideoDecodeStepStatus = String(decodeStep.outputStatus || decodeStep.status || "").trim();
   }
+  const decoderSession = pushResult?.decoderSession || summary.decoderSession || null;
+  if (decoderSession && typeof decoderSession === "object") {
+    state.w8NativeVideoDecoderSessionActive = decoderSession.active === true;
+    state.w8NativeVideoDecoderSessionMode = String(decoderSession.mode || "").trim();
+    state.w8NativeVideoDecoderSessionReason = String(decoderSession.reason || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 160);
+    state.w8NativeVideoDecoderSessionStatus = String(
+      decoderSession.lastStatus || decoderSession.status || "",
+    ).trim();
+    state.w8NativeVideoDecoderSessionOutputSubtype = String(decoderSession.outputSubtype || "").trim();
+    state.w8NativeVideoDecoderSessionSubmittedFrames = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.submittedFrames) || 0),
+    );
+    state.w8NativeVideoDecoderSessionAcceptedInputFrames = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.acceptedInputFrames) || 0),
+    );
+    state.w8NativeVideoDecoderSessionDecodedFrames = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.decodedFrames) || 0),
+    );
+  }
 
   updateHostDiagnostics({
     w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
@@ -7324,6 +7469,15 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDecodeStepMode: state.w8NativeVideoDecodeStepMode,
     w8NativeVideoDecodeStepReason: state.w8NativeVideoDecodeStepReason,
     w8NativeVideoDecodeStepStatus: state.w8NativeVideoDecodeStepStatus,
+    w8NativeVideoDecoderSessionActive: state.w8NativeVideoDecoderSessionActive,
+    w8NativeVideoDecoderSessionMode: state.w8NativeVideoDecoderSessionMode,
+    w8NativeVideoDecoderSessionReason: state.w8NativeVideoDecoderSessionReason,
+    w8NativeVideoDecoderSessionStatus: state.w8NativeVideoDecoderSessionStatus,
+    w8NativeVideoDecoderSessionOutputSubtype: state.w8NativeVideoDecoderSessionOutputSubtype,
+    w8NativeVideoDecoderSessionSubmittedFrames: state.w8NativeVideoDecoderSessionSubmittedFrames,
+    w8NativeVideoDecoderSessionAcceptedInputFrames:
+      state.w8NativeVideoDecoderSessionAcceptedInputFrames,
+    w8NativeVideoDecoderSessionDecodedFrames: state.w8NativeVideoDecoderSessionDecodedFrames,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

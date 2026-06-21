@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 MF H.264 persistent decoder session diagnostics
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会在 H.264 Annex B payload 进入原生层后维护一份持续 decoder session 诊断摘要：第一次看到 SPS/PPS decoder config 时创建会话摘要，后续帧会累计 `submittedFrames`、`acceptedInputFrames`、`decodedFrames`、`outputSubtype`、`lastStatus` 和阻塞/ready 原因。Windows 控制端诊断/复制导出新增 `原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...`、`原生会话状态 ...`。由于 Media Foundation 的 `IMFTransform` 不能直接放入 Tauri 全局状态跨线程保存，本轮保留的是安全的会话诊断状态和每帧 MF 步进证据；下一步仍需把真正长期 decoder 放到专用 native renderer/decoder 线程，再接 native surface latest-frame 绘制。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 MF H.264 sample decode step preflight
 - Windows 主线继续推进 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会在首个带 SPS/PPS/IDR 的 Annex B H.264 帧到达时，除已有 decoder init preflight 外，再把完整 access unit 内部保留为 MF input sample，设置第一个可用输出 subtype，调用 `ProcessInput` 并尝试 `ProcessOutput`，然后把 `decodeStep` 摘要随 push 结果返回。Windows 控制端诊断/复制导出新增 `原生解码步进 ready|blocked` 和 `原生步进状态 need-more-input|decoded-output|stream-change|...`。这一步仍不是最终原生播放器：没有保持长生命周期 decoder，没有输出真实 native surface，也没有替换 WebCodecs/canvas；下一步才是持续 decoder 会话、decoded frame 计数/格式证据和 latest-frame native surface 绘制。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 

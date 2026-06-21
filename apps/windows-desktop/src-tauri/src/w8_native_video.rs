@@ -121,6 +121,7 @@ pub struct NativeH264AnnexBPushResult {
     pub summary: NativeH264AnnexBSummary,
     pub decoder_init: Option<W8NativeVideoDecoderInitPreflight>,
     pub decode_step: Option<W8NativeVideoDecodeStepPreflight>,
+    pub decoder_session: Option<W8NativeVideoDecoderSessionSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -149,6 +150,22 @@ pub struct W8NativeVideoDecodeStepPreflight {
     pub output_attempted: bool,
     pub output_produced: bool,
     pub output_status: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct W8NativeVideoDecoderSessionSummary {
+    pub mode: String,
+    pub attempted: bool,
+    pub active: bool,
+    pub ready: bool,
+    pub codec_string: Option<String>,
+    pub output_subtype: String,
+    pub submitted_frames: u64,
+    pub accepted_input_frames: u64,
+    pub decoded_frames: u64,
+    pub last_status: String,
     pub reason: String,
 }
 
@@ -253,6 +270,7 @@ impl NativeVideoQueue {
             summary,
             decoder_init: None,
             decode_step: None,
+            decoder_session: None,
         }
     }
 
@@ -412,7 +430,6 @@ pub struct W8NativeVideoState {
     session: Mutex<W8NativeVideoSession>,
 }
 
-#[derive(Debug, Clone)]
 struct W8NativeVideoSession {
     running: bool,
     host: Option<String>,
@@ -422,6 +439,7 @@ struct W8NativeVideoSession {
     queue: NativeVideoQueue,
     decoder_init: Option<W8NativeVideoDecoderInitPreflight>,
     decode_step: Option<W8NativeVideoDecodeStepPreflight>,
+    decoder_session: W8NativeVideoDecoderSessionState,
 }
 
 impl Default for W8NativeVideoSession {
@@ -435,6 +453,7 @@ impl Default for W8NativeVideoSession {
             queue: NativeVideoQueue::new(NativeVideoQueueConfig::default()),
             decoder_init: None,
             decode_step: None,
+            decoder_session: W8NativeVideoDecoderSessionState::default(),
         }
     }
 }
@@ -603,6 +622,150 @@ struct W8NativeVideoDecodeStepRuntime {
     output_attempted: bool,
     output_produced: bool,
     output_status: String,
+    reason: String,
+}
+
+#[derive(Default)]
+struct W8NativeVideoDecoderSessionState {
+    summary: Option<W8NativeVideoDecoderSessionSummary>,
+    decoder_config_bytes: Vec<u8>,
+}
+
+impl W8NativeVideoDecoderSessionState {
+    fn reset(&mut self) {
+        self.summary = None;
+        self.decoder_config_bytes.clear();
+    }
+
+    fn push_h264_access_unit(
+        &mut self,
+        summary: &NativeH264AnnexBSummary,
+    ) -> Option<W8NativeVideoDecoderSessionSummary> {
+        if self.summary.is_none() && !summary.has_decoder_config {
+            return None;
+        }
+
+        if self.summary.is_none() {
+            self.start(summary);
+        }
+
+        let should_process = self
+            .summary
+            .as_ref()
+            .map(|current| current.active)
+            .unwrap_or(false);
+        let process_result = if should_process {
+            Some(self.process(summary))
+        } else {
+            None
+        };
+
+        if let Some(current) = self.summary.as_mut() {
+            current.submitted_frames += 1;
+            if let Some(process_result) = process_result {
+                if process_result.input_accepted {
+                    current.accepted_input_frames += 1;
+                }
+                if process_result.output_produced {
+                    current.decoded_frames += 1;
+                }
+                current.last_status = process_result.status;
+                current.reason = process_result.reason;
+                current.ready = current.active && current.accepted_input_frames > 0;
+            }
+            Some(current.clone())
+        } else {
+            None
+        }
+    }
+
+    fn start(&mut self, summary: &NativeH264AnnexBSummary) {
+        let codec_string = summary.codec_string.clone();
+        self.decoder_config_bytes = summary.decoder_config_bytes.clone();
+        let mut started = W8NativeVideoDecoderSessionSummary {
+            mode: "media-foundation-h264-persistent-decoder-session".to_string(),
+            attempted: true,
+            active: false,
+            ready: false,
+            codec_string,
+            output_subtype: "pending".to_string(),
+            submitted_frames: 0,
+            accepted_input_frames: 0,
+            decoded_frames: 0,
+            last_status: "starting".to_string(),
+            reason: "starting persistent decoder session".to_string(),
+        };
+
+        #[cfg(windows)]
+        {
+            match unsafe { preflight_media_foundation_h264_decoder(&self.decoder_config_bytes) } {
+                Ok((input_type_set, output_subtypes))
+                    if input_type_set && !output_subtypes.is_empty() =>
+                {
+                    started.active = true;
+                    started.output_subtype = output_subtypes
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "unknown".to_string());
+                    started.last_status = "active".to_string();
+                    started.reason =
+                        "ready; persistent decoder session diagnostics active".to_string();
+                }
+                Ok((_, _)) => {
+                    started.last_status = "start-blocked".to_string();
+                    started.reason =
+                        "blocked: Media Foundation decoder output type is unavailable".to_string();
+                }
+                Err(error) => {
+                    started.last_status = "start-blocked".to_string();
+                    started.reason = format!("blocked: {error}");
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            started.last_status = "unsupported".to_string();
+            started.reason =
+                "blocked: Windows-only Media Foundation persistent decoder session".to_string();
+        }
+
+        self.summary = Some(started);
+    }
+
+    fn process(&mut self, summary: &NativeH264AnnexBSummary) -> W8NativeVideoDecoderSessionProcess {
+        #[cfg(windows)]
+        {
+            if self.decoder_config_bytes.is_empty() {
+                return W8NativeVideoDecoderSessionProcess {
+                    input_accepted: false,
+                    output_produced: false,
+                    status: "missing-config".to_string(),
+                    reason: "blocked: persistent decoder session has no decoder config".to_string(),
+                };
+            }
+            unsafe {
+                persistent_h264_decoder_session_step(
+                    &self.decoder_config_bytes,
+                    &summary.access_unit_bytes,
+                )
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            W8NativeVideoDecoderSessionProcess {
+                input_accepted: false,
+                output_produced: false,
+                status: "inactive".to_string(),
+                reason: "blocked: persistent decoder session is not active".to_string(),
+            }
+        }
+    }
+}
+
+struct W8NativeVideoDecoderSessionProcess {
+    input_accepted: bool,
+    output_produced: bool,
+    status: String,
     reason: String,
 }
 
@@ -960,6 +1123,27 @@ unsafe fn preflight_media_foundation_h264_decode_step_inner(
 }
 
 #[cfg(windows)]
+unsafe fn persistent_h264_decoder_session_step(
+    sequence_header: &[u8],
+    access_unit: &[u8],
+) -> W8NativeVideoDecoderSessionProcess {
+    match preflight_media_foundation_h264_decode_step(sequence_header, access_unit) {
+        Ok(runtime) => W8NativeVideoDecoderSessionProcess {
+            input_accepted: runtime.input_accepted,
+            output_produced: runtime.output_produced,
+            status: runtime.output_status,
+            reason: runtime.reason,
+        },
+        Err(error) => W8NativeVideoDecoderSessionProcess {
+            input_accepted: false,
+            output_produced: false,
+            status: "process-blocked".to_string(),
+            reason: format!("blocked: {error}"),
+        },
+    }
+}
+
+#[cfg(windows)]
 unsafe fn probe_media_foundation_h264_decoders() -> Result<(u32, u32), String> {
     MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|error| format!("MFStartup failed: {error}"))?;
 
@@ -1254,6 +1438,7 @@ pub fn start_w8_native_video_session(
     session.queue = NativeVideoQueue::new(config);
     session.decoder_init = None;
     session.decode_step = None;
+    session.decoder_session.reset();
     Ok(session.snapshot())
 }
 
@@ -1287,21 +1472,7 @@ pub fn push_w8_native_h264_annexb_frame(
     if !session.running {
         return Err("W8 视频会话尚未启动".to_string());
     }
-    let mut result = session.queue.push_h264_annexb(NativeH264AnnexBFrame {
-        id: request.id,
-        received_at_ms: request.received_at_ms,
-        data,
-    });
-    if result.summary.has_decoder_config && session.decoder_init.is_none() {
-        session.decoder_init = Some(preflight_h264_decoder_init(&result.summary));
-    }
-    if result.summary.has_decoder_config && result.summary.has_idr && session.decode_step.is_none()
-    {
-        session.decode_step = Some(preflight_h264_decode_step(&result.summary));
-    }
-    result.decoder_init = session.decoder_init.clone();
-    result.decode_step = session.decode_step.clone();
-    Ok(result)
+    session.push_h264_annexb_frame(request.id, request.received_at_ms, data)
 }
 
 #[tauri::command]
@@ -1324,10 +1495,38 @@ pub fn stop_w8_native_video_session(
         .lock()
         .map_err(|_| "W8 视频会话锁定失败".to_string())?;
     session.running = false;
+    session.decoder_session.reset();
     Ok(session.snapshot())
 }
 
 impl W8NativeVideoSession {
+    fn push_h264_annexb_frame(
+        &mut self,
+        id: u64,
+        received_at_ms: u64,
+        data: Vec<u8>,
+    ) -> Result<NativeH264AnnexBPushResult, String> {
+        if !self.running {
+            return Err("W8 视频会话尚未启动".to_string());
+        }
+        let mut result = self.queue.push_h264_annexb(NativeH264AnnexBFrame {
+            id,
+            received_at_ms,
+            data,
+        });
+        if result.summary.has_decoder_config && self.decoder_init.is_none() {
+            self.decoder_init = Some(preflight_h264_decoder_init(&result.summary));
+        }
+        if result.summary.has_decoder_config && result.summary.has_idr && self.decode_step.is_none()
+        {
+            self.decode_step = Some(preflight_h264_decode_step(&result.summary));
+        }
+        result.decoder_session = self.decoder_session.push_h264_access_unit(&result.summary);
+        result.decoder_init = self.decoder_init.clone();
+        result.decode_step = self.decode_step.clone();
+        Ok(result)
+    }
+
     fn snapshot(&self) -> W8NativeVideoSnapshot {
         W8NativeVideoSnapshot {
             running: self.running,
@@ -1502,6 +1701,42 @@ mod tests {
         }
         assert!(!step.output_status.trim().is_empty());
         assert!(!step.reason.trim().is_empty());
+    }
+
+    #[test]
+    fn persistent_decoder_session_tracks_input_across_h264_pushes() {
+        let mut session = W8NativeVideoSession::default();
+        session.running = true;
+        let first_payload =
+            annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce], &[0x65, 0x88]]);
+        let second_payload = annexb_payload(&[&[0x61, 0x99]]);
+
+        let first = session
+            .push_h264_annexb_frame(42, 1000, first_payload)
+            .expect("first H.264 frame should enter native session");
+        let second = session
+            .push_h264_annexb_frame(43, 1016, second_payload)
+            .expect("second H.264 frame should enter native session");
+
+        let first_session = first
+            .decoder_session
+            .expect("first keyframe should start decoder session diagnostics");
+        let second_session = second
+            .decoder_session
+            .expect("second frame should reuse decoder session diagnostics");
+
+        assert_eq!(
+            first_session.mode,
+            "media-foundation-h264-persistent-decoder-session"
+        );
+        assert_eq!(first_session.codec_string.as_deref(), Some("avc1.420029"));
+        assert_eq!(first_session.submitted_frames, 1);
+        assert_eq!(second_session.submitted_frames, 2);
+        assert!(second_session.accepted_input_frames <= second_session.submitted_frames);
+        assert!(second_session.decoded_frames <= second_session.accepted_input_frames);
+        assert!(!second_session.output_subtype.trim().is_empty());
+        assert!(!second_session.last_status.trim().is_empty());
+        assert!(!second_session.reason.trim().is_empty());
     }
 
     #[test]

@@ -5365,6 +5365,14 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoDecodeStepMode: state.w8NativeVideoDecodeStepMode,
         w8NativeVideoDecodeStepReason: state.w8NativeVideoDecodeStepReason,
         w8NativeVideoDecodeStepStatus: state.w8NativeVideoDecodeStepStatus,
+        w8NativeVideoDecoderSessionActive: state.w8NativeVideoDecoderSessionActive,
+        w8NativeVideoDecoderSessionMode: state.w8NativeVideoDecoderSessionMode,
+        w8NativeVideoDecoderSessionReason: state.w8NativeVideoDecoderSessionReason,
+        w8NativeVideoDecoderSessionStatus: state.w8NativeVideoDecoderSessionStatus,
+        w8NativeVideoDecoderSessionOutputSubtype: state.w8NativeVideoDecoderSessionOutputSubtype,
+        w8NativeVideoDecoderSessionSubmittedFrames: state.w8NativeVideoDecoderSessionSubmittedFrames,
+        w8NativeVideoDecoderSessionAcceptedInputFrames: state.w8NativeVideoDecoderSessionAcceptedInputFrames,
+        w8NativeVideoDecoderSessionDecodedFrames: state.w8NativeVideoDecoderSessionDecodedFrames,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5492,6 +5500,21 @@ async function verifyH264KeyFrameDetection(session) {
                           reason: "ready; ProcessInput accepted; ProcessOutput need-more-input",
                         }
                       : null,
+                    decoderSession: id >= 42
+                      ? {
+                          mode: "media-foundation-h264-persistent-decoder-session",
+                          attempted: true,
+                          active: true,
+                          ready: true,
+                          codecString: "avc1.420029",
+                          outputSubtype: "NV12",
+                          submittedFrames: id === 42 ? 1 : 2,
+                          acceptedInputFrames: id === 42 ? 1 : 2,
+                          decodedFrames: 0,
+                          lastStatus: "need-more-input",
+                          reason: "ready; persistent decoder session active",
+                        }
+                      : null,
                   };
                 }
                 if (command === "probe_w8_native_video_decoder") {
@@ -5570,6 +5593,14 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDecodeStepMode = "";
         state.w8NativeVideoDecodeStepReason = "";
         state.w8NativeVideoDecodeStepStatus = "";
+        state.w8NativeVideoDecoderSessionActive = false;
+        state.w8NativeVideoDecoderSessionMode = "";
+        state.w8NativeVideoDecoderSessionReason = "";
+        state.w8NativeVideoDecoderSessionStatus = "";
+        state.w8NativeVideoDecoderSessionOutputSubtype = "";
+        state.w8NativeVideoDecoderSessionSubmittedFrames = 0;
+        state.w8NativeVideoDecoderSessionAcceptedInputFrames = 0;
+        state.w8NativeVideoDecoderSessionDecodedFrames = 0;
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5625,6 +5656,14 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoDecodeStepMode ===
             "media-foundation-h264-sample-decode-step-preflight" &&
           state.hostDiagnostics?.w8NativeVideoDecodeStepStatus === "need-more-input" &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionActive === true &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionMode ===
+            "media-foundation-h264-persistent-decoder-session" &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionOutputSubtype === "NV12" &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionSubmittedFrames === 1 &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionAcceptedInputFrames === 1 &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionDecodedFrames === 0 &&
+          state.hostDiagnostics?.w8NativeVideoDecoderSessionStatus === "need-more-input" &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
           exportText.includes("原生解码配置 avc1.420029") &&
@@ -5633,7 +5672,12 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生解码初始化 ready") &&
           exportText.includes("原生输出 NV12/ARGB32") &&
           exportText.includes("原生解码步进 ready") &&
-          exportText.includes("原生步进状态 need-more-input");
+          exportText.includes("原生步进状态 need-more-input") &&
+          exportText.includes("原生解码会话 active") &&
+          exportText.includes("原生会话输出 NV12") &&
+          exportText.includes("原生会话输入 1") &&
+          exportText.includes("原生会话解码 0") &&
+          exportText.includes("原生会话状态 need-more-input");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5675,6 +5719,15 @@ async function verifyH264KeyFrameDetection(session) {
           w8NativeVideoDecodeStepReady: state.hostDiagnostics?.w8NativeVideoDecodeStepReady,
           w8NativeVideoDecodeStepMode: state.hostDiagnostics?.w8NativeVideoDecodeStepMode,
           w8NativeVideoDecodeStepStatus: state.hostDiagnostics?.w8NativeVideoDecodeStepStatus,
+          w8NativeVideoDecoderSessionActive: state.hostDiagnostics?.w8NativeVideoDecoderSessionActive,
+          w8NativeVideoDecoderSessionMode: state.hostDiagnostics?.w8NativeVideoDecoderSessionMode,
+          w8NativeVideoDecoderSessionOutputSubtype: state.hostDiagnostics?.w8NativeVideoDecoderSessionOutputSubtype,
+          w8NativeVideoDecoderSessionSubmittedFrames:
+            state.hostDiagnostics?.w8NativeVideoDecoderSessionSubmittedFrames,
+          w8NativeVideoDecoderSessionAcceptedInputFrames:
+            state.hostDiagnostics?.w8NativeVideoDecoderSessionAcceptedInputFrames,
+          w8NativeVideoDecoderSessionDecodedFrames: state.hostDiagnostics?.w8NativeVideoDecoderSessionDecodedFrames,
+          w8NativeVideoDecoderSessionStatus: state.hostDiagnostics?.w8NativeVideoDecoderSessionStatus,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5738,6 +5791,14 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDecodeStepMode = original.w8NativeVideoDecodeStepMode;
         state.w8NativeVideoDecodeStepReason = original.w8NativeVideoDecodeStepReason;
         state.w8NativeVideoDecodeStepStatus = original.w8NativeVideoDecodeStepStatus;
+        state.w8NativeVideoDecoderSessionActive = original.w8NativeVideoDecoderSessionActive;
+        state.w8NativeVideoDecoderSessionMode = original.w8NativeVideoDecoderSessionMode;
+        state.w8NativeVideoDecoderSessionReason = original.w8NativeVideoDecoderSessionReason;
+        state.w8NativeVideoDecoderSessionStatus = original.w8NativeVideoDecoderSessionStatus;
+        state.w8NativeVideoDecoderSessionOutputSubtype = original.w8NativeVideoDecoderSessionOutputSubtype;
+        state.w8NativeVideoDecoderSessionSubmittedFrames = original.w8NativeVideoDecoderSessionSubmittedFrames;
+        state.w8NativeVideoDecoderSessionAcceptedInputFrames = original.w8NativeVideoDecoderSessionAcceptedInputFrames;
+        state.w8NativeVideoDecoderSessionDecodedFrames = original.w8NativeVideoDecoderSessionDecodedFrames;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;

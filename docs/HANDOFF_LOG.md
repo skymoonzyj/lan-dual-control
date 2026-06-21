@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 MF H.264 persistent decoder session diagnostics
+开发端：Windows Codex
+本轮目标：继续只做视频侧，把上一轮一次性 sample decode step preflight 推进为可持续累计的 decoder session 诊断摘要。
+完成内容：`NativeH264AnnexBPushResult` 新增 `decoderSession`；`W8NativeVideoSession` 在首个 SPS/PPS decoder config 到达后维护会话摘要，后续 H.264 push 会累计 `submittedFrames`、`acceptedInputFrames`、`decodedFrames`、`outputSubtype`、`lastStatus` 和 reason。Windows 控制端诊断/复制导出新增 `原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...`、`原生会话状态 ...`。由于 Media Foundation 的 `IMFTransform` 不能安全放进 Tauri 全局状态跨线程保存，本轮没有强行 unsafe；会话里保存安全摘要和 decoder config，并用每帧 MF 步进结果提供诊断证据。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `push_h264_annexb_frame` / `decoderSession`，前端专项失败于导出缺 `原生解码会话 active` / `原生会话状态 need-more-input`；实现后验证通过：W8 Rust 专项 13 项通过、桌面端 `cargo test` 全量 6+23+doc 通过、`cargo check` 通过、前端 H.264 专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`git diff --check` 通过、冲突标记扫描无命中。
+遗留问题：本轮仍不是最终原生播放器；真正长期持有 MF decoder、decoded frame handoff 和 native surface latest-frame 绘制还没完成。
+下一步建议：把 decoder runtime 放到专用 native decoder/renderer 线程，避免 Tauri state 跨线程持有 `IMFTransform`；随后把 decoded frame 接到 D3D11/native surface，并让 WebCodecs/canvas 退为诊断备用。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续 native surface 真连验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 MF H.264 sample decode step preflight
 开发端：Windows Codex
 本轮目标：继续只做视频侧，把上一轮 decoder init preflight 往前推进到 MF sample / `ProcessInput` / `ProcessOutput` 步进预检。
