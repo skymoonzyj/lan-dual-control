@@ -50,6 +50,9 @@ Common examples:
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -Json
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -NoDiscover -HostName 127.0.0.1 -Port 9 -Json -RequireMacReady
+  Start-Windows-Desktop-Control-Mac.cmd
+  Build-Windows-Desktop-Control-Mac.cmd
+  node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary
 
 This wrapper calls node scripts/windows/check-windows-resume-status.mjs. It is
 read-only: it does not authenticate a WebSocket, does not ask for or print
@@ -123,6 +126,12 @@ not clear the call, authenticate a WebSocket, send a password, or send input/inj
 If MacManualUxAck= shows a ready command, use -SendManualUxAck to send that
 same secret-free Windows/User manual UX acknowledgement. If the Mac manual UX
 call is timed out, the Node report refuses to send and asks Mac to reconfirm.
+It also includes the W10 Windows desktop control entry for real W8/W10 video
+validation:
+Start-Windows-Desktop-Control-Mac.cmd
+Build-Windows-Desktop-Control-Mac.cmd
+node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary
+The Web/browser path remains diagnostic-only for this gate.
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 PowerShell equivalent:

@@ -34,6 +34,12 @@ const defaults = {
   sendManualUxAck: false,
 };
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
+const windowsDesktopStartCommand = "Start-Windows-Desktop-Control-Mac.cmd";
+const windowsDesktopBuildCommand = "Build-Windows-Desktop-Control-Mac.cmd";
+const windowsDesktopStatusCommand = "node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary";
+const windowsDesktopLongRunNext = "desktop-connect-copy-diagnostics";
+const windowsDesktopWebGate = "diagnostic-only";
+const windowsDesktopSafety = "no-password,no-auth,no-input-inject";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
 const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
 const w2VisibilityRetestEvidence = "visibility-return-h264-recovery";
@@ -71,6 +77,9 @@ Windows video encoder/WGC/WebCodecs support, dedicated Windows Graphics Capture
 preflight, and WGC H.264 raw-bgra vs NV12 compare commands.
 They also include browser-only WebCodecs H.264 commands and remind the team to
 copy the in-page diagnostics report first when UI symptoms need to be shared.
+They also include the W10 Windows desktop control entry so W8/W10 real video
+validation can use the Tauri desktop app as the main experience path while the
+Web/browser path stays diagnostic-only.
 Windows PowerShell and PowerShell 7 help coverage commands are included so .ps1
 entry points can be checked before posting a handoff.
 JSON and human output also include local alert-watcher start/status commands
@@ -214,6 +223,9 @@ Examples:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
+  Start-Windows-Desktop-Control-Mac.cmd
+  Build-Windows-Desktop-Control-Mac.cmd
+  node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   Run-WinClientRetest.cmd
   Run-WinClientRetest-And-Post.cmd
@@ -4623,6 +4635,26 @@ function makeMacManualUxAck(args, macManualUx) {
   };
 }
 
+function makeWindowsDesktopEntry() {
+  const summary = [
+    `start=${windowsDesktopStartCommand}`,
+    `build=${windowsDesktopBuildCommand}`,
+    `status=${windowsDesktopStatusCommand}`,
+    `next=${windowsDesktopLongRunNext}`,
+    `web=${windowsDesktopWebGate}`,
+    `safety=${windowsDesktopSafety}`,
+  ].join(" ");
+  return {
+    startCommand: windowsDesktopStartCommand,
+    buildCommand: windowsDesktopBuildCommand,
+    statusCommand: windowsDesktopStatusCommand,
+    next: windowsDesktopLongRunNext,
+    webGate: windowsDesktopWebGate,
+    safety: windowsDesktopSafety.split(","),
+    summary,
+  };
+}
+
 function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
@@ -4836,6 +4868,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
   return {
     server: args.server,
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
+    windowsDesktopEntry: makeWindowsDesktopEntry(),
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
     macHostReadinessCommand,
@@ -5310,6 +5343,7 @@ function makeBoardSummary(report) {
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
     ...(report.board.macMaxFpsSafeStart?.command ? [`MacMaxFpsSafeStart=${report.board.macMaxFpsSafeStart.command}.`] : []),
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
+    `WindowsDesktopEntry=${report.commands.windowsDesktopEntry.summary}.`,
     `WinClientRetestEntry=${report.commands.windowsClientRetestUserEntryCommand}; WinClientRetestAndPostEntry=${report.commands.windowsClientRetestAndPostUserEntryCommand}; WinClientRetest=${report.commands.windowsClientRetestBoardSummaryCommand}; WinClientRetestPs=${report.commands.windowsClientRetestBoardSummaryPowerShellCommand}.`,
     `W2VisibilityRetest=${report.w2VisibilityRetest.summary}.`,
     `W2W4BackgroundRetest=${report.w2w4BackgroundRetest.summary}.`,
@@ -5882,6 +5916,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
+  console.log(`  WindowsDesktopEntry=${report.commands.windowsDesktopEntry.summary}`);
   console.log(`  ${report.commands.windowsClientRetestUserEntryCommand}`);
   console.log(`  ${report.commands.windowsClientRetestAndPostUserEntryCommand}`);
   console.log(`  W2VisibilityRetest=${report.w2VisibilityRetest.summary}`);

@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W10 Windows 恢复总览桌面视频入口
+开发端：Windows Codex
+本轮目标：继续按视频侧主线推进，让开工第一屏直接显示桌面控制端主入口，减少误走 Web/browser 诊断路径。
+完成内容：`check-windows-resume-status` 新增结构化 `commands.windowsDesktopEntry`，JSON、普通输出和 `--boardSummary` 都会输出 `WindowsDesktopEntry=start=Start-Windows-Desktop-Control-Mac.cmd build=Build-Windows-Desktop-Control-Mac.cmd status=node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary next=desktop-connect-copy-diagnostics web=diagnostic-only safety=no-password,no-auth,no-input-inject`。这条状态只读提醒真实 W8/W10 视频验收应打开 Tauri 桌面端，连接后复制诊断或上板查看 `W8NativeVideo=`；Web/browser 仅诊断备用。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/check-windows-resume-status.ps1；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 help/JSON/boardSummary 缺少桌面入口；实现后跑 Node 与 PowerShell resume-status 回归、语法检查、help 检查、diff check 和冲突扫描。
+遗留问题：本轮不做带认证真实 Mac 长跑；仍需要用户在桌面 app 中本机输入 Mac 临时密码连接，并看 `W8NativeVideo=` 的 `presenting/presentGap/presentFrames/decoded/streamChange/deviceLost/errors`。
+下一步建议：真实视频长跑优先双击 `Start-Windows-Desktop-Control-Mac.cmd`；如果 fresh clone 没有 exe，先运行 `Build-Windows-Desktop-Control-Mac.cmd`。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实长跑需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W10 Windows 桌面控制端一键入口
 开发端：Windows Codex
 本轮目标：按通讯板 W10 要求，给用户一个 Windows 桌面控制端入口/可测包，不再把浏览器 Web 复测当最终体验门槛。

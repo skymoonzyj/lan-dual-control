@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W10 Windows 恢复总览桌面视频入口
+- Windows 恢复总览 `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 现在直接暴露 `WindowsDesktopEntry=`：`start=Start-Windows-Desktop-Control-Mac.cmd`、`build=Build-Windows-Desktop-Control-Mac.cmd`、`status=node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary`、`next=desktop-connect-copy-diagnostics`、`web=diagnostic-only`。这让每天开工第一屏就能看到真实 Windows 控 Mac 视频验收应走 Tauri 桌面端，而不是误把 Web/browser diagnostics 当 W8/W10 主 gate。本轮只做只读状态入口，不启动 app、不请求密码、不认证、不发 input/inject，不改 Mac/协议。
+
 ## 2026-06-21 W10 Windows 桌面控制端一键入口
 - Windows 主线继续围绕视频侧和真实桌面体验推进。根目录新增 `Start-Windows-Desktop-Control-Mac.cmd`，默认打开 Tauri Windows 桌面控制端 release exe；新增 `Build-Windows-Desktop-Control-Mac.cmd`，用于新机器或 fresh clone 先构建桌面 exe。只读助手 `start-windows-desktop-control-mac --dryRun --json|--boardSummary` 会输出 `WindowsDesktopEntry=`、release exe 路径、构建命令、`USABLE_NEXT=open_windows_desktop`、`LongRun=desktop-connect-copy-diagnostics` 和 `WebGate=diagnostic-only`。这一步不请求密码、不认证、不发送 input/inject；真实 Mac H.264 长跑仍由用户在桌面 app 里本机输入临时密码连接，然后复制诊断/上板查看 `W8NativeVideo=`。
 
