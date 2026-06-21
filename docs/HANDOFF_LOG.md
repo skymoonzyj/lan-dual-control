@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8NativeGate 转述 decoder 提交差值
+开发端：Windows Codex
+本轮目标：继续按通讯板 W8 最新口径，让 `W8NativeGate=` 也能直接显示 `pushed/submitted/decoderGap`，避免只看 gate 行时漏掉 decoder 负载判断。
+完成内容：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 的 `makeW8NativeGateSummary` 现在会从 `W8NativeVideo=` 解析 `pushed`、`submitted` 和 `decoderGap`，并在 gate 摘要中转述。若以后旧摘要只有 pushed/submitted 而没有显式 decoderGap，helper 会按 `pushed-submitted` 计算；如果输入没有这些字段，则保持旧 gate，不伪造证据。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于两个 helper 的 `W8NativeGate=` 缺 `pushed=192/submitted=190/decoderGap=2`；实现后 `node scripts/windows/test-post-w8-desktop-video-board.mjs` 与 `node scripts/windows/test-post-w2w3-retest-board.mjs` 均转绿。
+遗留问题：本轮仍未跑真实带密码桌面长跑，不宣称真实卡顿已修；只是让下一次 gate 行更容易读。
+下一步建议：真实长跑后先看 `W8NativeGate` 的原生主面与 `pushed/submitted/decoderGap`，再结合 `W8ArrivalBacklog arrivalSource` 判断继续查 Windows arrival/backlog 还是 native present。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在 Windows 本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 原生 decoder 提交差值上板
 开发端：Windows Codex
 本轮目标：继续只做视频侧，让上一轮“队列拒绝帧不进 decoder”的效果能在真实长跑摘要和通讯板里直接可见。

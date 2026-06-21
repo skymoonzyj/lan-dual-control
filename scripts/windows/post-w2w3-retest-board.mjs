@@ -193,6 +193,13 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
   const webBypass = numericField(fields, "webBypass");
   const presentFrames = numericField(fields, "presentFrames");
   const decoded = numericField(fields, "decoded");
+  const pushed = numericField(fields, "pushed");
+  const submitted = numericField(fields, "submitted");
+  const hasDecoderSubmissionEvidence =
+    fields.pushed !== undefined || fields.submitted !== undefined || fields.decoderGap !== undefined;
+  const decoderGap =
+    fields.decoderGap !== undefined ? numericField(fields, "decoderGap") :
+      pushed > 0 && submitted > 0 ? Math.max(0, pushed - submitted) : 0;
   const explicitPresentGap = fields.presentGap !== undefined ? numericField(fields, "presentGap") : null;
   const presentGap = explicitPresentGap ?? Math.max(0, decoded - presentFrames);
   const presentGapLimit = Math.max(2, Math.ceil(Math.max(decoded, presentFrames) * 0.02));
@@ -235,6 +242,7 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
     `presentGapLimit=${presentGapLimit}`,
     `presentFrames=${presentFrames}`,
     `decoded=${decoded}`,
+    ...(hasDecoderSubmissionEvidence ? [`pushed=${pushed}`, `submitted=${submitted}`, `decoderGap=${decoderGap}`] : []),
     `errors=${errors}`,
     `next=${next}`,
   ].join(" ");

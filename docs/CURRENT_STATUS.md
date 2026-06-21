@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8NativeGate 转述 decoder 提交差值
+- Windows 视频侧继续补强通讯板判读：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 生成的 `W8NativeGate=` 现在会从同一条 `W8NativeVideo=` 转述 `pushed/submitted/decoderGap`。这样下一次真实桌面长跑即使只盯 gate 行，也能看到 W8 原生队列推入帧、真正提交持久 MF/D3D11 decoder 帧，以及被低延迟预过滤挡在 decoder 前的差值。本轮只改 Windows 上板 helper 和测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
+
 ## 2026-06-22 W8 原生 decoder 提交差值上板
 - Windows 视频侧补强了 `W8NativeVideo=` 摘要：现在会输出 `submitted=<decoderSessionSubmittedFrames>` 和 `decoderGap=<pushed-submitted>`。`pushed` 表示 Windows 控制端把 H.264 access unit 推入 W8 原生队列的数量，`submitted` 表示真正提交给持久 MF/D3D11 decoder worker 的数量，`decoderGap` 表示被低延迟队列预过滤挡在 decoder 前的差值。这样上一轮 `accepted=false` 旧 delta 不进 decoder 的行为能在通讯板/复制诊断里直接看见；下一次真实长跑如果 `decoderGap` 增长但 `presentFrames/decoded` 仍健康，优先理解为预过滤在挡旧帧，而不是 decoder 线程无端吞旧帧。本轮只改 Windows 视频摘要和文档，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
 
