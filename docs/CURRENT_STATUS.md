@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 MF H.264 sample decode step preflight
+- Windows 主线继续推进 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会在首个带 SPS/PPS/IDR 的 Annex B H.264 帧到达时，除已有 decoder init preflight 外，再把完整 access unit 内部保留为 MF input sample，设置第一个可用输出 subtype，调用 `ProcessInput` 并尝试 `ProcessOutput`，然后把 `decodeStep` 摘要随 push 结果返回。Windows 控制端诊断/复制导出新增 `原生解码步进 ready|blocked` 和 `原生步进状态 need-more-input|decoded-output|stream-change|...`。这一步仍不是最终原生播放器：没有保持长生命周期 decoder，没有输出真实 native surface，也没有替换 WebCodecs/canvas；下一步才是持续 decoder 会话、decoded frame 计数/格式证据和 latest-frame native surface 绘制。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 MF H.264 decoder init preflight
 - Windows 主线继续推进 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会把首个带 SPS/PPS 的 Annex B H.264 帧里的参数集保留在 Rust 内部，用于 Media Foundation input type；`push_w8_native_h264_annexb_frame` 在会话内第一次看到 decoder config 时会尝试创建 H.264 decoder MFT、设置 1920x1080/60 的 H.264 输入类型并枚举输出 subtype，然后把 `decoderInit` 摘要随 push 结果返回。Windows 控制端诊断/复制导出新增 `原生解码初始化 ready|blocked` 和 `原生输出 NV12/ARGB32/...`。这一步仍不向 decoder 喂真实帧、不输出 decoded frame、不做原生 surface 绘制；下一步才是 ProcessInput/ProcessOutput 和 latest-frame native surface。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 

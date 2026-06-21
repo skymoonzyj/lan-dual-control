@@ -626,6 +626,10 @@ const state = {
   w8NativeVideoDecoderInitMode: "",
   w8NativeVideoDecoderInitReason: "",
   w8NativeVideoDecoderInitOutputSubtypes: "",
+  w8NativeVideoDecodeStepReady: false,
+  w8NativeVideoDecodeStepMode: "",
+  w8NativeVideoDecodeStepReason: "",
+  w8NativeVideoDecodeStepStatus: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -765,6 +769,10 @@ const state = {
     w8NativeVideoDecoderInitMode: "",
     w8NativeVideoDecoderInitReason: "",
     w8NativeVideoDecoderInitOutputSubtypes: "",
+    w8NativeVideoDecodeStepReady: false,
+    w8NativeVideoDecodeStepMode: "",
+    w8NativeVideoDecodeStepReason: "",
+    w8NativeVideoDecodeStepStatus: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1009,6 +1017,10 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDecoderInitMode: "",
     w8NativeVideoDecoderInitReason: "",
     w8NativeVideoDecoderInitOutputSubtypes: "",
+    w8NativeVideoDecodeStepReady: false,
+    w8NativeVideoDecodeStepMode: "",
+    w8NativeVideoDecodeStepReason: "",
+    w8NativeVideoDecodeStepStatus: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1371,6 +1383,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDecoderInitMode = String(diagnostics.w8NativeVideoDecoderInitMode || "").trim();
   const nativeDecoderInitReason = String(diagnostics.w8NativeVideoDecoderInitReason || "").trim();
   const nativeDecoderInitOutputSubtypes = String(diagnostics.w8NativeVideoDecoderInitOutputSubtypes || "").trim();
+  const nativeDecodeStepReady = Boolean(diagnostics.w8NativeVideoDecodeStepReady);
+  const nativeDecodeStepMode = String(diagnostics.w8NativeVideoDecodeStepMode || "").trim();
+  const nativeDecodeStepReason = String(diagnostics.w8NativeVideoDecodeStepReason || "").trim();
+  const nativeDecodeStepStatus = String(diagnostics.w8NativeVideoDecodeStepStatus || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1426,6 +1442,15 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeDecoderInitReason && !nativeDecoderInitReady) {
     parts.push(`原生初始化原因 ${nativeDecoderInitReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecodeStepMode) {
+    parts.push(`原生解码步进 ${nativeDecodeStepReady ? "ready" : "blocked"}`);
+  }
+  if (nativeDecodeStepStatus) {
+    parts.push(`原生步进状态 ${nativeDecodeStepStatus}`);
+  }
+  if (nativeDecodeStepReason && !nativeDecodeStepReady) {
+    parts.push(`原生步进原因 ${nativeDecodeStepReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) {
     parts.push(`原生原因 ${nativeLastReason}`);
@@ -5706,6 +5731,18 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoDecoderInitOutputSubtypes ||
       "",
   ).trim();
+  const nativeDecodeStepReady = Boolean(
+    state.w8NativeVideoDecodeStepReady || state.hostDiagnostics?.w8NativeVideoDecodeStepReady,
+  );
+  const nativeDecodeStepMode = String(
+    state.w8NativeVideoDecodeStepMode || state.hostDiagnostics?.w8NativeVideoDecodeStepMode || "",
+  ).trim();
+  const nativeDecodeStepReason = String(
+    state.w8NativeVideoDecodeStepReason || state.hostDiagnostics?.w8NativeVideoDecodeStepReason || "",
+  ).trim();
+  const nativeDecodeStepStatus = String(
+    state.w8NativeVideoDecodeStepStatus || state.hostDiagnostics?.w8NativeVideoDecodeStepStatus || "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5766,6 +5803,11 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeDecoderInitOutputSubtypes) parts.push(`原生输出 ${nativeDecoderInitOutputSubtypes}`);
   if (nativeDecoderInitReason && !nativeDecoderInitReady) {
     parts.push(`原生初始化原因 ${nativeDecoderInitReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecodeStepMode) parts.push(`原生解码步进 ${nativeDecodeStepReady ? "ready" : "blocked"}`);
+  if (nativeDecodeStepStatus) parts.push(`原生步进状态 ${nativeDecodeStepStatus}`);
+  if (nativeDecodeStepReason && !nativeDecodeStepReady) {
+    parts.push(`原生步进原因 ${nativeDecodeStepReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
   if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
@@ -7198,6 +7240,10 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDecoderInitMode = "";
   state.w8NativeVideoDecoderInitReason = "";
   state.w8NativeVideoDecoderInitOutputSubtypes = "";
+  state.w8NativeVideoDecodeStepReady = false;
+  state.w8NativeVideoDecodeStepMode = "";
+  state.w8NativeVideoDecodeStepReason = "";
+  state.w8NativeVideoDecodeStepStatus = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7250,6 +7296,15 @@ function updateW8NativeVideoDiagnostics({
       ? decoderInit.outputSubtypes.map((item) => String(item || "").trim()).filter(Boolean).join("/")
       : String(decoderInit.outputSubtypes || "").trim();
   }
+  const decodeStep = pushResult?.decodeStep || summary.decodeStep || null;
+  if (decodeStep && typeof decodeStep === "object") {
+    state.w8NativeVideoDecodeStepReady = decodeStep.ready === true;
+    state.w8NativeVideoDecodeStepMode = String(decodeStep.mode || "").trim();
+    state.w8NativeVideoDecodeStepReason = String(decodeStep.reason || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 160);
+    state.w8NativeVideoDecodeStepStatus = String(decodeStep.outputStatus || decodeStep.status || "").trim();
+  }
 
   updateHostDiagnostics({
     w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
@@ -7265,6 +7320,10 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDecoderInitMode: state.w8NativeVideoDecoderInitMode,
     w8NativeVideoDecoderInitReason: state.w8NativeVideoDecoderInitReason,
     w8NativeVideoDecoderInitOutputSubtypes: state.w8NativeVideoDecoderInitOutputSubtypes,
+    w8NativeVideoDecodeStepReady: state.w8NativeVideoDecodeStepReady,
+    w8NativeVideoDecodeStepMode: state.w8NativeVideoDecodeStepMode,
+    w8NativeVideoDecodeStepReason: state.w8NativeVideoDecodeStepReason,
+    w8NativeVideoDecodeStepStatus: state.w8NativeVideoDecodeStepStatus,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

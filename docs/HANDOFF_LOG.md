@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 MF H.264 sample decode step preflight
+开发端：Windows Codex
+本轮目标：继续只做视频侧，把上一轮 decoder init preflight 往前推进到 MF sample / `ProcessInput` / `ProcessOutput` 步进预检。
+完成内容：`NativeH264AnnexBSummary` 现在在 Rust 内部保留完整 Annex B access unit；`push_w8_native_h264_annexb_frame` 在会话内第一次看到带 SPS/PPS/IDR 的帧时会执行 `preflight_h264_decode_step`：创建 MF H.264 decoder MFT、设置输入类型和首个输出 subtype、把 access unit 包成 MF sample、调用 `ProcessInput` 并尝试 `ProcessOutput`，返回 `decodeStep` 摘要。Windows 控制端诊断/复制导出新增 `原生解码步进 ready|blocked` 和 `原生步进状态 ...`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `preflight_h264_decode_step`、前端专项缺 `原生解码步进 ready` / `原生步进状态 need-more-input`；实现后验证通过：W8 Rust 专项 12 项通过、`cargo test` 全量通过、`cargo check` 通过、完整 `test-windows-client-browser --diagnosticsOnly` 通过、H.264 专项通过、`node --check` 两项通过、`git diff --check` 通过、冲突标记扫描无命中。
+遗留问题：本轮仍不是完整原生播放器；decoder 仍是一次性 preflight，没有保持持续会话，也没有把 decoded frame 画到 native surface。
+下一步建议：继续 W8：把一次性 preflight 升级成持续 Media Foundation H.264 decoder 会话，记录 decoded frame 计数、输出 subtype 和 sample length，再接 D3D11/native surface latest-frame 绘制。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实持续 decoder/renderer 联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 MF H.264 decoder init preflight
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在上一轮 D3D11/MF decoder probe 后，让首个带 SPS/PPS 的 H.264 帧真正触发 Media Foundation decoder 初始化预检。
