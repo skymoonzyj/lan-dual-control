@@ -141,7 +141,7 @@ function parseTokens(text) {
 }
 
 function hasWindowsH264EvidenceTokens(tokens) {
-  return ["status", "decoded", "recv", "key", "sps", "pps", "idr", "needsKeyframe", "lastNal"].some((key) => tokens[key] !== undefined);
+  return ["status", "decoded", "recv", "key", "sps", "pps", "idr", "needsKeyframe", "lastNal", "canvas", "image"].some((key) => tokens[key] !== undefined);
 }
 
 function statusCodeFor(result) {
@@ -215,6 +215,41 @@ function h264TextSegment(text) {
   return nextTopLevel >= 0 ? segment.slice(0, nextTopLevel) : segment;
 }
 
+function firstNumberMatch(text, pattern) {
+  const match = pattern.exec(text);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function parseChineseWindowsEvidence(text) {
+  const tokens = {};
+  const recv = firstNumberMatch(text, /H\.264收到\s*(\d+)/i);
+  if (recv !== undefined) tokens.recv = recv;
+  const key = firstNumberMatch(text, /关键帧\s*(\d+)/);
+  if (key !== undefined) tokens.key = key;
+  const spsPpsIdr = /SPS\/PPS\/IDR\s*(\d+)\/(\d+)\/(\d+)/i.exec(text);
+  if (spsPpsIdr) {
+    tokens.sps = Number(spsPpsIdr[1]);
+    tokens.pps = Number(spsPpsIdr[2]);
+    tokens.idr = Number(spsPpsIdr[3]);
+  }
+  const lastNal = firstNumberMatch(text, /NAL\s*(\d+)/i);
+  if (lastNal !== undefined) tokens.lastNal = lastNal;
+  const queueMs = firstNumberMatch(text, /本机队列\s*(\d+)\s*ms/i);
+  if (queueMs !== undefined) tokens.queueMs = queueMs;
+  const staleDrops = firstNumberMatch(text, /本地过期丢帧\s*(\d+)/);
+  if (staleDrops !== undefined) tokens.staleDrops = staleDrops;
+  const decoded = firstNumberMatch(text, /已绘制\s*(\d+)/);
+  if (decoded !== undefined) tokens.decoded = decoded;
+  if (/视频等关键帧|等待\s*H\.264\s*关键帧/i.test(text)) {
+    tokens.needsKeyframe = "yes";
+  }
+  const reason = /原因\s*([A-Za-z0-9_-]+)/.exec(text);
+  if (reason) tokens.reason = reason[1];
+  return tokens;
+}
+
 function extractWindowsEvidence(entries) {
   const ordered = [...entries].reverse();
   for (const entry of ordered) {
@@ -226,10 +261,16 @@ function extractWindowsEvidence(entries) {
     const h264Segment = h264TextSegment(retestText);
     if (!h264Segment) continue;
     const h264Tokens = parseTokens(h264Segment);
-    if (!hasWindowsH264EvidenceTokens(h264Tokens)) continue;
+    const chineseTokens = parseChineseWindowsEvidence(retestText);
+    const mergedEvidenceTokens = {
+      ...h264Tokens,
+      ...chineseTokens,
+    };
+    if (!hasWindowsH264EvidenceTokens(mergedEvidenceTokens)) continue;
     const tokens = {
       ...parseTokens(retestText),
       ...h264Tokens,
+      ...chineseTokens,
     };
     const evidence = {
       status: tokens.status ? String(tokens.status) : undefined,
@@ -327,6 +368,8 @@ function hasMacKeyEvidence(mac) {
 function hasDecodedSurface(windows) {
   if (!windows) return false;
   if (toNumber(windows.decoded, 0) > 0) return true;
+  if (String(windows.canvas || "").toLowerCase() === "true") return true;
+  if (String(windows.image || "").toLowerCase() === "true") return true;
   const surface = String(windows.surface || "").toLowerCase();
   return Boolean(surface && surface !== "none" && surface !== "false" && surface !== "0");
 }

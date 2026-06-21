@@ -245,6 +245,27 @@ async function checkStdinDryRunDoesNotPost(args) {
   });
 }
 
+async function checkAcceptsFullRetestLogWithSafeInputMentions(args) {
+  await withFakeBoard(async (board) => {
+    const fullLog = [
+      "[OK] Input status text: 输入事件：0（真实控制 / 已注入） / 输入事件：0（安全日志，不会真正控制）",
+      "Windows client diagnostics: passed; no input/inject was performed.",
+      `${retestLine}; fps=实收 38.7 FPS; audio=声音：接收中. No password was printed or sent to Agent Link Board; no input/inject was performed.`,
+      "unsafe marker words above are diagnostics, not board payload.",
+    ].join("\n");
+    const result = await run(["--server", board.url, "--text", fullLog, "--json"], args);
+    assert(result.exitCode === 0, `full retest log dry-run should ignore safe non-payload input mentions\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "full retest log dry-run JSON");
+    assert(payload.ok === true, "full retest log dry-run should be ok");
+    assert(payload.retestLine.startsWith(retestLine), "full retest log should extract only the W2W3Retest line");
+    assertNotIncludes(payload.retestLine, "No password", "full retest log extracted line");
+    assertNotIncludes(payload.retestLine, "input/inject", "full retest log extracted line");
+    assert(board.messages.length === 0, `full retest log dry-run should not post messages, got ${board.messages.length}`);
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "full retest log dry-run");
+    console.log("[OK] W2/W3 retest board-post helper accepts full logs with safe input/inject diagnostics");
+  });
+}
+
 async function checkSendRetestAndDiagnosis(args) {
   await withFakeBoard(async (board) => {
     const result = await run(["--server", board.url, "--text", `prefix\n${retestLine}\n`, "--send", "--json"], args);
@@ -310,6 +331,7 @@ async function main() {
   await checkHelp(args);
   await checkDryRunDoesNotPost(args);
   await checkStdinDryRunDoesNotPost(args);
+  await checkAcceptsFullRetestLogWithSafeInputMentions(args);
   await checkSendRetestAndDiagnosis(args);
   await checkRejectsUnsafeInput(args);
   await checkRejectsMissingRetest(args);

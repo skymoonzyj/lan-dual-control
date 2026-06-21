@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,7 +193,7 @@ async function preparePassword(args) {
 }
 
 function promptHidden(label) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (!process.stdin.isTTY) {
     return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
   }
 
@@ -7081,7 +7081,7 @@ async function verifyReconnectControls(session) {
           quickSummaryLiveAudio:
             exportText.includes("- 现场声音：") &&
             exportText.includes("队列 120 ms") &&
-            exportText.includes("缓冲 80/70/450/120 ms") &&
+            exportText.includes("缓冲 60/50/450/120 ms") &&
             exportText.includes("接收 24") &&
             exportText.includes("重同步 1") &&
             exportText.includes("原因 queue-overflow-trim-future") &&
@@ -7267,7 +7267,7 @@ async function verifyReconnectControls(session) {
           liveAudioStatus:
             exportText.includes("- 现场声音统计：") &&
             exportText.includes("队列 120 ms") &&
-            exportText.includes("缓冲 80/70/450/120 ms") &&
+            exportText.includes("缓冲 60/50/450/120 ms") &&
             exportText.includes("重同步 1") &&
             exportText.includes("原因 queue-overflow-trim-future"),
           audioLevel: exportText.includes("- 声音电平：37%"),
@@ -8252,6 +8252,18 @@ async function verifyLiveStatusLayoutStability(session) {
   }
   return result;
 }
+
+function verifyPromptPasswordAllowsPipedStdout() {
+  const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const match = source.match(/function promptHidden\(label\) \{[\s\S]*?\n\}/);
+  if (!match) {
+    throw new Error("promptHidden source block not found");
+  }
+  if (/process\.stdout\.isTTY/.test(match[0])) {
+    throw new Error("promptHidden must allow piped stdout so retest-and-post can capture W2W3Retest while stdin stays interactive");
+  }
+  return { ok: true };
+}
 async function run() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -8260,6 +8272,7 @@ async function run() {
 
   const args = parseArgs(process.argv);
   activeOutputArgs = args;
+  verifyPromptPasswordAllowsPipedStdout();
   const summary = {
     status: "running",
     mode: args.diagnosticsOnly ? "diagnostics" : "connect",

@@ -347,6 +347,26 @@ async function checkDecodedSurfaceReady(args) {
   console.log("[OK] W2 H.264 board diagnosis recognizes decoded H.264 surfaces");
 }
 
+async function checkChineseRetestSurfaceEvidence(args) {
+  const windowsText = "W2W3Retest=video=实收 38.7 FPS · 请求 60 Hz · 协商 60 Hz · 视频等关键帧 · 平均间隔 26 ms · 最大间隔 41 ms · 远端媒体平均间隔 17 ms · 远端媒体最大间隔 21 ms · 帧 10 · H.264收到 10 · 关键帧 1 · SPS/PPS/IDR 1/1/1 · NAL 1 · 本机队列 121 ms · 解码延迟..., audio=队列 40 ms · 缓冲 60/50/450/120 ms · 接收 4 · 播放 4 · 丢 0 · 平均间隔 38 ms · 最大间隔 45 ms · 远端音频平均间隔 20 ms · 远端音频最大间隔 20 ms · 补缓冲 2 · 追实时 1 · 原因 queue-latency-trim-future, h264=canvas=true image=false, h264Errors=0; fps=实收 38.7 FPS · 协商 60 Hz · 视频等关键帧 · 最大间隔 41 ms · 本机队列 121 ms · 本地过期丢帧 5; audio=声音：接收中 · 0% · 80% · 等待播放; surface=canvas=1920x1080,image=off; h264Errors=0.";
+  await withFakeBoard(makeState({ windowsText, macText: macNalEvidence }), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `Chinese W2W3Retest with canvas should exit 0\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "Chinese W2W3Retest JSON");
+    assert(payload.status === "ready", `expected ready for canvas=true evidence: ${result.stdout}`);
+    assert(payload.reason === "decoded-surface-seen", `expected decoded-surface-seen: ${result.stdout}`);
+    assert(payload.windows?.recv === 10, `expected Chinese H.264 received count: ${result.stdout}`);
+    assert(payload.windows?.key === 1, `expected Chinese key count: ${result.stdout}`);
+    assert(payload.windows?.sps === 1 && payload.windows?.pps === 1 && payload.windows?.idr === 1, `expected Chinese SPS/PPS/IDR counts: ${result.stdout}`);
+    assert(payload.windows?.canvas === "true" && payload.windows?.image === "false", `expected Chinese canvas/image evidence: ${result.stdout}`);
+    assert(payload.windows?.queueMs === 121, `expected Chinese local queue ms: ${result.stdout}`);
+    assert(payload.windows?.needsKeyframe === "yes", `expected Chinese keyframe wait evidence: ${result.stdout}`);
+    assert(payload.windows?.staleDrops === 5, `expected Chinese stale drops evidence: ${result.stdout}`);
+    assertSecretSafe(result.stdout + result.stderr, "Chinese W2W3Retest JSON");
+  });
+  console.log("[OK] W2 H.264 board diagnosis recognizes Chinese live retest surface evidence");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -362,6 +382,7 @@ async function main() {
   await checkMacParamExplanationIgnored(args);
   await checkPlaceholderNalEvidenceIgnored(args);
   await checkDecodedSurfaceReady(args);
+  await checkChineseRetestSurfaceEvidence(args);
   console.log("[OK] W2 H.264 board diagnosis regression passed");
 }
 

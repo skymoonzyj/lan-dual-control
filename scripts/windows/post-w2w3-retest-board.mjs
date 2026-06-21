@@ -109,13 +109,20 @@ function findUnsafeMarker(text) {
   return checks.find((check) => check.pattern.test(text))?.label || "";
 }
 
-function extractRetestLine(input) {
-  const unsafeMarker = findUnsafeMarker(input);
-  if (unsafeMarker) throw new Error("unsafe input rejected before posting");
+function normalizeRetestLine(line) {
+  return String(line || "")
+    .replace(/\s+No password was printed or sent to Agent Link Board; no input\/inject was performed\.?.*$/i, "")
+    .replace(/\s+Source=Run-WinClientRetest\/local-hidden-password-prompt\..*$/i, "")
+    .replace(/\s+Safety=no-password-on-board,no-input-inject\..*$/i, "")
+    .trim();
+}
 
-  const matches = [...String(input).matchAll(/W2W3Retest=[^\r\n]+/g)].map((match) => match[0].trim());
+function extractRetestLine(input) {
+  const matches = [...String(input).matchAll(/W2W3Retest=[^\r\n]+/g)].map((match) => normalizeRetestLine(match[0]));
   const retestLine = matches.at(-1) || "";
   if (!retestLine) throw new Error("No W2W3Retest= line found in input.");
+  const unsafeMarker = findUnsafeMarker(retestLine);
+  if (unsafeMarker) throw new Error("unsafe input rejected before posting");
   if (!/\bvideo=/.test(retestLine) || !/\bh264=/.test(retestLine)) {
     throw new Error("W2W3Retest= line is missing required video= or h264= evidence.");
   }
