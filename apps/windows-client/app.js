@@ -175,6 +175,9 @@ const videoStreamStallThresholdMs = 2500;
 const videoStreamStatusPollMs = 1000;
 const h264MaximumQueuedFrames = 8;
 const h264MaximumQueueAgeMs = 450;
+const h264LiveBacklogMinimumAgeMs = 90;
+const h264LiveBacklogFrameWindow = 6;
+const h264LiveBacklogKeyFrameRequestCooldownMs = 700;
 const h264FirstSurfaceQueueGraceMs = 2200;
 const h264VisibilityRecoveryMinimumHiddenMs = 250;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -594,6 +597,8 @@ const state = {
   h264RecoveryInFlight: false,
   h264RecoveryKeyFrameReceivedAt: 0,
   h264RecoveryFrameDrawnAt: 0,
+  h264LiveBacklogRecoveryLastRequestedAt: 0,
+  h264LiveBacklogRecoveryCount: 0,
   h264DecodedFrames: 0,
   h264ReceivedFrames: 0,
   h264ReceivedKeyFrames: 0,
@@ -3230,6 +3235,8 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264RecoveryInFlight = false;
   state.h264RecoveryKeyFrameReceivedAt = 0;
   state.h264RecoveryFrameDrawnAt = 0;
+  state.h264LiveBacklogRecoveryLastRequestedAt = 0;
+  state.h264LiveBacklogRecoveryCount = 0;
   state.h264DecodedFrames = 0;
   if (resetFallback) {
     resetH264ReceiveEvidence();
@@ -5332,6 +5339,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     Number(state.videoDecoderQueueMs || state.hostDiagnostics?.videoDecoderQueueMs) || 0,
   );
   const decoderLatencyMs = Number(state.h264DecoderLatencyMs || state.hostDiagnostics?.h264DecoderLatencyMs) || 0;
+  const liveBacklogRecoveryCount = Number(state.h264LiveBacklogRecoveryCount || state.hostDiagnostics?.h264LiveBacklogRecoveryCount) || 0;
   const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
   const skippedDeltaFrames = Number(state.h264SkippedDeltaFrames || state.hostDiagnostics?.h264SkippedDeltaFrames) || 0;
   const visibilityRecoveryCount = Number(state.h264VisibilityRecoveryCount || state.hostDiagnostics?.h264VisibilityRecoveryCount) || 0;
@@ -5395,6 +5403,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (decoderQueue > 0) parts.push(`解码队列 ${decoderQueue}`);
   if (decoderQueueMs > 0) parts.push(`本机队列 ${Math.round(decoderQueueMs)} ms`);
   if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
+  if (liveBacklogRecoveryCount > 0) parts.push(`追实时请求 ${liveBacklogRecoveryCount} 次`);
   if (staleDrops > 0) parts.push(`本地过期丢帧 ${staleDrops}`);
   if (skippedDeltaFrames > 0) parts.push(`跳过 delta ${skippedDeltaFrames}`);
   if (visibilityRecoveryCount > 0) parts.push(`可见恢复 ${visibilityRecoveryCount} 次`);
@@ -9129,6 +9138,8 @@ function updateH264DecoderDiagnostics(extra = {}) {
     h264VisibilityRecoveryLastAt: state.h264VisibilityRecoveryLastAt,
     h264KeyFrameWaitMs: getH264KeyFrameWaitMs(),
     h264KeyFrameRecoveryLastRequestedAt: state.h264KeyFrameRecoveryLastRequestedAt,
+    h264LiveBacklogRecoveryCount: state.h264LiveBacklogRecoveryCount,
+    h264LiveBacklogRecoveryLastRequestedAt: state.h264LiveBacklogRecoveryLastRequestedAt,
     h264FallbackReason: state.h264FallbackReason,
     h264FallbackRecoveryCount: state.h264FallbackRecoveryCount,
     h264FallbackLastReason: state.h264FallbackLastReason,
@@ -9355,6 +9366,71 @@ function getH264LatencyResyncReason({ isKeyFrame = false } = {}) {
   return "queue-overflow-wait-keyframe";
 }
 
+function getH264LiveBacklogTargetAgeMs() {
+  const fps = Math.max(
+    1,
+    Math.min(
+      240,
+      Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value) || 30,
+    ),
+  );
+  return Math.max(h264LiveBacklogMinimumAgeMs, Math.round((1000 / fps) * h264LiveBacklogFrameWindow));
+}
+
+function getH264LiveBacklogStatus(now = performance.now()) {
+  const metrics = getH264DecoderQueueMetrics(now);
+  const targetAgeMs = getH264LiveBacklogTargetAgeMs();
+  const decodedFrames = Number(state.h264DecodedFrames) || 0;
+  const status = String(state.h264DecoderStatus || "").toLowerCase();
+  const liveBacklog =
+    decodedFrames > 0 &&
+    !state.h264FallbackActive &&
+    status !== "waiting-keyframe" &&
+    status !== "recovering" &&
+    metrics.queueLength > 1 &&
+    metrics.oldestAgeMs >= targetAgeMs;
+  return { metrics, targetAgeMs, liveBacklog };
+}
+
+function maybeRequestH264LiveBacklogKeyFrame({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
+  const timestamp = Number(now);
+  const { metrics, targetAgeMs, liveBacklog } = getH264LiveBacklogStatus(timestamp);
+  if (!liveBacklog) {
+    return { dropFrame: false, requested: false, queueMs: metrics.oldestAgeMs, targetAgeMs };
+  }
+
+  if (isKeyFrame) {
+    return resyncH264DecoderQueueForLatency({
+      isKeyFrame: true,
+      frameId,
+      now: timestamp,
+      reason: "live-backlog-keyframe-jump-live",
+    });
+  }
+
+  if (state.h264DecoderNeedsKeyFrame === true) {
+    return { dropFrame: false, requested: false, queueMs: metrics.oldestAgeMs, targetAgeMs };
+  }
+  const lastRequestedAt = Number(state.h264LiveBacklogRecoveryLastRequestedAt) || 0;
+  if (lastRequestedAt > 0 && timestamp - lastRequestedAt < h264LiveBacklogKeyFrameRequestCooldownMs) {
+    return { dropFrame: false, requested: false, queueMs: metrics.oldestAgeMs, targetAgeMs };
+  }
+  if (!state.connected || typeof state.client?.sendDisplaySettings !== "function") {
+    return { dropFrame: false, requested: false, queueMs: metrics.oldestAgeMs, targetAgeMs };
+  }
+
+  state.h264LiveBacklogRecoveryLastRequestedAt = timestamp;
+  state.h264LiveBacklogRecoveryCount = (Number(state.h264LiveBacklogRecoveryCount) || 0) + 1;
+  state.videoDecoderQueueMs = metrics.oldestAgeMs;
+  state.videoLastDropReason = "live-backlog-keyframe-request";
+  updateH264DecoderDiagnostics();
+  state.client.sendDisplaySettings(buildDisplaySettingsMessage());
+  addLog(
+    "H.264 追实时",
+    `本机队列 ${metrics.oldestAgeMs} ms 超过实时窗口 ${targetAgeMs} ms，已请求关键帧 #${frameId || "--"}`,
+  );
+  return { dropFrame: false, requested: true, queueMs: metrics.oldestAgeMs, targetAgeMs };
+}
 function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
   if (!shouldResyncH264DecoderQueue(now)) {
     return { dropFrame: false, droppedFrames: 0, queueMs: getH264DecoderQueueMetrics(now).oldestAgeMs };
@@ -9788,6 +9864,13 @@ async function renderH264VideoFrame(frame) {
       elements.remoteStatusText.textContent = `H.264 本机队列过高，已丢旧帧并等待关键帧 #${frame.frameId ?? state.videoFrames}`;
       return;
     }
+    const liveBacklogRequest = maybeRequestH264LiveBacklogKeyFrame({
+      isKeyFrame,
+      frameId: frame.frameId ?? state.videoFrames,
+    });
+    if (liveBacklogRequest.requested) {
+      elements.remoteStatusText.textContent = `H.264 本机队列 ${liveBacklogRequest.queueMs} ms，已请求关键帧追实时`;
+    }
     if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
       const waitNow = performance.now();
       startH264KeyFrameWait(waitNow);
@@ -9880,6 +9963,8 @@ async function ensureH264Decoder(frame, { currentFrameIsKeyFrame = false } = {})
   const previousRecoveryKeyFrameReceivedAt = state.h264RecoveryKeyFrameReceivedAt;
   const previousRecoveryFrameDrawnAt = state.h264RecoveryFrameDrawnAt;
   const previousRecoveryQueueGraceUntil = state.h264RecoveryQueueGraceUntil;
+  const previousLiveBacklogRecoveryLastRequestedAt = state.h264LiveBacklogRecoveryLastRequestedAt;
+  const previousLiveBacklogRecoveryCount = state.h264LiveBacklogRecoveryCount;
   resetVideoDecoder();
   state.h264DecoderErrorCount = previousErrorCount;
   state.h264DecoderWarned = previousWarned;
@@ -9891,6 +9976,8 @@ async function ensureH264Decoder(frame, { currentFrameIsKeyFrame = false } = {})
   state.h264RecoveryKeyFrameReceivedAt = previousRecoveryKeyFrameReceivedAt;
   state.h264RecoveryFrameDrawnAt = previousRecoveryFrameDrawnAt;
   state.h264RecoveryQueueGraceUntil = previousRecoveryQueueGraceUntil;
+  state.h264LiveBacklogRecoveryLastRequestedAt = previousLiveBacklogRecoveryLastRequestedAt;
+  state.h264LiveBacklogRecoveryCount = previousLiveBacklogRecoveryCount;
   state.h264DecoderStatus = "configuring";
   state.h264DecoderKey = decoderKey;
   state.h264DecoderCodec = `${decoderKey}:checking`;

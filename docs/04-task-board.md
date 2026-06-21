@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W2 Windows H.264 live backlog 追实时：d923e7f 后证据显示 Mac 远端媒体 17/21ms 正常，Windows 控制端现在在 H.264 本机队列超过实时窗口但未到硬重同步阈值时先请求关键帧，关键帧到达后清旧队列追实时；诊断新增 `追实时请求`、`live-backlog-keyframe-request`、`live-backlog-keyframe-jump-live`。页面回归先红于缺 helper，再绿于 diagnosticsOnly。不改协议、不认证、不请求密码、不发 input/inject。
 - [x] W2/W6 远端媒体间隔与本地到达间隔分离诊断：cc8da2aa 后真实复测显示 keyframe loop 未复发但视频仍约 `40.9/60 FPS`、原始 arrival 约 `930ms`，音频 dropped=0 但仍有 stutter/refill。Windows 控制端现在记录视频/音频帧 `timestampUs` 与本地收到时间，复制诊断分别输出 `远端媒体平均/最大间隔`、`远端音频平均/最大间隔` 和原有本地平均/最大间隔，用于区分 Mac 产帧/发送节奏、Windows 接收/浏览器后台节流和系统时钟偏差。页面回归先红于缺少远端间隔字段，再绿于 diagnosticsOnly。不改协议、不认证、不请求密码、不发 input/inject。
 - [x] W2 H.264 恢复关键帧追实时诊断：recovery-in-flight 期间关键帧到达且旧解码队列过高时，原有丢旧队列/改用当前关键帧路径会标记 `recovery-keyframe-jump-live`，让真实复测能区分“没收到关键帧”“收到未绘制”和“已跳 live 但仍低 FPS/arrival”。页面回归新增 `jumpLive=yes`。不改协议、不认证、不请求密码、不发 input/inject。
 - [x] W4 音频恢复后 underrun 稳定缓冲：可见性恢复 / snap-live 后短窗口内若再次 underrun，使用约 `180ms` 恢复缓冲并记录 `queue-underrun-recovery-prebuffer`，避免刚切回窗口时声音继续断续。`--onlyAudioBufferGuards` 覆盖 `recoveryUnderrunRebuildBuffer`。不改系统声音输出、不认证、不请求密码、不发 input/inject。

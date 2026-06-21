@@ -198,3 +198,7 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 - clipboard_file_offer
 - clipboard_file_chunk
 - clipboard_file_complete
+
+### W2 H.264 live backlog 诊断
+
+当远端媒体间隔正常但 Windows 本地 H.264 队列开始滞后时，控制端会先保持当前解码不断流并请求新的 H.264 关键帧；诊断里会显示 `追实时请求 <n> 次` 与 `live-backlog-keyframe-request`。如果关键帧到达时本机队列仍超过实时窗口，会清旧队列并从该关键帧追实时，原因标记 `live-backlog-keyframe-jump-live`。

@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 Windows H.264 live backlog 追实时
+开发端：Windows Codex
+本轮目标：响应 d923e7f 后真实复测 NOT-PASS 且 Mac 远端媒体 17/21ms 正常，把 W2 修复集中到 Windows 本地 H.264/WebCodecs 队列追实时。
+完成内容：Windows 控制端新增 H.264 live backlog 策略：已出画面后本机队列超过约 6 帧实时窗口但未到硬重同步阈值时，先不断流请求 H.264 关键帧，诊断显示 `追实时请求 <n> 次` 与 `live-backlog-keyframe-request`；关键帧到达且队列仍滞后时，清旧队列并从当前关键帧追实时，原因标记 `live-backlog-keyframe-jump-live`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5210 --debugPort 9350 --timeoutMs 45000` 先失败于缺少 live backlog helper；绿灯后 `--clientPort 5212 --debugPort 9352` 通过。另跑 `node --check apps/windows-client/app.js` 和 `node --check scripts/windows/test-windows-client-browser.mjs`。
+遗留问题：仍需用户真实最小化/切 app/切回复测确认约 33fps/117ms queue 是否改善；若远端媒体间隔仍正常但 Windows 本地帧率低，继续查浏览器后台 WebSocket handler / WebCodecs output / canvas 调度。
+下一步建议：双方拉最新；Mac 端保持 host 在线即可；下一次复测只看 W2 新字段和本机队列/绘制结果，不要回旧 Mac 产帧或 keyframe wait-loop。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；需要用户下一轮真实复测。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2/W6 远端媒体间隔与本地到达间隔分离诊断
 开发端：Windows Codex
 本轮目标：响应 cc8da2aa 后真实复测 NOT-PASS，把下一轮定位从 keyframe wait-loop 转向采集/发送/到达节奏证据。

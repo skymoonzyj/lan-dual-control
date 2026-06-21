@@ -4,6 +4,10 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 Windows H.264 live backlog 追实时
+- d923e7f 后真实复测显示 Mac 远端媒体间隔 `17/21ms`，Mac 产帧/发送节奏正常；本轮 Windows 控制端新增 H.264 live backlog 追实时策略：当已出画面后本机解码队列超过约 6 帧/实时窗口但未到硬重同步阈值时，先不断流请求 H.264 关键帧并在诊断显示 `追实时请求 <n> 次` / `live-backlog-keyframe-request`；关键帧到达且队列仍旧滞后时，清旧队列并从该关键帧追实时，原因标记 `live-backlog-keyframe-jump-live`。不改协议，不碰 Mac host，不改音频路径。
+
+
 ## 2026-06-21 W2/W6 远端媒体间隔与本地到达间隔分离诊断
 - cc8da2aa 后通讯板真实复测结果为 NOT-PASS：H.264 canvas / decode / keyframe loop 均未复发，`localQueue=30-37ms`、`decode=38ms`，但仍只有约 `40.9/60 FPS`，原始 `arrival≈930ms`；音频 dropped=0 但仍有 `queue=109ms`、`maxInterval=274ms`、`audioStutter=1`、`refill=3`。因此本轮不再继续围绕 `needsKeyframe` / `queue-overflow-wait-keyframe` 打补丁，而是把诊断改成能区分“Mac 远端媒体时间间隔”和“Windows 本地收到间隔”。Windows 控制端现在会用视频/音频帧的 `timestampUs` 或远端时间戳记录 `videoFrameTimingSamples` / `audioFrameTimingSamples`，复制诊断的“现场视频”会显示 `远端媒体平均间隔` / `远端媒体最大间隔`，“现场声音”会显示 `远端音频平均间隔` / `远端音频最大间隔`。下一次真实复测时，如果远端媒体间隔接近 16-17ms 但本地平均/最大间隔偏大，优先查 Windows 接收/浏览器后台/绘制节流；如果远端媒体间隔本身偏大，优先让 Mac 端查 ScreenCaptureKit / PCM 产帧或发送节奏。该改动不改协议、不改 Mac host、不请求密码、不认证、不发 input/inject。
 ## 2026-06-21 W2 H.264 恢复关键帧追实时诊断
