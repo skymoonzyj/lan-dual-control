@@ -152,6 +152,7 @@ async function checkDryRunJsonReady(args) {
   assertIncludes(payload.boardSummary, "WindowsDesktopEntry=status=ready", "dryRun JSON boardSummary");
   assertIncludes(payload.boardSummary, "USABLE_NEXT=open_windows_desktop", "dryRun JSON boardSummary");
   assertIncludes(payload.boardSummary, "WebGate=diagnostic-only", "dryRun JSON boardSummary");
+  assertIncludes(payload.boardSummary, "W8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary", "dryRun JSON boardSummary");
   assertIncludes(payload.boardSummary, "Safety=no-password,no-auth,no-input-inject", "dryRun JSON boardSummary");
   const combined = JSON.stringify(payload);
   assertNotIncludes(combined, "demo-password", "dryRun JSON");
@@ -180,6 +181,7 @@ async function checkBoardSummary(args) {
   assertIncludes(result.stdout, "USABLE_NEXT=open_windows_desktop", "boardSummary");
   assertIncludes(result.stdout, "Start=Start-Windows-Desktop-Control-Mac.cmd", "boardSummary");
   assertIncludes(result.stdout, "LongRun=desktop-connect-copy-diagnostics", "boardSummary");
+  assertIncludes(result.stdout, "W8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary", "boardSummary");
   assertIncludes(result.stdout, "WebGate=diagnostic-only", "boardSummary");
   assertNotIncludes(result.stdout, "demo-password", "boardSummary");
   assertNotIncludes(result.stdout, "password=", "boardSummary");

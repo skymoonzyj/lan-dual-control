@@ -12,6 +12,7 @@ const defaultExePath = resolve(
   "src-tauri/target/release/lan-dual-control-windows.exe",
 );
 const defaultTimeoutMs = 120000;
+const w8DesktopVideoPostCommand = "node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary";
 
 function printHelp() {
   console.log(`Usage:
@@ -127,6 +128,7 @@ function makeReport(args, extra = {}) {
     openApp: Boolean(args.openApp && !args.dryRun && status === "ready"),
     dryRun: Boolean(args.dryRun),
     longRun: "desktop-connect-copy-diagnostics",
+    w8DesktopVideoPostCommand,
     webGate: "diagnostic-only",
     safety: {
       requestPassword: false,
@@ -148,6 +150,7 @@ function makeBoardSummary(report) {
     `BuildAction=${report.buildAction}`,
     `Build=${report.buildCommand}`,
     `LongRun=${report.longRun}`,
+    `W8Post=${report.w8DesktopVideoPostCommand}`,
     `WebGate=${report.webGate}`,
     "Safety=no-password,no-auth,no-input-inject",
   ].join(" ");
@@ -167,6 +170,7 @@ function printReport(report, args) {
   console.log(`Start: ${report.startCommand}`);
   console.log(`Build: ${report.buildCommand}`);
   console.log("Long run: open the desktop app, connect to the Mac host, then copy diagnostics for W8NativeVideo.");
+  console.log(`Post W8 diagnostics: ${report.w8DesktopVideoPostCommand}`);
 }
 
 function writeBuildOutputToStderr(result) {

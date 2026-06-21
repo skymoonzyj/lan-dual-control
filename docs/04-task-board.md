@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 桌面复制诊断直发通讯板：新增 `post-w8-desktop-video-board.mjs` 和专项回归，支持 `--text/--file/--stdin` 读取 `W8NativeVideo=`，默认 dry-run，`--send` 时只发 `W8NativeVideo=` 与自动生成的 `W8NativeGate=`。桌面入口 dry-run 和 Windows 恢复总览同步显示 `W8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`，方便真实桌面长跑复制诊断后直接上板。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8 Windows gate 旁路证据判读：`W8NativeGate=` 现在输出 `canvasRole/webDecode/webBypass`，并且原生主面 Present 证据成立后仍要求 `canvasRole=diagnostic-fallback` 且 `webDecode=native-main-surface` 或 `webBypass>0`，才进入 `arrival-backlog-next`；缺旁路证据时输出 `status=web-bypass-next next=verify-webcodecs-bypass`，不生成 `W8ArrivalBacklog=`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。
 - [x] W8 Windows arrival/backlog 间隔来源上板：`W8ArrivalBacklog=` 现在输出 `localAvgMs/localMaxMs/remoteMediaAvgMs/remoteMediaMaxMs/arrivalSource`，可区分 `windows-arrival-gap`、`windows-queue-backlog`、`remote-media-gap`、`stable` 和 `unknown`。远端媒体最大间隔正常但本地最大间隔高时，next 仍指向 `investigate-windows-arrival-backlog`；远端媒体最大间隔本身异常时，next 会转为 `inspect-remote-media-cadence`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。
 - [x] W8 Windows 原生主面旁路证据上板：`W8NativeVideo=` 现在在 `ui=html-shell mainSurface=... canvasRole=diagnostic-fallback` 后追加 `webDecode=<status>`、`webBypass=<n>`、`webBypassReason=<reason>` 和 `webBypassFrame=<id>`，并把摘要压缩上限放宽到 560，避免新增旁路字段截断 `streamChange/deviceLost/errors`。`post-w2w3-retest-board` 回归样例同步保留这些字段；下次真实长跑可直接判断 WebCodecs 是否已旁路为诊断备用。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。

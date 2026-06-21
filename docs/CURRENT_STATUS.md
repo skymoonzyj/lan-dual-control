@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8 桌面复制诊断直发通讯板
+- Windows 视频侧补了一个更直接的 W8 桌面长跑上板入口：`node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`。用户在 Windows 桌面控制端连接 Mac 后，点击复制诊断，把包含 `W8NativeVideo=` 的文本通过管道或文件交给该脚本即可；脚本会只提取最后一条 `W8NativeVideo=`，生成 `W8NativeGate=`，默认 dry-run，显式 `--send` 才发 Agent Link Board。它不认证、不请求或打印密码、不发送 input/inject，也会拒绝 password/token/input_event 等危险标记。`start-windows-desktop-control-mac --dryRun --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 现在都会露出同一条 `W8Post=` 命令，避免真实桌面长跑还要绕旧 W2/W3 helper。
+
 ## 2026-06-22 W8 Windows gate 旁路证据判读
 - Windows 视频侧继续收口 `W8NativeGate=`：gate 现在会把 `canvasRole/webDecode/webBypass` 一起输出，并且只有 `mainSurface=native-hwnd`、`presenting=yes`、`presentGap` 可接受、`errors=0` 且 `canvasRole=diagnostic-fallback`、`webDecode=native-main-surface` 或 `webBypass>0` 时，才进入 `status=arrival-backlog-next`。如果原生主面已经 Present 但缺少 WebCodecs 旁路证据，gate 会输出 `status=web-bypass-next next=verify-webcodecs-bypass`，并且不会生成 `W8ArrivalBacklog=`，避免把 Web 备用解码队列误当成主画面 arrival/backlog blocker。本轮只改 Windows 上板判读和测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
 

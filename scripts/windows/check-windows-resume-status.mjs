@@ -38,6 +38,7 @@ const windowsDesktopStartCommand = "Start-Windows-Desktop-Control-Mac.cmd";
 const windowsDesktopBuildCommand = "Build-Windows-Desktop-Control-Mac.cmd";
 const windowsDesktopStatusCommand = "node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary";
 const windowsDesktopLongRunNext = "desktop-connect-copy-diagnostics";
+const windowsDesktopW8PostCommand = "node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary";
 const windowsDesktopWebGate = "diagnostic-only";
 const windowsDesktopSafety = "no-password,no-auth,no-input-inject";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
@@ -4641,6 +4642,7 @@ function makeWindowsDesktopEntry() {
     `build=${windowsDesktopBuildCommand}`,
     `status=${windowsDesktopStatusCommand}`,
     `next=${windowsDesktopLongRunNext}`,
+    `w8Post=${windowsDesktopW8PostCommand}`,
     `web=${windowsDesktopWebGate}`,
     `safety=${windowsDesktopSafety}`,
   ].join(" ");
@@ -4648,6 +4650,7 @@ function makeWindowsDesktopEntry() {
     startCommand: windowsDesktopStartCommand,
     buildCommand: windowsDesktopBuildCommand,
     statusCommand: windowsDesktopStatusCommand,
+    w8PostCommand: windowsDesktopW8PostCommand,
     next: windowsDesktopLongRunNext,
     webGate: windowsDesktopWebGate,
     safety: windowsDesktopSafety.split(","),

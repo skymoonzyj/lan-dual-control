@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 桌面复制诊断直发通讯板
+开发端：Windows Codex
+本轮目标：按通讯板 W8 最新口径，补一个不依赖旧 W2/W3 复测行的桌面诊断上板入口，让真实 Windows 桌面端长跑后可直接粘贴 `W8NativeVideo=` 并生成 `W8NativeGate=`。
+完成内容：新增 `post-w8-desktop-video-board.mjs`，支持 `--text/--file/--stdin` 读取最后一条 `W8NativeVideo=`，默认 dry-run，显式 `--send` 才向 Agent Link Board 发布 `W8NativeVideo=` + `W8NativeGate=`；缺 WebCodecs 旁路证据时输出 `web-bypass-next`，证据足够时输出 `arrival-backlog-next`。`start-windows-desktop-control-mac --dryRun --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 同步显示 `W8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；scripts/windows/start-windows-desktop-control-mac.mjs；scripts/windows/test-windows-desktop-control-mac-entry.mjs；scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `post-w8-desktop-video-board.mjs` 不存在；实现后 `node scripts/windows/test-post-w8-desktop-video-board.mjs` 转绿。随后先让桌面入口测试红于缺 `W8Post=`，实现后 `node scripts/windows/test-windows-desktop-control-mac-entry.mjs` 转绿；恢复总览 Node/PowerShell 测试先红于缺 `w8PostCommand`，实现后两组转绿。
+遗留问题：这只是无密上板入口，不跑真实带密码桌面长跑，也不宣称真实卡顿已修。`W8NativeGate=arrival-backlog-next` 之后仍需要结合完整复测或复制诊断继续看本机队列、arrivalSource 和真实体感。
+下一步建议：用户完成真实桌面长跑后复制诊断，若只有 `W8NativeVideo=`，直接走 `post-w8-desktop-video-board --stdin --send --boardSummary` 上板；若已有旧 `W2W3Retest=` + `W8NativeVideo=` 组合输出，仍可走 `post-w2w3-retest-board` 生成 `W8ArrivalBacklog=`。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 Windows gate 旁路证据判读
 开发端：Windows Codex
 本轮目标：按通讯板最新 W8 验收口径，把 WebCodecs/canvas 旁路证据纳入 `W8NativeGate=`，避免原生主面 Present 成立但 Web 备用队列仍混入时直接进入 arrival/backlog。
