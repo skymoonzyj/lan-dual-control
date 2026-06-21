@@ -1,6 +1,28 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Mutex};
+#[cfg(windows)]
+use std::{ffi::c_void, ptr};
+
+#[cfg(windows)]
+use windows::Win32::Foundation::HMODULE;
+#[cfg(windows)]
+use windows::Win32::Graphics::Direct3D::{
+    D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
+};
+#[cfg(windows)]
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+    D3D11_SDK_VERSION,
+};
+#[cfg(windows)]
+use windows::Win32::Media::MediaFoundation::{
+    MFMediaType_Video, MFShutdown, MFStartup, MFTEnumEx, MFVideoFormat_H264, MFSTARTUP_LITE,
+    MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG, MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_LOCALMFT,
+    MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT, MFT_REGISTER_TYPE_INFO, MF_VERSION,
+};
+#[cfg(windows)]
+use windows::Win32::System::Com::CoTaskMemFree;
 
 const DEFAULT_TARGET_QUEUE_MS: u64 = 80;
 const DEFAULT_HARD_MAX_QUEUE_MS: u64 = 180;
@@ -377,6 +399,7 @@ pub struct W8NativeH264AnnexBFrameRequest {
 pub struct W8NativeVideoPlan {
     pub stage: String,
     pub renderer_mode: String,
+    pub decoder_probe_mode: String,
     pub protocol_change_required: bool,
     pub video_queue_target_ms: u64,
     pub video_queue_hard_max_ms: u64,
@@ -395,22 +418,214 @@ pub struct W8NativeVideoSnapshot {
     pub queue: NativeVideoQueueSnapshot,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct W8NativeVideoDecoderProbe {
+    pub mode: String,
+    pub d3d11_available: bool,
+    pub d3d_feature_level: Option<String>,
+    pub media_foundation_available: bool,
+    pub h264_decoder_available: bool,
+    pub h264_decoder_count: u32,
+    pub h264_hardware_decoder_available: bool,
+    pub h264_hardware_decoder_count: u32,
+    pub ready: bool,
+    pub reason: String,
+}
+
+impl W8NativeVideoDecoderProbe {
+    fn summarize(
+        d3d_feature_level: Result<String, String>,
+        h264_decoder_counts: Result<(u32, u32), String>,
+    ) -> Self {
+        let d3d_feature_level_text = d3d_feature_level.ok();
+        let d3d11_available = d3d_feature_level_text.is_some();
+        let (media_foundation_available, h264_decoder_count, h264_hardware_decoder_count, mf_error) =
+            match h264_decoder_counts {
+                Ok((decoder_count, hardware_decoder_count)) => {
+                    (true, decoder_count, hardware_decoder_count, None)
+                }
+                Err(error) => (false, 0, 0, Some(error)),
+            };
+        let h264_decoder_available = h264_decoder_count > 0;
+        let h264_hardware_decoder_available = h264_hardware_decoder_count > 0;
+        let ready = d3d11_available && media_foundation_available && h264_decoder_available;
+        let reason = if ready {
+            let hardware = if h264_hardware_decoder_available {
+                format!("hardware={h264_hardware_decoder_count}")
+            } else {
+                "hardware=0".to_string()
+            };
+            format!(
+                "ready; d3d11={}; h264Decoders={h264_decoder_count}; {hardware}",
+                d3d_feature_level_text.as_deref().unwrap_or("unknown")
+            )
+        } else if !d3d11_available {
+            "blocked: D3D11 hardware device is unavailable".to_string()
+        } else if !media_foundation_available {
+            format!(
+                "blocked: Media Foundation probe failed: {}",
+                mf_error.unwrap_or_else(|| "unknown".to_string())
+            )
+        } else {
+            "blocked: no Media Foundation H.264 decoder MFT found".to_string()
+        };
+
+        Self {
+            mode: "media-foundation-h264-d3d11-probe".to_string(),
+            d3d11_available,
+            d3d_feature_level: d3d_feature_level_text,
+            media_foundation_available,
+            h264_decoder_available,
+            h264_decoder_count,
+            h264_hardware_decoder_available,
+            h264_hardware_decoder_count,
+            ready,
+            reason,
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn unsupported() -> Self {
+        Self {
+            mode: "media-foundation-h264-d3d11-probe".to_string(),
+            d3d11_available: false,
+            d3d_feature_level: None,
+            media_foundation_available: false,
+            h264_decoder_available: false,
+            h264_decoder_count: 0,
+            h264_hardware_decoder_available: false,
+            h264_hardware_decoder_count: 0,
+            ready: false,
+            reason: "blocked: Windows-only native decoder probe".to_string(),
+        }
+    }
+}
+
 #[tauri::command]
 pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
     let config = NativeVideoQueueConfig::default();
     W8NativeVideoPlan {
         stage: "w8-video-mvp".to_string(),
         renderer_mode: "native-video-queue-mvp".to_string(),
+        decoder_probe_mode: "media-foundation-h264-d3d11-probe".to_string(),
         protocol_change_required: false,
         video_queue_target_ms: config.target_queue_ms,
         video_queue_hard_max_ms: config.hard_max_queue_ms,
         max_frames: config.max_frames,
         next_native_steps: vec![
-            "feed SPS/PPS decoder config into Windows Media Foundation or D3D11 decoder"
-                .to_string(),
+            "initialize Media Foundation H.264 decoder from native SPS/PPS config".to_string(),
             "render decoded frames to a native surface with latest-frame policy".to_string(),
         ],
     }
+}
+
+#[tauri::command]
+pub fn probe_w8_native_video_decoder() -> W8NativeVideoDecoderProbe {
+    probe_w8_native_video_decoder_runtime()
+}
+
+pub fn probe_w8_native_video_decoder_runtime() -> W8NativeVideoDecoderProbe {
+    #[cfg(windows)]
+    {
+        W8NativeVideoDecoderProbe::summarize(unsafe { probe_d3d11_feature_level() }, unsafe {
+            probe_media_foundation_h264_decoders()
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        W8NativeVideoDecoderProbe::unsupported()
+    }
+}
+
+#[cfg(windows)]
+unsafe fn probe_d3d11_feature_level() -> Result<String, String> {
+    let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+    let mut device: Option<ID3D11Device> = None;
+    let mut context: Option<ID3D11DeviceContext> = None;
+    let mut selected = D3D_FEATURE_LEVEL_11_0;
+    D3D11CreateDevice(
+        None,
+        D3D_DRIVER_TYPE_HARDWARE,
+        HMODULE::default(),
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        Some(&feature_levels),
+        D3D11_SDK_VERSION,
+        Some(&mut device),
+        Some(&mut selected),
+        Some(&mut context),
+    )
+    .map_err(|error| format!("D3D11CreateDevice failed: {error}"))?;
+    device.ok_or_else(|| "D3D11CreateDevice returned no device".to_string())?;
+    context.ok_or_else(|| "D3D11CreateDevice returned no immediate context".to_string())?;
+    Ok(format_d3d_feature_level(selected))
+}
+
+#[cfg(windows)]
+fn format_d3d_feature_level(level: D3D_FEATURE_LEVEL) -> String {
+    if level == D3D_FEATURE_LEVEL_11_1 {
+        "11_1".to_string()
+    } else if level == D3D_FEATURE_LEVEL_11_0 {
+        "11_0".to_string()
+    } else {
+        format!("{:?}", level)
+    }
+}
+
+#[cfg(windows)]
+unsafe fn probe_media_foundation_h264_decoders() -> Result<(u32, u32), String> {
+    MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|error| format!("MFStartup failed: {error}"))?;
+
+    let all_flags = MFT_ENUM_FLAG_SYNCMFT
+        | MFT_ENUM_FLAG_LOCALMFT
+        | MFT_ENUM_FLAG_HARDWARE
+        | MFT_ENUM_FLAG_SORTANDFILTER;
+    let decoder_count = count_h264_decoder_mfts(all_flags);
+    let hardware_count =
+        count_h264_decoder_mfts(MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER);
+    let shutdown = MFShutdown();
+
+    let decoder_count = decoder_count?;
+    let hardware_count = hardware_count?;
+    shutdown.map_err(|error| format!("MFShutdown failed: {error}"))?;
+    Ok((decoder_count, hardware_count))
+}
+
+#[cfg(windows)]
+unsafe fn count_h264_decoder_mfts(flags: MFT_ENUM_FLAG) -> Result<u32, String> {
+    let input_type = MFT_REGISTER_TYPE_INFO {
+        guidMajorType: MFMediaType_Video,
+        guidSubtype: MFVideoFormat_H264,
+    };
+    let mut activates = ptr::null_mut();
+    let mut count = 0_u32;
+    MFTEnumEx(
+        MFT_CATEGORY_VIDEO_DECODER,
+        flags,
+        Some(&input_type),
+        None,
+        &mut activates,
+        &mut count,
+    )
+    .map_err(|error| format!("MFTEnumEx H.264 decoder failed: {error}"))?;
+
+    release_mft_activates(activates, count);
+    Ok(count)
+}
+
+#[cfg(windows)]
+unsafe fn release_mft_activates(
+    activates: *mut Option<windows::Win32::Media::MediaFoundation::IMFActivate>,
+    count: u32,
+) {
+    if activates.is_null() {
+        return;
+    }
+    let slice = std::slice::from_raw_parts_mut(activates, count as usize);
+    for activate in slice {
+        *activate = None;
+    }
+    CoTaskMemFree(Some(activates as *const c_void));
 }
 
 #[tauri::command]
@@ -568,6 +783,31 @@ mod tests {
         assert_eq!(summary.pps_count, 0);
         assert!(!summary.has_decoder_config);
         assert_eq!(summary.codec_string, None);
+    }
+
+    #[test]
+    fn plan_advertises_media_foundation_d3d11_probe() {
+        let plan = get_w8_native_video_plan();
+
+        assert_eq!(plan.decoder_probe_mode, "media-foundation-h264-d3d11-probe");
+        assert!(plan
+            .next_native_steps
+            .iter()
+            .any(|step| step.contains("initialize Media Foundation H.264 decoder")));
+    }
+
+    #[test]
+    fn native_decoder_probe_reports_runtime_capabilities() {
+        let probe = probe_w8_native_video_decoder();
+
+        assert_eq!(probe.mode, "media-foundation-h264-d3d11-probe");
+        assert!(!probe.reason.trim().is_empty());
+        assert_eq!(
+            probe.ready,
+            probe.d3d11_available
+                && probe.media_foundation_available
+                && probe.h264_decoder_available
+        );
     }
 
     #[test]

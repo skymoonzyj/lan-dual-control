@@ -617,6 +617,11 @@ const state = {
   w8NativeVideoDroppedFrames: 0,
   w8NativeVideoHasDecoderConfig: false,
   w8NativeVideoCodecString: "",
+  w8NativeVideoDecoderProbePromise: null,
+  w8NativeVideoDecoderReady: false,
+  w8NativeVideoDecoderMode: "",
+  w8NativeVideoDecoderReason: "",
+  w8NativeVideoD3dFeatureLevel: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -748,6 +753,10 @@ const state = {
     w8NativeVideoDroppedFrames: 0,
     w8NativeVideoHasDecoderConfig: false,
     w8NativeVideoCodecString: "",
+    w8NativeVideoDecoderReady: false,
+    w8NativeVideoDecoderMode: "",
+    w8NativeVideoDecoderReason: "",
+    w8NativeVideoD3dFeatureLevel: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -984,6 +993,10 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDroppedFrames: 0,
     w8NativeVideoHasDecoderConfig: false,
     w8NativeVideoCodecString: "",
+    w8NativeVideoDecoderReady: false,
+    w8NativeVideoDecoderMode: "",
+    w8NativeVideoDecoderReason: "",
+    w8NativeVideoD3dFeatureLevel: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1338,6 +1351,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDroppedFrames = Number(diagnostics.w8NativeVideoDroppedFrames);
   const nativeHasDecoderConfig = Boolean(diagnostics.w8NativeVideoHasDecoderConfig);
   const nativeCodecString = String(diagnostics.w8NativeVideoCodecString || "").trim();
+  const nativeDecoderReady = Boolean(diagnostics.w8NativeVideoDecoderReady);
+  const nativeDecoderMode = String(diagnostics.w8NativeVideoDecoderMode || "").trim();
+  const nativeDecoderReason = String(diagnostics.w8NativeVideoDecoderReason || "").trim();
+  const nativeD3dFeatureLevel = String(diagnostics.w8NativeVideoD3dFeatureLevel || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1375,6 +1392,15 @@ function formatVideoDecoderDiagnostics(diagnostics) {
     parts.push(`原生解码配置 ${nativeCodecString}`);
   } else if (nativeHasDecoderConfig) {
     parts.push("原生解码配置已到达");
+  }
+  if (nativeDecoderMode) {
+    parts.push(`原生解码器 ${nativeDecoderReady ? "ready" : "blocked"}`);
+  }
+  if (nativeD3dFeatureLevel) {
+    parts.push(`D3D11 ${nativeD3dFeatureLevel}`);
+  }
+  if (nativeDecoderReason && !nativeDecoderReady) {
+    parts.push(`原生解码器原因 ${nativeDecoderReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) {
     parts.push(`原生原因 ${nativeLastReason}`);
@@ -5629,6 +5655,18 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeCodecString = String(
     state.w8NativeVideoCodecString || state.hostDiagnostics?.w8NativeVideoCodecString || "",
   ).trim();
+  const nativeDecoderReady = Boolean(
+    state.w8NativeVideoDecoderReady || state.hostDiagnostics?.w8NativeVideoDecoderReady,
+  );
+  const nativeDecoderMode = String(
+    state.w8NativeVideoDecoderMode || state.hostDiagnostics?.w8NativeVideoDecoderMode || "",
+  ).trim();
+  const nativeDecoderReason = String(
+    state.w8NativeVideoDecoderReason || state.hostDiagnostics?.w8NativeVideoDecoderReason || "",
+  ).trim();
+  const nativeD3dFeatureLevel = String(
+    state.w8NativeVideoD3dFeatureLevel || state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel || "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5680,6 +5718,11 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeDroppedFrames > 0) parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
   if (nativeCodecString) parts.push(`原生解码配置 ${nativeCodecString}`);
   else if (nativeHasDecoderConfig) parts.push("原生解码配置已到达");
+  if (nativeDecoderMode) parts.push(`原生解码器 ${nativeDecoderReady ? "ready" : "blocked"}`);
+  if (nativeD3dFeatureLevel) parts.push(`D3D11 ${nativeD3dFeatureLevel}`);
+  if (nativeDecoderReason && !nativeDecoderReady) {
+    parts.push(`原生解码器原因 ${nativeDecoderReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
   if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
   if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
   if (nativeLastError) parts.push(`原生最近错误 ${nativeLastError.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -7102,6 +7145,11 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDroppedFrames = 0;
   state.w8NativeVideoHasDecoderConfig = false;
   state.w8NativeVideoCodecString = "";
+  state.w8NativeVideoDecoderProbePromise = null;
+  state.w8NativeVideoDecoderReady = false;
+  state.w8NativeVideoDecoderMode = "";
+  state.w8NativeVideoDecoderReason = "";
+  state.w8NativeVideoD3dFeatureLevel = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7150,10 +7198,58 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
     w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
     w8NativeVideoCodecString: state.w8NativeVideoCodecString,
+    w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
+    w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
+    w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,
+    w8NativeVideoD3dFeatureLevel: state.w8NativeVideoD3dFeatureLevel,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,
   });
+}
+
+function updateW8NativeVideoDecoderProbeDiagnostics(probe) {
+  if (!probe || typeof probe !== "object") return;
+  state.w8NativeVideoDecoderReady = probe.ready === true;
+  state.w8NativeVideoDecoderMode = String(probe.mode || "").trim();
+  state.w8NativeVideoDecoderReason = String(probe.reason || "").replace(/\s+/g, " ").slice(0, 160);
+  state.w8NativeVideoD3dFeatureLevel = String(probe.d3dFeatureLevel || "").trim();
+  updateHostDiagnostics({
+    w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
+    w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
+    w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,
+    w8NativeVideoD3dFeatureLevel: state.w8NativeVideoD3dFeatureLevel,
+  });
+}
+
+function probeW8NativeVideoDecoder() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return Promise.resolve(null);
+  if (state.w8NativeVideoDecoderProbePromise) {
+    return state.w8NativeVideoDecoderProbePromise;
+  }
+  state.w8NativeVideoDecoderProbePromise = invoke("probe_w8_native_video_decoder")
+    .then((probe) => {
+      updateW8NativeVideoDecoderProbeDiagnostics(probe);
+      return probe;
+    })
+    .catch((error) => {
+      state.w8NativeVideoDecoderReady = false;
+      state.w8NativeVideoDecoderMode = "media-foundation-h264-d3d11-probe";
+      state.w8NativeVideoDecoderReason = String(error?.message || error || "probe failed")
+        .replace(/\s+/g, " ")
+        .slice(0, 160);
+      updateHostDiagnostics({
+        w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
+        w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
+        w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,
+      });
+      return null;
+    })
+    .finally(() => {
+      state.w8NativeVideoDecoderProbePromise = null;
+    });
+  return state.w8NativeVideoDecoderProbePromise;
 }
 
 async function ensureW8NativeVideoSession() {
@@ -7182,6 +7278,7 @@ async function ensureW8NativeVideoSession() {
       state.w8NativeVideoLastSnapshot = snapshot || null;
       state.w8NativeVideoLastError = "";
       updateW8NativeVideoDiagnostics({ snapshot });
+      void probeW8NativeVideoDecoder();
       return snapshot || null;
     })
     .catch((error) => {

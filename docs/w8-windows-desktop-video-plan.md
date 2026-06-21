@@ -13,8 +13,10 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 本轮完成的是视频侧第一块可运行基础，不改协议、不改 Mac host：
 
 - 新增 Rust 原生视频队列模块 `w8_native_video`。
-- 新增 Tauri 命令：读取 W8 视频计划、启动/停止 W8 视频会话、推入视频帧元数据、推入 base64 Annex B H.264 payload、读取队列快照。
+- 新增 Tauri 命令：读取 W8 视频计划、探测本机原生解码能力、启动/停止 W8 视频会话、推入视频帧元数据、推入 base64 Annex B H.264 payload、读取队列快照。
 - 原生侧可以识别 Annex B H.264 NAL type，并提取 SPS、PPS、IDR、关键帧状态。
+- 原生侧可以从 SPS/PPS 提取 decoder config 摘要，例如 `avc1.420029`。
+- 原生侧可以只读探测 D3D11 hardware device 与 Media Foundation H.264 decoder MFT，并返回 `ready/reason/D3D11 feature level/decoder counts`。
 - 原生队列默认目标约 80ms，硬上限约 180ms。
 - 队列积压且已有较新关键帧时，直接丢旧跳到最新关键帧。
 - 队列积压但没有可用新关键帧时，清掉 delta 积压并进入等待关键帧状态，避免继续攒旧帧。
@@ -25,25 +27,28 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 Tauri 原生命令：
 
 - `get_w8_native_video_plan`
+- `probe_w8_native_video_decoder`
 - `start_w8_native_video_session`
 - `push_w8_native_video_frame`
 - `push_w8_native_h264_annexb_frame`
 - `get_w8_native_video_snapshot`
 - `stop_w8_native_video_session`
 
-这些接口后续会被桌面控制端的媒体接收层调用。当前可以用 Rust 单元测试验证 Annex B NAL 识别和低延迟策略，不需要真实密码、不认证、不发 input/inject。
+这些接口后续会被桌面控制端的媒体接收层调用。当前可以用 Rust 单元测试验证 Annex B NAL 识别、decoder config 提取、MF/D3D11 能力探测和低延迟策略，不需要真实密码、不认证、不发 input/inject。
 
 ## 下一步
 
 1. 把 Mac host H.264 WebSocket 接收路径从浏览器渲染循环迁到桌面原生侧或独立 native renderer，并调用 `push_w8_native_h264_annexb_frame`。
-2. 接入 Windows Media Foundation 或 D3D11 解码器，把 Annex B H.264 解码为可绘制帧。
-3. 用 native surface 做最新帧绘制策略，窗口最小化 / 后台 / 切 app 时仍按实时队列丢旧保新。
-4. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
-5. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。
+2. 用已提取的 SPS/PPS decoder config 和 `probe_w8_native_video_decoder` 结果初始化 Windows Media Foundation H.264 decoder。
+3. 把 Annex B H.264 解码为可绘制帧。
+4. 用 native surface 做最新帧绘制策略，窗口最小化 / 后台 / 切 app 时仍按实时队列丢旧保新。
+5. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
+6. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。
 
 ## 验收口径
 
 - Rust 视频队列测试必须覆盖：低延迟正常入队、积压跳到最新关键帧、无关键帧时清 delta 并等待关键帧。
 - Rust H.264 入站测试必须覆盖：Annex B SPS/PPS/IDR 识别、关键帧元数据进入原生队列。
+- Rust 原生能力测试必须覆盖：D3D11 / Media Foundation H.264 探测结果能汇总为 ready 或明确 blocked reason。
 - 桌面端 `cargo check` 必须通过。
 - 后续接入真实渲染后，真实最小化 / 切 app / 切回测试要看本机视频队列是否保持在 80-180ms 附近，而不是继续堆到 600ms+。

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 MF/D3D11 解码能力探测
+- Windows 主线继续推进 W8 视频侧，不碰 W9 音频。Windows 桌面端 `w8_native_video` 新增 `probe_w8_native_video_decoder` Tauri 命令，真实调用 D3D11 硬件 device 创建和 Media Foundation H.264 decoder MFT 枚举，返回 `media-foundation-h264-d3d11-probe`、D3D feature level、H.264 decoder 数量、硬件 decoder 数量、`ready` 和阻塞原因。Windows 控制端桌面壳启动 W8 原生视频会话后会自动 probe 一次，并在诊断/复制导出里显示 `原生解码器 ready|blocked` 和 `D3D11 11_x`。这一步仍不解码和绘制真实帧，但已经把“能不能初始化 MF/D3D11 H.264 解码路径”从文档计划变成可运行证据。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端原生解码配置准备
 - Windows 主线继续只做 W8 视频侧，本轮不碰 W9 音频。`w8_native_video` 现在会在 Rust 原生侧从 Annex B H.264 SPS/PPS 中提取解码配置：输出 `spsCount/ppsCount/hasDecoderConfig/codecString`，例如 `avc1.420029`；`push_w8_native_h264_annexb_frame` 会把这份摘要随原生队列结果返回。Windows 控制端桌面壳收到原生结果后，会把 `原生解码配置 avc1...` 写入诊断和复制/导出报告，便于后续接 Windows Media Foundation / D3D11 时确认 SPS/PPS 已经到达原生层。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；还没有完成 Media Foundation/D3D11 解码或原生画面绘制。
 

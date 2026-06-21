@@ -5352,6 +5352,11 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
         w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
         w8NativeVideoCodecString: state.w8NativeVideoCodecString,
+        w8NativeVideoDecoderProbePromise: state.w8NativeVideoDecoderProbePromise,
+        w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
+        w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
+        w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,
+        w8NativeVideoD3dFeatureLevel: state.w8NativeVideoD3dFeatureLevel,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5451,7 +5456,21 @@ async function verifyH264KeyFrameDetection(session) {
                           ppsCount: 0,
                           hasDecoderConfig: false,
                           codecString: null,
-                        },
+                      },
+                  };
+                }
+                if (command === "probe_w8_native_video_decoder") {
+                  return {
+                    mode: "media-foundation-h264-d3d11-probe",
+                    d3d11Available: true,
+                    d3dFeatureLevel: "11_1",
+                    mediaFoundationAvailable: true,
+                    h264DecoderAvailable: true,
+                    h264DecoderCount: 2,
+                    h264HardwareDecoderAvailable: true,
+                    h264HardwareDecoderCount: 1,
+                    ready: true,
+                    reason: "ready",
                   };
                 }
                 throw new Error("unexpected invoke " + command);
@@ -5503,6 +5522,11 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDroppedFrames = 0;
         state.w8NativeVideoHasDecoderConfig = false;
         state.w8NativeVideoCodecString = "";
+        state.w8NativeVideoDecoderProbePromise = null;
+        state.w8NativeVideoDecoderReady = false;
+        state.w8NativeVideoDecoderMode = "";
+        state.w8NativeVideoDecoderReason = "";
+        state.w8NativeVideoD3dFeatureLevel = "";
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5532,9 +5556,11 @@ async function verifyH264KeyFrameDetection(session) {
         const exportText = getVideoPerformanceExportStatus();
         const nativeStartCalls = nativeCalls.filter((call) => call.command === "start_w8_native_video_session");
         const nativePushCalls = nativeCalls.filter((call) => call.command === "push_w8_native_h264_annexb_frame");
+        const nativeProbeCalls = nativeCalls.filter((call) => call.command === "probe_w8_native_video_decoder");
         const nativeQueueRecorded =
           nativeStartCalls.length === 1 &&
           nativePushCalls.length === 2 &&
+          nativeProbeCalls.length === 1 &&
           nativeStartCalls[0].payload?.request?.host === "192.168.31.122" &&
           nativeStartCalls[0].payload?.request?.port === 43770 &&
           nativePushCalls[0].payload?.request?.id === 41 &&
@@ -5545,9 +5571,14 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoQueueMs === 16 &&
           state.hostDiagnostics?.w8NativeVideoHasDecoderConfig === true &&
           state.hostDiagnostics?.w8NativeVideoCodecString === "avc1.420029" &&
+          state.hostDiagnostics?.w8NativeVideoDecoderReady === true &&
+          state.hostDiagnostics?.w8NativeVideoDecoderMode === "media-foundation-h264-d3d11-probe" &&
+          state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel === "11_1" &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
-          exportText.includes("原生解码配置 avc1.420029");
+          exportText.includes("原生解码配置 avc1.420029") &&
+          exportText.includes("原生解码器 ready") &&
+          exportText.includes("D3D11 11_1");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5580,6 +5611,9 @@ async function verifyH264KeyFrameDetection(session) {
           w8NativeVideoQueueMs: state.hostDiagnostics?.w8NativeVideoQueueMs,
           w8NativeVideoHasDecoderConfig: state.hostDiagnostics?.w8NativeVideoHasDecoderConfig,
           w8NativeVideoCodecString: state.hostDiagnostics?.w8NativeVideoCodecString,
+          w8NativeVideoDecoderReady: state.hostDiagnostics?.w8NativeVideoDecoderReady,
+          w8NativeVideoDecoderMode: state.hostDiagnostics?.w8NativeVideoDecoderMode,
+          w8NativeVideoD3dFeatureLevel: state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5630,6 +5664,11 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDroppedFrames = original.w8NativeVideoDroppedFrames;
         state.w8NativeVideoHasDecoderConfig = original.w8NativeVideoHasDecoderConfig;
         state.w8NativeVideoCodecString = original.w8NativeVideoCodecString;
+        state.w8NativeVideoDecoderProbePromise = original.w8NativeVideoDecoderProbePromise;
+        state.w8NativeVideoDecoderReady = original.w8NativeVideoDecoderReady;
+        state.w8NativeVideoDecoderMode = original.w8NativeVideoDecoderMode;
+        state.w8NativeVideoDecoderReason = original.w8NativeVideoDecoderReason;
+        state.w8NativeVideoD3dFeatureLevel = original.w8NativeVideoD3dFeatureLevel;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;

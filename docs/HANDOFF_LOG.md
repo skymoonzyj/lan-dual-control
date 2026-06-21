@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 MF/D3D11 解码能力探测
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在已有 Annex B SPS/PPS decoder config 后，先把 Windows 本机原生解码前置能力探测接到桌面控制端。
+完成内容：新增 Tauri 命令 `probe_w8_native_video_decoder`，Rust 原生侧只读探测 D3D11 hardware device feature level 和 Media Foundation H.264 decoder MFT，并汇总 `ready/reason/h264DecoderCount/h264HardwareDecoderCount`。Windows 控制端桌面壳在启动 W8 原生 H.264 会话后会调用该 probe，并把 `原生解码器 ready|blocked`、`D3D11 11_x` 和阻断原因并入诊断/复制导出。`get_w8_native_video_plan` 同步标出下一步是用 SPS/PPS config 初始化 MF/D3D11 decoder。
+修改文件：apps/windows-desktop/src-tauri/Cargo.toml；apps/windows-desktop/src-tauri/Cargo.lock；apps/windows-desktop/src-tauri/src/main.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `decoder_probe_mode` / `probe_w8_native_video_decoder`，前端专项失败于未调用 probe 且导出缺 `原生解码器 ready` / `D3D11 11_1`；实现后专项转绿。完整验证见本轮提交前命令记录。
+遗留问题：本轮仍是能力探测和诊断接线，不是完整原生播放器；还没有把 H.264 Annex B 交给 MF decoder 解码，也没有把 decoded frame 画到原生 surface。
+下一步建议：继续 W8：用已提取的 SPS/PPS decoder config 和 probe 结果初始化 Media Foundation H.264 decoder，拿到 decoded frame 后接 D3D11/native surface 最新帧绘制；WebCodecs/canvas 继续保留诊断备用。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实 native decoder/renderer 联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端原生解码配置准备
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在接 Media Foundation / D3D11 前把 H.264 SPS/PPS decoder config 从 Web 路径推进到 Rust 原生侧。
