@@ -162,6 +162,7 @@ const audioResyncBufferSeconds = 0.12;
 const audioStableUnderrunBufferSeconds = 0.12;
 const audioRecoveryUnderrunBufferSeconds = 0.18;
 const audioAdaptiveUnderrunWindowSeconds = 2;
+const audioStableUnderrunMinimumPlayedFrames = 8;
 const audioVisibilityRecoveryMinimumHiddenMs = 250;
 const audioVisibilityRecoveryQueuedSeconds = 0.18;
 const audioVisibilityRecoveryFollowupWindowMs = 3000;
@@ -3668,10 +3669,13 @@ async function playPcmAudioFrame(frame) {
       state.audioStablePrebufferCount = (Number(state.audioStablePrebufferCount) || 0) + 1;
       state.audioLastBufferReason = "queue-underrun-recovery-prebuffer";
       state.audioNextPlayTime = now + audioRecoveryUnderrunBufferSeconds;
-    } else if (isRepeatedUnderrun) {
+    } else if (isRepeatedUnderrun && (Number(state.audioPlayedFrames) || 0) >= audioStableUnderrunMinimumPlayedFrames) {
       state.audioStablePrebufferCount = (Number(state.audioStablePrebufferCount) || 0) + 1;
       state.audioLastBufferReason = "queue-underrun-stable-prebuffer";
       state.audioNextPlayTime = now + audioStableUnderrunBufferSeconds;
+    } else if (isRepeatedUnderrun) {
+      state.audioLastBufferReason = "queue-underrun-startup-prebuffer";
+      state.audioNextPlayTime = now + audioInitialBufferSeconds;
     } else {
       state.audioLastBufferReason = "queue-underrun-prebuffer";
       state.audioNextPlayTime = now + audioInitialBufferSeconds;

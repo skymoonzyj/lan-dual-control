@@ -7556,6 +7556,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const preservedPrebuffer = underrunPrebufferDiagnosed;
 
         state.audioContext.currentTime = 10.2;
+        state.audioPlayedFrames = 8;
         starts.length = 0;
         stops.length = 0;
         const adaptiveUnderrunPlayed = await playPcmAudioFrame(makeFrame());
@@ -7625,6 +7626,39 @@ async function verifyAudioPlaybackBufferGuards(session) {
           adaptiveUnderrunExportText.includes("补缓冲 2") &&
           adaptiveUnderrunExportText.includes("稳缓冲 1") &&
           adaptiveUnderrunExportText.includes("原因 queue-underrun-stable-prebuffer");
+
+        state.audioContext = makeFakeContext(11);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 10.99;
+        state.audioPlayedFrames = 3;
+        state.audioDroppedFrames = 0;
+        state.audioResyncCount = 0;
+        state.audioUnderrunCount = 1;
+        state.audioStablePrebufferCount = 0;
+        state.audioLastUnderrunAt = 10.94;
+        state.audioLastDropReason = "";
+        state.audioLastBufferReason = "queue-underrun-prebuffer";
+        state.audioVisibilityHiddenAt = 0;
+        state.audioVisibilityRecoveryCount = 0;
+        state.audioVisibilityRecoveryLastAt = 0;
+        state.audioScheduledSources = [];
+        starts.length = 0;
+        stops.length = 0;
+        const startupUnderrunPlayed = await playPcmAudioFrame(makeFrame());
+        const startupUnderrunStart = starts[0] || 0;
+        const startupUnderrunReason = state.audioLastBufferReason;
+        const startupUnderrunStableCount = state.audioStablePrebufferCount;
+        const startupUnderrunExportText = getAudioPerformanceExportStatus();
+        const startupUnderrunKeepsLowLatency =
+          startupUnderrunPlayed &&
+          starts.length === 1 &&
+          state.audioUnderrunCount === 2 &&
+          startupUnderrunStableCount === 0 &&
+          startupUnderrunReason === "queue-underrun-startup-prebuffer" &&
+          startupUnderrunStart >= 11.075 &&
+          startupUnderrunStart < 11.13 &&
+          startupUnderrunExportText.includes("原因 queue-underrun-startup-prebuffer") &&
+          !startupUnderrunExportText.includes("稳缓冲");
 
         state.audioContext = makeFakeContext(20);
         state.audioGain = { gain: { value: 0 } };
@@ -7747,7 +7781,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
           starts[0] < 50.22;
 
         return {
-          ok: preservedPrebuffer && adaptivePrebuffered && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer,
+          ok: preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer,
           preservedPrebuffer,
           underrunPrebufferDiagnosed,
           underrunCount: underrunCountAfterPrebuffer,
@@ -7770,6 +7804,12 @@ async function verifyAudioPlaybackBufferGuards(session) {
           firstFrameWaitExportText,
           adaptiveUnderrunStart,
           adaptiveUnderrunExportText,
+          startupUnderrunPlayed,
+          startupUnderrunKeepsLowLatency,
+          startupUnderrunStart,
+          startupUnderrunReason,
+          startupUnderrunStableCount,
+          startupUnderrunExportText,
           stablePrebufferCount: state.audioStablePrebufferCount,
           overflowPlayed,
           trimmedFutureQueue,
