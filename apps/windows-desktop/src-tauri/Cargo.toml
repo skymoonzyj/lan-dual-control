@@ -5,6 +5,10 @@ description = "LAN dual control Windows desktop shell"
 authors = ["skymoonzyj"]
 edition = "2021"
 
+[lib]
+name = "lan_dual_control_windows_audio"
+path = "src/native_audio_queue.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
