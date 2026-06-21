@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 BGRA8 HWND swapchain Present
+开发端：Windows Codex
+本轮目标：继续只做视频侧，把上一轮 HWND swapchain 预检推进成 BGRA8 latest-frame 到真实窗口 swapchain 的 `Present` 路径，并把状态留在诊断摘要。
+完成内容：`start_w8_native_video_session` 现在由 Tauri 自动注入真实窗口，Rust 在会话启动时提取 HWND/client size 并保存为 native present target；`lan-dual-w8-mf-decoder` worker 创建 D3D11 latest-frame texture 和 BGRA8 present texture 时，会在同一个 device 上创建持久 `IDXGISwapChain1`。BGRA8 decoded sample 进入 latest-frame 后会复制到 present texture，再复制到 swapchain back buffer 并调用 `Present`；诊断状态为 `nativePresentMode=d3d11-hwnd-swapchain`、`nativePresentStatus=latest-frame-swapchain-presented`、`nativePresentFrames>0`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md；apps/windows-desktop/README.md；apps/windows-client/README.md。
+验证方式：TDD 红灯先失败于缺 `W8NativeWindowPresentTargetConfig` / `create_d3d11_latest_frame_texture_target_for_window`；绿灯后 `native_present_target_presents_bgra_latest_frame_to_hwnd_swapchain` 通过。完整验证见本轮提交前命令记录。
+遗留问题：当前真实 Mac H.264 常见输出仍是 NV12，仍会标记 `waiting-nv12-renderer`；还需要 NV12 shader/native renderer、stream-change、surface resize 和 device lost 重建。
+下一步建议：继续 W8：优先做 NV12 -> BGRA shader/native renderer 转换，让 Mac 当前输出也能进入 HWND swapchain Present；随后补 resize/stream-change/device-lost 恢复。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实窗口呈现验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 HWND swapchain 预检
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 BGRA8 native present texture target 后，把真实 Tauri 窗口 HWND swapchain 入口变成可运行探针，并透到 Windows 控制端诊断。

@@ -25,8 +25,9 @@ use windows::Win32::Graphics::Dxgi::Common::{
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, IDXGIFactory2, IDXGIOutput, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1,
-    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
+    CreateDXGIFactory1, IDXGIFactory2, IDXGIOutput, IDXGISwapChain1, DXGI_PRESENT,
+    DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
+    DXGI_USAGE_RENDER_TARGET_OUTPUT,
 };
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
@@ -484,6 +485,8 @@ struct W8NativeVideoSession {
     decoder_init: Option<W8NativeVideoDecoderInitPreflight>,
     decode_step: Option<W8NativeVideoDecodeStepPreflight>,
     decoder_session: W8NativeVideoDecoderSessionState,
+    #[cfg(windows)]
+    window_present_target: Option<W8NativeWindowPresentTargetConfig>,
 }
 
 impl Default for W8NativeVideoSession {
@@ -498,6 +501,8 @@ impl Default for W8NativeVideoSession {
             decoder_init: None,
             decode_step: None,
             decoder_session: W8NativeVideoDecoderSessionState::default(),
+            #[cfg(windows)]
+            window_present_target: None,
         }
     }
 }
@@ -690,13 +695,18 @@ impl W8NativeVideoDecoderSessionState {
     fn push_h264_access_unit(
         &mut self,
         summary: &NativeH264AnnexBSummary,
+        #[cfg(windows)] window_present_target: Option<W8NativeWindowPresentTargetConfig>,
     ) -> Option<W8NativeVideoDecoderSessionSummary> {
         if self.summary.is_none() && !summary.has_decoder_config {
             return None;
         }
 
         if self.summary.is_none() {
-            self.start(summary);
+            self.start(
+                summary,
+                #[cfg(windows)]
+                window_present_target,
+            );
         }
 
         let should_process = self
@@ -761,7 +771,11 @@ impl W8NativeVideoDecoderSessionState {
         }
     }
 
-    fn start(&mut self, summary: &NativeH264AnnexBSummary) {
+    fn start(
+        &mut self,
+        summary: &NativeH264AnnexBSummary,
+        #[cfg(windows)] window_present_target: Option<W8NativeWindowPresentTargetConfig>,
+    ) {
         let codec_string = summary.codec_string.clone();
         self.decoder_config_bytes = summary.decoder_config_bytes.clone();
         let mut started = W8NativeVideoDecoderSessionSummary {
@@ -809,7 +823,10 @@ impl W8NativeVideoDecoderSessionState {
 
         #[cfg(windows)]
         {
-            match W8NativeVideoDecoderWorker::start(self.decoder_config_bytes.clone()) {
+            match W8NativeVideoDecoderWorker::start(
+                self.decoder_config_bytes.clone(),
+                window_present_target,
+            ) {
                 Ok((worker, output_subtype, surface_target)) => {
                     started.active = true;
                     started.output_subtype = output_subtype;
@@ -950,13 +967,16 @@ struct W8NativeVideoDecoderWorker {
 impl W8NativeVideoDecoderWorker {
     fn start(
         sequence_header: Vec<u8>,
+        window_present_target: Option<W8NativeWindowPresentTargetConfig>,
     ) -> Result<(Self, String, W8NativeSurfaceTargetSummary), String> {
         let (command_sender, command_receiver) = mpsc::channel();
         let (init_sender, init_receiver) = mpsc::channel();
         let handle = thread::Builder::new()
             .name("lan-dual-w8-mf-decoder".to_string())
-            .spawn(
-                move || match unsafe { W8MfH264DecoderWorkerRuntime::start(&sequence_header) } {
+            .spawn(move || {
+                match unsafe {
+                    W8MfH264DecoderWorkerRuntime::start(&sequence_header, window_present_target)
+                } {
                     Ok(mut runtime) => {
                         let output_subtype = runtime.output_subtype.clone();
                         let surface_target = runtime.surface_target.summary.clone();
@@ -979,8 +999,8 @@ impl W8NativeVideoDecoderWorker {
                     Err(error) => {
                         let _ = init_sender.send(Err(error));
                     }
-                },
-            )
+                }
+            })
             .map_err(|error| format!("spawn native decoder worker failed: {error}"))?;
 
         match init_receiver.recv_timeout(Duration::from_millis(3000)) {
@@ -1052,11 +1072,27 @@ struct W8MfH264DecoderWorkerRuntime {
 }
 
 #[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct W8NativeWindowPresentTargetConfig {
+    hwnd_value: isize,
+    client_width: u32,
+    client_height: u32,
+}
+
+#[cfg(windows)]
+impl W8NativeWindowPresentTargetConfig {
+    fn hwnd(self) -> HWND {
+        HWND(self.hwnd_value as *mut c_void)
+    }
+}
+
+#[cfg(windows)]
 struct W8NativeSurfaceTargetRuntime {
     _device: ID3D11Device,
     _context: ID3D11DeviceContext,
     _texture: ID3D11Texture2D,
     _present_texture: ID3D11Texture2D,
+    _swapchain: Option<IDXGISwapChain1>,
     summary: W8NativeSurfaceTargetSummary,
 }
 
@@ -1345,6 +1381,22 @@ fn probe_w8_native_video_window_swapchain_runtime(
     }
 }
 
+#[cfg(windows)]
+fn resolve_native_window_present_target(
+    window: &tauri::Window,
+) -> Option<W8NativeWindowPresentTargetConfig> {
+    let hwnd = window.hwnd().ok()?;
+    if unsafe { !IsWindow(Some(hwnd)).as_bool() } {
+        return None;
+    }
+    let (client_width, client_height) = unsafe { hwnd_client_size(hwnd).ok()? };
+    Some(W8NativeWindowPresentTargetConfig {
+        hwnd_value: hwnd.0 as isize,
+        client_width,
+        client_height,
+    })
+}
+
 pub fn preflight_h264_decoder_init(
     summary: &NativeH264AnnexBSummary,
 ) -> W8NativeVideoDecoderInitPreflight {
@@ -1455,13 +1507,23 @@ unsafe fn hwnd_client_size(hwnd: HWND) -> Result<(u32, u32), String> {
 #[cfg(windows)]
 unsafe fn probe_d3d11_hwnd_swapchain(hwnd: HWND, width: u32, height: u32) -> Result<(), String> {
     let (device, _, _) = create_d3d11_video_device()?;
+    let _swapchain = create_d3d11_hwnd_swapchain_for_device(&device, hwnd, width, height)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn create_d3d11_hwnd_swapchain_for_device(
+    device: &ID3D11Device,
+    hwnd: HWND,
+    width: u32,
+    height: u32,
+) -> Result<IDXGISwapChain1, String> {
     let factory: IDXGIFactory2 =
         CreateDXGIFactory1().map_err(|error| format!("CreateDXGIFactory1 failed: {error}"))?;
     let desc = d3d11_hwnd_swapchain_desc(width, height);
-    let _swapchain = factory
-        .CreateSwapChainForHwnd(&device, hwnd, &desc, None, None::<&IDXGIOutput>)
-        .map_err(|error| format!("CreateSwapChainForHwnd failed: {error}"))?;
-    Ok(())
+    factory
+        .CreateSwapChainForHwnd(device, hwnd, &desc, None, None::<&IDXGIOutput>)
+        .map_err(|error| format!("CreateSwapChainForHwnd failed: {error}"))
 }
 
 #[cfg(windows)]
@@ -1475,9 +1537,17 @@ fn format_d3d_feature_level(level: D3D_FEATURE_LEVEL) -> String {
     }
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, test))]
 unsafe fn create_d3d11_latest_frame_texture_target(
     output_subtype: &str,
+) -> Result<W8NativeSurfaceTargetRuntime, String> {
+    create_d3d11_latest_frame_texture_target_for_window(output_subtype, None)
+}
+
+#[cfg(windows)]
+unsafe fn create_d3d11_latest_frame_texture_target_for_window(
+    output_subtype: &str,
+    window_present_target: Option<W8NativeWindowPresentTargetConfig>,
 ) -> Result<W8NativeSurfaceTargetRuntime, String> {
     let (device, context, selected) = create_d3d11_video_device()?;
     let (dxgi_format, surface_format) = dxgi_format_for_surface_output(output_subtype);
@@ -1528,12 +1598,48 @@ unsafe fn create_d3d11_latest_frame_texture_target(
         .map_err(|error| format!("CreateTexture2D BGRA8 present target failed: {error}"))?;
     let present_texture = present_texture
         .ok_or_else(|| "CreateTexture2D returned no BGRA8 present texture".to_string())?;
+    let swapchain = match window_present_target {
+        Some(target) => {
+            let hwnd = target.hwnd();
+            if !IsWindow(Some(hwnd)).as_bool() {
+                return Err("desktop window HWND is not valid for native present".to_string());
+            }
+            Some(create_d3d11_hwnd_swapchain_for_device(
+                &device,
+                hwnd,
+                DEFAULT_NATIVE_SURFACE_WIDTH,
+                DEFAULT_NATIVE_SURFACE_HEIGHT,
+            )?)
+        }
+        None => None,
+    };
+    let swapchain_attached = swapchain.is_some();
+    let native_present_mode = if swapchain_attached {
+        "d3d11-hwnd-swapchain"
+    } else {
+        "d3d11-bgra8-present-texture-target"
+    };
+    let native_present_reason = match (swapchain_attached, window_present_target) {
+        (true, Some(target)) => format!(
+            "ready; D3D11 {} HWND swapchain attached; client={}x{}; backbuffer={}x{} BGRA8",
+            format_d3d_feature_level(selected),
+            target.client_width.max(1),
+            target.client_height.max(1),
+            DEFAULT_NATIVE_SURFACE_WIDTH,
+            DEFAULT_NATIVE_SURFACE_HEIGHT
+        ),
+        _ => format!(
+            "ready; D3D11 {} BGRA8 present texture target created; waiting for renderer/swapchain",
+            format_d3d_feature_level(selected)
+        ),
+    };
 
     Ok(W8NativeSurfaceTargetRuntime {
         _device: device,
         _context: context,
         _texture: texture,
         _present_texture: present_texture,
+        _swapchain: swapchain,
         summary: W8NativeSurfaceTargetSummary {
             ready: true,
             mode: "d3d11-latest-frame-texture-target".to_string(),
@@ -1550,17 +1656,14 @@ unsafe fn create_d3d11_latest_frame_texture_target(
             presented_frames: 0,
             last_frame_id: None,
             native_present_ready: true,
-            native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
+            native_present_mode: native_present_mode.to_string(),
             native_present_status: "waiting-latest-frame".to_string(),
             native_present_format: "BGRA8".to_string(),
             native_present_width: DEFAULT_NATIVE_SURFACE_WIDTH,
             native_present_height: DEFAULT_NATIVE_SURFACE_HEIGHT,
             native_present_frames: 0,
             native_present_last_frame_id: None,
-            native_present_reason: format!(
-                "ready; D3D11 {} BGRA8 present texture target created; waiting for renderer/swapchain",
-                format_d3d_feature_level(selected)
-            ),
+            native_present_reason,
         },
     })
 }
@@ -1667,12 +1770,52 @@ unsafe fn stage_latest_frame_for_native_present(
         .CopyResource(&present_resource, &latest_resource);
     target._context.Flush();
 
+    if target._swapchain.is_some() {
+        present_bgra_texture_to_hwnd_swapchain(target, frame_id, &present_resource)?;
+        return Ok(());
+    }
+
     let present_frames = target.summary.native_present_frames.saturating_add(1);
     target.summary.native_present_status = "latest-frame-present-staged".to_string();
     target.summary.native_present_frames = present_frames;
     target.summary.native_present_last_frame_id = Some(frame_id);
     target.summary.native_present_reason = format!(
         "ready; copied BGRA8 latest-frame texture into BGRA8 present texture target; frames={present_frames}"
+    );
+    Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn present_bgra_texture_to_hwnd_swapchain(
+    target: &mut W8NativeSurfaceTargetRuntime,
+    frame_id: u64,
+    present_resource: &ID3D11Resource,
+) -> Result<(), String> {
+    let swapchain = target
+        ._swapchain
+        .as_ref()
+        .ok_or_else(|| "HWND swapchain is not attached".to_string())?;
+    let back_buffer: ID3D11Texture2D = swapchain
+        .GetBuffer(0)
+        .map_err(|error| format!("IDXGISwapChain1::GetBuffer failed: {error}"))?;
+    let back_resource: ID3D11Resource = back_buffer
+        .cast()
+        .map_err(|error| format!("swapchain back buffer cast to resource failed: {error}"))?;
+    target
+        ._context
+        .CopyResource(&back_resource, present_resource);
+    target._context.Flush();
+    swapchain
+        .Present(0, DXGI_PRESENT(0))
+        .ok()
+        .map_err(|error| format!("IDXGISwapChain1::Present failed: {error}"))?;
+
+    let present_frames = target.summary.native_present_frames.saturating_add(1);
+    target.summary.native_present_status = "latest-frame-swapchain-presented".to_string();
+    target.summary.native_present_frames = present_frames;
+    target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_reason = format!(
+        "ready; Present copied BGRA8 present texture into HWND swapchain; frames={present_frames}"
     );
     Ok(())
 }
@@ -1881,7 +2024,10 @@ unsafe fn preflight_media_foundation_h264_decode_step_inner(
 
 #[cfg(windows)]
 impl W8MfH264DecoderWorkerRuntime {
-    unsafe fn start(sequence_header: &[u8]) -> Result<Self, String> {
+    unsafe fn start(
+        sequence_header: &[u8],
+        window_present_target: Option<W8NativeWindowPresentTargetConfig>,
+    ) -> Result<Self, String> {
         MFStartup(MF_VERSION, MFSTARTUP_LITE)
             .map_err(|error| format!("MFStartup failed: {error}"))?;
         let started = (|| {
@@ -1894,7 +2040,10 @@ impl W8MfH264DecoderWorkerRuntime {
             transform
                 .SetOutputType(0, &output_type, 0)
                 .map_err(|error| format!("SetOutputType {output_subtype} failed: {error}"))?;
-            let surface_target = create_d3d11_latest_frame_texture_target(&output_subtype)?;
+            let surface_target = create_d3d11_latest_frame_texture_target_for_window(
+                &output_subtype,
+                window_present_target,
+            )?;
             Ok(Self {
                 transform,
                 output_subtype,
@@ -2306,6 +2455,7 @@ unsafe fn release_mft_activates(
 
 #[tauri::command]
 pub fn start_w8_native_video_session(
+    window: tauri::Window,
     request: W8NativeVideoStartRequest,
     state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W8NativeVideoSnapshot, String> {
@@ -2333,6 +2483,14 @@ pub fn start_w8_native_video_session(
     session.decoder_init = None;
     session.decode_step = None;
     session.decoder_session.reset();
+    #[cfg(windows)]
+    {
+        session.window_present_target = resolve_native_window_present_target(&window);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+    }
     Ok(session.snapshot())
 }
 
@@ -2390,6 +2548,10 @@ pub fn stop_w8_native_video_session(
         .map_err(|_| "W8 视频会话锁定失败".to_string())?;
     session.running = false;
     session.decoder_session.reset();
+    #[cfg(windows)]
+    {
+        session.window_present_target = None;
+    }
     Ok(session.snapshot())
 }
 
@@ -2415,7 +2577,11 @@ impl W8NativeVideoSession {
         {
             self.decode_step = Some(preflight_h264_decode_step(&result.summary));
         }
-        result.decoder_session = self.decoder_session.push_h264_access_unit(&result.summary);
+        result.decoder_session = self.decoder_session.push_h264_access_unit(
+            &result.summary,
+            #[cfg(windows)]
+            self.window_present_target,
+        );
         result.decoder_init = self.decoder_init.clone();
         result.decode_step = self.decode_step.clone();
         Ok(result)
@@ -2789,6 +2955,129 @@ mod tests {
             assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
             result.expect("native present target staging should succeed");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_present_target_presents_bgra_latest_frame_to_hwnd_swapchain() {
+        unsafe {
+            MFStartup(MF_VERSION, MFSTARTUP_LITE).expect("MFStartup should succeed");
+            let result = (|| -> Result<(), String> {
+                let window = HiddenPresentTestWindow::create(1280, 720)?;
+                let target_config = window.config();
+                let mut target = create_d3d11_latest_frame_texture_target_for_window(
+                    "ARGB32",
+                    Some(target_config),
+                )?;
+                let expected_bytes =
+                    target.summary.width as usize * target.summary.height as usize * 4;
+                let frame_bytes = vec![0x88; expected_bytes];
+                let sample = create_mf_sample_from_bytes(&frame_bytes, 0, 16_667)?;
+
+                let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 11)?;
+
+                assert_eq!(copy.status, "latest-frame-presented");
+                assert_eq!(target.summary.native_present_mode, "d3d11-hwnd-swapchain");
+                assert_eq!(
+                    target.summary.native_present_status,
+                    "latest-frame-swapchain-presented"
+                );
+                assert_eq!(target.summary.native_present_frames, 1);
+                assert_eq!(target.summary.native_present_last_frame_id, Some(11));
+                assert!(target.summary.native_present_reason.contains("Present"));
+                Ok(())
+            })();
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+            result.expect("native HWND swapchain present should succeed");
+        }
+    }
+
+    #[cfg(windows)]
+    struct HiddenPresentTestWindow {
+        hwnd: HWND,
+        client_width: u32,
+        client_height: u32,
+    }
+
+    #[cfg(windows)]
+    impl HiddenPresentTestWindow {
+        unsafe fn create(client_width: u32, client_height: u32) -> Result<Self, String> {
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use windows::core::PCWSTR;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                CreateWindowExW, RegisterClassW, CW_USEDEFAULT, WINDOW_EX_STYLE, WNDCLASSW,
+                WS_OVERLAPPEDWINDOW,
+            };
+
+            static WINDOW_INDEX: AtomicUsize = AtomicUsize::new(1);
+            let index = WINDOW_INDEX.fetch_add(1, Ordering::Relaxed);
+            let class_name = wide_null(&format!("LanDualW8PresentTestWindow{index}"));
+            let title = wide_null("LanDual W8 present test");
+            let window_class = WNDCLASSW {
+                lpfnWndProc: Some(test_present_window_proc),
+                lpszClassName: PCWSTR(class_name.as_ptr()),
+                ..Default::default()
+            };
+            let atom = RegisterClassW(&window_class);
+            if atom == 0 {
+                return Err("RegisterClassW failed for W8 present test window".to_string());
+            }
+            let hwnd = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(class_name.as_ptr()),
+                PCWSTR(title.as_ptr()),
+                WS_OVERLAPPEDWINDOW,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                client_width as i32,
+                client_height as i32,
+                None,
+                None,
+                None,
+                None,
+            )
+            .map_err(|error| format!("CreateWindowExW failed for W8 present test: {error}"))?;
+            Ok(Self {
+                hwnd,
+                client_width,
+                client_height,
+            })
+        }
+
+        fn config(&self) -> W8NativeWindowPresentTargetConfig {
+            W8NativeWindowPresentTargetConfig {
+                hwnd_value: self.hwnd.0 as isize,
+                client_width: self.client_width,
+                client_height: self.client_height,
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for HiddenPresentTestWindow {
+        fn drop(&mut self) {
+            unsafe {
+                use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
+                let _ = DestroyWindow(self.hwnd);
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    unsafe extern "system" fn test_present_window_proc(
+        hwnd: HWND,
+        message: u32,
+        wparam: windows::Win32::Foundation::WPARAM,
+        lparam: windows::Win32::Foundation::LPARAM,
+    ) -> windows::Win32::Foundation::LRESULT {
+        use windows::Win32::UI::WindowsAndMessaging::DefWindowProcW;
+        DefWindowProcW(hwnd, message, wparam, lparam)
+    }
+
+    #[cfg(windows)]
+    fn wide_null(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
     #[test]
