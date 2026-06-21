@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 原生 decoder 提交差值上板：`W8NativeVideo=` 现在新增 `submitted=<decoderSessionSubmittedFrames>` 与 `decoderGap=<pushed-submitted>`，让真实长跑可直接区分“推入 W8 原生队列的帧”和“真正进入持久 MF/D3D11 decoder 的帧”。这与上一轮 `accepted=false` 旧 delta 不进 decoder 配套，避免只看 `pushed` 或 `queueDrops` 误判 decoder 负载。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8 原生低延迟队列拒绝帧不再进 decoder：Windows 桌面原生侧现在会在 `NativeVideoQueue` 返回 `accepted=false` 时停止把该 H.264 access unit 交给持久 MF/D3D11 decoder，保留上一条 decoder 摘要给诊断可见性，只更新队列丢帧、等待关键帧和 keyframe request 状态。这样 `need-keyframe` / `waiting-keyframe` 的旧 delta 不再推高 `submittedFrames` 或占用原生解码线程。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8Post 可选 arrival/backlog 生成：`post-w8-desktop-video-board` 现在除了必需的 `W8NativeVideo=`，还会可选读取同段输入里的最后一条 `W2W3Retest=`；当 `W8NativeGate=status=arrival-backlog-next` 时，同步生成 `W8ArrivalBacklog=`，输出本机队列、过期丢帧、追实时请求、本地/远端间隔、`arrivalSource` 和 next。只有 `W8NativeVideo=` 时仍保持只发 gate。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8 桌面复制诊断直发通讯板：新增 `post-w8-desktop-video-board.mjs` 和专项回归，支持 `--text/--file/--stdin` 读取 `W8NativeVideo=`，默认 dry-run，`--send` 时只发 `W8NativeVideo=` 与自动生成的 `W8NativeGate=`。桌面入口 dry-run 和 Windows 恢复总览同步显示 `W8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`，方便真实桌面长跑复制诊断后直接上板。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。

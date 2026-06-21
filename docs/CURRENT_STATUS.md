@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8 原生 decoder 提交差值上板
+- Windows 视频侧补强了 `W8NativeVideo=` 摘要：现在会输出 `submitted=<decoderSessionSubmittedFrames>` 和 `decoderGap=<pushed-submitted>`。`pushed` 表示 Windows 控制端把 H.264 access unit 推入 W8 原生队列的数量，`submitted` 表示真正提交给持久 MF/D3D11 decoder worker 的数量，`decoderGap` 表示被低延迟队列预过滤挡在 decoder 前的差值。这样上一轮 `accepted=false` 旧 delta 不进 decoder 的行为能在通讯板/复制诊断里直接看见；下一次真实长跑如果 `decoderGap` 增长但 `presentFrames/decoded` 仍健康，优先理解为预过滤在挡旧帧，而不是 decoder 线程无端吞旧帧。本轮只改 Windows 视频摘要和文档，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
+
 ## 2026-06-22 W8 桌面复制诊断直发通讯板
 - Windows 视频侧补了一个更直接的 W8 桌面长跑上板入口：`node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`。用户在 Windows 桌面控制端连接 Mac 后，点击复制诊断，把包含 `W8NativeVideo=` 的文本通过管道或文件交给该脚本即可；脚本会只提取最后一条 `W8NativeVideo=`，生成 `W8NativeGate=`，默认 dry-run，显式 `--send` 才发 Agent Link Board。它不认证、不请求或打印密码、不发送 input/inject，也会拒绝 password/token/input_event 等危险标记。`start-windows-desktop-control-mac --dryRun --boardSummary` 和 `check-windows-resume-status --checkBoard --boardSummary` 现在都会露出同一条 `W8Post=` 命令，避免真实桌面长跑还要绕旧 W2/W3 helper。
 - 该入口现在还会可选消费同一段文本里的最后一条 `W2W3Retest=`：如果 `W8NativeGate=status=arrival-backlog-next`，会同步生成 `W8ArrivalBacklog=`，带 `queueMs/staleDrops/liveBacklogRequests/localMaxMs/remoteMediaMaxMs/arrivalSource` 和 next。这样用户复制整段桌面/复测诊断时，一条 W8Post 就能同时上板原生主面 gate 和 arrival/backlog 来源；如果只有 `W8NativeVideo=`，仍只发 gate。

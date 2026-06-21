@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 原生 decoder 提交差值上板
+开发端：Windows Codex
+本轮目标：继续只做视频侧，让上一轮“队列拒绝帧不进 decoder”的效果能在真实长跑摘要和通讯板里直接可见。
+完成内容：`makeW8NativeVideoRetestSummary` 现在读取 `w8NativeVideoDecoderSessionSubmittedFrames`，在 `W8NativeVideo=` 中输出 `submitted=<n>`；当同一摘要有 `pushed=<n>` 时同步输出 `decoderGap=<pushed-submitted>`。这个差值表示 W8 原生低延迟队列挡在持久 MF/D3D11 decoder 前的帧数，方便下一次真实长跑区分预过滤挡旧帧、decoder 真实负载和 Present 是否跟上。
+修改文件：scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md；apps/windows-client/README.md。
+验证方式：TDD 红灯先失败于 `W8 native video summary check failed`，旧摘要只有 `accepted=190 pushed=192`，缺少 `submitted=190 decoderGap=2`；实现后 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 转绿，并显示 `W8NativeVideo=... submitted=190 decoderGap=2 accepted=190 pushed=192 ...`。
+遗留问题：本轮未跑真实带密码桌面长跑，不宣称真实卡顿已修；需要下次现场复制诊断或 W8Post 上板看真实 `decoderGap/presentGap/errors`。
+下一步建议：真实长跑若 `decoderGap` 增长但 `presentFrames/decoded` 和 `presentGap` 健康，优先判为低延迟预过滤在挡旧 delta；若 `decoderGap` 增长且 `presentGap` 也拉大，再继续查关键帧恢复、arrival/backlog 或原生 Present。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在 Windows 本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 原生低延迟队列拒绝帧不再进 decoder
 开发端：Windows Codex
 本轮目标：按用户要求继续主要完成视频侧修改，减少 W8 原生主线里被低延迟队列判定丢弃的旧 H.264 delta 继续占用 MF/D3D11 decoder 的可能。

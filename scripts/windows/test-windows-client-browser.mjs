@@ -454,6 +454,7 @@ function makeH264RetestSummary(value = {}) {
 function makeW8NativeVideoRetestSummary(value = {}) {
   const framesPushed = positiveInteger(value.w8NativeVideoFramesPushed);
   const decoded = positiveInteger(value.w8NativeVideoDecoderSessionDecodedFrames);
+  const submitted = positiveInteger(value.w8NativeVideoDecoderSessionSubmittedFrames);
   const accepted = positiveInteger(value.w8NativeVideoDecoderSessionAcceptedInputFrames);
   const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
@@ -491,6 +492,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const hasEvidence =
     framesPushed > 0 ||
     decoded > 0 ||
+    submitted > 0 ||
     accepted > 0 ||
     presentFrames > 0 ||
     surfaceFrames > 0 ||
@@ -531,6 +533,12 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     parts.push(`queueDropScope=${queueDropScope}`);
     if (queueReason) {
       parts.push(`queueReason=${compactBoardSummaryToken(queueReason, 60)}`);
+    }
+  }
+  if (submitted > 0) {
+    parts.push(`submitted=${submitted}`);
+    if (framesPushed > 0) {
+      parts.push(`decoderGap=${Math.max(0, framesPushed - submitted)}`);
     }
   }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
@@ -682,6 +690,7 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
     w8NativeVideoNativePresentFrames: 188,
     w8NativeVideoDecoderSessionDecodedFrames: 188,
+    w8NativeVideoDecoderSessionSubmittedFrames: 190,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 190,
     w8NativeVideoFramesPushed: 192,
     w8NativeVideoDecoderSessionOutputSubtype: "NV12",
@@ -699,6 +708,7 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoNativePresentStatus: "waiting-nv12-renderer",
     w8NativeVideoNativePresentFrames: 0,
     w8NativeVideoDecoderSessionDecodedFrames: 12,
+    w8NativeVideoDecoderSessionSubmittedFrames: 14,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 14,
     w8NativeVideoFramesPushed: 16,
     w8NativeVideoDecoderSessionOutputSubtype: "NV12",
@@ -713,6 +723,7 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
     w8NativeVideoNativePresentFrames: 3722,
     w8NativeVideoDecoderSessionDecodedFrames: 3722,
+    w8NativeVideoDecoderSessionSubmittedFrames: 3722,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 3722,
     w8NativeVideoFramesPushed: 3722,
     w8NativeVideoDroppedFrames: 3722,
@@ -748,9 +759,13 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("webBypassFrame=188") &&
     text.includes("presenting=yes") &&
     text.includes("presentGap=0") &&
+    text.includes("submitted=190") &&
+    text.includes("decoderGap=2") &&
     w8NativeVideoBehind.includes("mainSurface=native-pending") &&
     w8NativeVideoBehind.includes("presenting=no") &&
     w8NativeVideoBehind.includes("presentGap=12") &&
+    w8NativeVideoBehind.includes("submitted=14") &&
+    w8NativeVideoBehind.includes("decoderGap=2") &&
     w8NativeVideoPredecodeDrops.includes("queueDrops=3722") &&
     w8NativeVideoPredecodeDrops.includes("queueDropScope=predecode") &&
     w8NativeVideoPredecodeDrops.includes("queueReason=waiting-keyframe") &&
