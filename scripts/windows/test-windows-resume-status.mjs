@@ -788,6 +788,12 @@ async function checkWindowsClientDiagnosticsPortOccupancy(args) {
     assertIncludes(payload.commands?.userAuthRequest, "-ClientPort 5200 -DebugPort 9340", "occupied client ports user auth request should prefer alternate ports");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "-ClientPort 5200 -DebugPort 9340", "occupied client ports formal checklist should prefer alternate ports");
     assertIncludes(payload.commands?.formalRun, "-ClientPort 5200 -DebugPort 9340", "occupied client ports formal run should prefer alternate ports");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--clientPort 5200", "occupied client ports real retest should prefer alternate page port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--debugPort 9340", "occupied client ports real retest should prefer alternate debug port");
+    assertNotIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--clientPort 5197", "occupied client ports real retest should not use occupied page port");
+    assertNotIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--debugPort 9337", "occupied client ports real retest should not use occupied debug port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand, "-ClientPort 5200", "occupied client ports PowerShell retest should prefer alternate page port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand, "-DebugPort 9340", "occupied client ports PowerShell retest should prefer alternate debug port");
     assertIncludes(payload.boardSummary, "WinClientDiagnosticsAlt=", "occupied client ports board summary");
     assertIncludes(payload.boardSummary, "--clientPort 5200 --debugPort 9340", "occupied client ports board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "occupied client ports JSON");

@@ -596,6 +596,12 @@ async function checkCustomClientDiagnosticsPorts(args) {
     assertIncludes(payload.commands?.userAuthRequest, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports user auth request should prefer alternate ports");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports formal checklist should prefer alternate ports");
     assertIncludes(payload.commands?.formalRun, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports formal run should prefer alternate ports");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--clientPort 5201", "PowerShell custom ports real retest should prefer alternate page port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--debugPort 9341", "PowerShell custom ports real retest should prefer alternate debug port");
+    assertNotIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--clientPort 5200", "PowerShell custom ports real retest should not use occupied page port");
+    assertNotIncludes(payload.commands?.windowsClientRetestBoardSummaryCommand, "--debugPort 9340", "PowerShell custom ports real retest should not use occupied debug port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand, "-ClientPort 5201", "PowerShell custom ports retest wrapper should prefer alternate page port");
+    assertIncludes(payload.commands?.windowsClientRetestBoardSummaryPowerShellCommand, "-DebugPort 9341", "PowerShell custom ports retest wrapper should prefer alternate debug port");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--clientPort 5200 --debugPort 9340", "PowerShell custom ports client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--clientPort 5201 --debugPort 9341", "PowerShell custom ports alternate diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-ClientPort 5200 -DebugPort 9340", "PowerShell custom ports client diagnostics PowerShell command");
