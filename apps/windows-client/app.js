@@ -3321,6 +3321,59 @@ function formatVideoLocalQueueStatusText() {
   return parts.join(" · ");
 }
 
+function formatVideoLiveHealthStatusText(now = performance.now(), {
+  firstFrameWaitStatus = null,
+  streamStallStatus = null,
+} = {}) {
+  const frameCount = Number(state.videoFrames) || 0;
+  if (frameCount <= 0) return "";
+  if (firstFrameWaitStatus?.waiting || streamStallStatus?.stalled) return "";
+
+  const decoderQueueMetrics = getH264DecoderQueueMetrics(now);
+  const decoderQueueMs = Math.max(
+    Number(decoderQueueMetrics.oldestAgeMs) || 0,
+    Number(state.videoDecoderQueueMs || state.hostDiagnostics?.videoDecoderQueueMs) || 0,
+  );
+  const targetAgeMs = getH264LiveBacklogTargetAgeMs();
+  const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
+  const liveBacklogRecoveryCount =
+    Number(state.h264LiveBacklogRecoveryCount || state.hostDiagnostics?.h264LiveBacklogRecoveryCount) || 0;
+  const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
+  const decoderStatus = String(state.h264DecoderStatus || state.hostDiagnostics?.videoDecoderStatus || "").toLowerCase();
+  const needsKeyFrame = Boolean(state.h264DecoderNeedsKeyFrame || state.hostDiagnostics?.h264DecoderNeedsKeyFrame);
+  if (needsKeyFrame && decoderStatus && decoderStatus !== "idle") {
+    return "视频等关键帧";
+  }
+  if (
+    staleDrops > 0 ||
+    decoderQueueMs >= Math.max(h264MaximumQueueAgeMs, targetAgeMs * 2) ||
+    /queue-overflow|recovery-keyframe-jump-live/.test(dropReason)
+  ) {
+    return "视频积压";
+  }
+  if (
+    liveBacklogRecoveryCount > 0 ||
+    decoderQueueMs >= targetAgeMs ||
+    /live-backlog/.test(dropReason)
+  ) {
+    return "视频追实时";
+  }
+
+  const actual = Number(state.actualVideoFps) || 0;
+  const negotiated = Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value) || 0;
+  const remoteMediaGapStats = getVideoRemoteMediaGapStats();
+  const expectedGapMs = negotiated > 0 ? 1000 / negotiated : 0;
+  const remoteCadenceLooksHealthy =
+    remoteMediaGapStats.sampleCount >= 2 &&
+    expectedGapMs > 0 &&
+    remoteMediaGapStats.averageGapMs <= expectedGapMs * 1.45;
+  if (actual > 0 && negotiated > 0 && actual < negotiated * 0.75) {
+    return remoteCadenceLooksHealthy ? "本机绘制偏慢" : "视频低 FPS";
+  }
+
+  return "视频实时正常";
+}
+
 function updateFpsMetric() {
   const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
   const negotiated = state.negotiatedFps || requested;
@@ -3333,6 +3386,10 @@ function updateFpsMetric() {
   const fpsLimitText = formatRemoteFpsLimitText();
   if (fpsLimitText) {
     parts.push(fpsLimitText);
+  }
+  const liveHealthText = formatVideoLiveHealthStatusText();
+  if (liveHealthText) {
+    parts.push(liveHealthText);
   }
   const frameGapText = formatVideoFrameGapStatusText();
   if (frameGapText) {
@@ -5381,6 +5438,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const remoteMediaGapStats = getVideoRemoteMediaGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
   const streamStallStatus = firstFrameWaitStatus.waiting ? { stalled: false } : getVideoStreamStallStatus(now);
+  const liveHealthText = formatVideoLiveHealthStatusText(now, { firstFrameWaitStatus, streamStallStatus });
   const parts = [];
   parts.push(actual > 0 ? `实收 ${actual.toFixed(1)} FPS` : "实收 -- FPS");
   if (firstFrameWaitStatus.waiting) {
@@ -5392,6 +5450,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   if (requested) parts.push(`请求 ${requested} Hz`);
   if (negotiated) parts.push(`协商 ${negotiated} Hz`);
+  if (liveHealthText) parts.push(liveHealthText);
   if (sampleCount >= 2) {
     parts.push(`平均间隔 ${averageGapMs} ms`);
     parts.push(`最大间隔 ${maxGapMs} ms`);

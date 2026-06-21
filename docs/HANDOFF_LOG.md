@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W2 视频 live 健康标签
+开发端：Windows Codex
+本轮目标：按用户要求把本轮重点放回视频侧，在 W2 已 PASS 的基础上增强长时间/后台复测时的一眼诊断。
+完成内容：Windows client 新增 `formatVideoLiveHealthStatusText`，把实收 FPS、协商/请求 Hz、远端媒体间隔、本机 H.264 队列、过期丢帧、live backlog 请求和关键帧状态折成 `视频实时正常`、`本机绘制偏慢`、`视频低 FPS`、`视频追实时`、`视频积压`、`视频等关键帧`。标签进入页面 FPS 行、悬停 title 和复制/导出诊断；页面自检覆盖积压与健康两个场景。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：红灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5214 --debugPort 9354 --timeoutMs 45000` 先失败于缺 `视频积压` / `视频实时正常`；绿灯同脚本 `--clientPort 5215 --debugPort 9355` 通过。
+遗留问题：这轮是视频侧诊断增强，不宣称又修复了新的真实卡顿；下一次真实复测需要看标签和本机队列/远端媒体间隔是否一致。
+下一步建议：若标签为 `视频实时正常`，继续做长时间体验；若为 `本机绘制偏慢` 或 `视频积压`，优先查 Windows 本机浏览器/WebCodecs/canvas 调度和 H.264 queue reason；只有 `recv/key/sps/pps/idr` 缺失时再让 Mac 补证据。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续需要 Mac host 在线和用户真实复测。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W7 音频恢复缓冲低延迟收敛
 开发端：Windows Codex
 本轮目标：响应 ad3d8b5 后真实复测结果，把音频剩余工作从 Mac PCM cadence 转为 Windows WebAudio 队列低延迟收敛。

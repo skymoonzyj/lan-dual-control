@@ -5475,6 +5475,39 @@ async function verifyVideoStutterDiagnostics(session) {
           fpsTitleText.includes("回退恢复 2 次") &&
           fpsTitleText.includes("恢复暂停 1 次") &&
           fpsTitleText.includes("暂停剩余");
+        const videoBacklogHealthVisible =
+          exportText.includes("视频积压") &&
+          fpsStatusText.includes("视频积压") &&
+          fpsTitleText.includes("视频积压");
+        state.videoFrameTimes = [2000, 2017, 2034, 2051, 2068, 2085];
+        state.videoFrameTimingSamples = [
+          { receivedAt: 2000, remoteMediaAtMs: 0 },
+          { receivedAt: 2017, remoteMediaAtMs: 17 },
+          { receivedAt: 2034, remoteMediaAtMs: 34 },
+          { receivedAt: 2051, remoteMediaAtMs: 51 },
+          { receivedAt: 2068, remoteMediaAtMs: 68 },
+          { receivedAt: 2085, remoteMediaAtMs: 85 },
+        ];
+        state.videoFrames = 6;
+        state.actualVideoFps = 60;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.hostDiagnostics = {};
+        state.h264DecoderQueue = [];
+        state.h264DecoderLatencyMs = 0;
+        state.videoDecoderQueueMs = 32;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+        state.h264FallbackRecoveryCount = 0;
+        state.h264FallbackLastReason = "";
+        state.h264FallbackRecoveryPauseCount = 0;
+        state.h264FallbackRecoveryPausedUntil = 0;
+        const healthyExportText = getVideoPerformanceExportStatus();
+        updateFpsMetric();
+        const healthyFpsStatusText = fpsElement?.textContent || "";
+        const healthyLiveStatusVisible =
+          healthyExportText.includes("视频实时正常") &&
+          healthyFpsStatusText.includes("视频实时正常");
         const firstFrameWaitNow = 9000;
         state.connected = true;
         state.videoFrames = 0;
@@ -5525,14 +5558,20 @@ async function verifyVideoStutterDiagnostics(session) {
             videoStutterStatusVisible &&
             videoLocalQueueStatusVisible &&
             videoLocalQueueTitleVisible &&
+            videoBacklogHealthVisible &&
+            healthyLiveStatusVisible &&
             videoFirstFrameWaitVisible &&
             videoStreamStallVisible,
           exportText,
+          healthyExportText,
           videoStutterStatusVisible,
           videoLocalQueueStatusVisible,
           videoLocalQueueTitleVisible,
+          videoBacklogHealthVisible,
+          healthyLiveStatusVisible,
           fpsStatusText,
           fpsTitleText,
+          healthyFpsStatusText,
           videoFirstFrameWaitVisible,
           firstFrameWaitRendered,
           firstFrameWaitStatusText,

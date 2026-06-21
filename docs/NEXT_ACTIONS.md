@@ -3,6 +3,7 @@
 最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- 最新 W2 视频侧口径：Windows client 现在会在页面 FPS 行和复制/导出诊断里显示视频 live 健康标签：`视频实时正常`、`本机绘制偏慢`、`视频低 FPS`、`视频追实时`、`视频积压`、`视频等关键帧`。下一次真实复测时先看这个标签：若是 `视频实时正常` 且本机队列约 30-60ms，可继续长时间体验；若是 `本机绘制偏慢`，优先查 Windows 浏览器/WebCodecs/canvas 调度；若是 `视频追实时` 或 `视频积压`，再看本机队列、过期丢帧、`live-backlog-keyframe-*` 或 `queue-overflow-*` reason；若是 `视频等关键帧`，对照 `recv/key/sps/pps/idr` 决定是否需要 Mac 补证据。不改协议、不需要 Mac 改代码。
 - 最新 W7 音频低延迟收敛：ad3d8b5/c7f8ce6 后用户真实复测显示 dropped=0、本地平均/最大间隔 15/29ms、远端音频 20/20ms，说明 Mac PCM cadence 已正常；剩余问题是 WebAudio queue 仍约 188ms。Windows 控制端当前恢复期 `queue-underrun-recovery-prebuffer` 为 100ms，并已补强测试避免该路径被启动期分支误判。下一次真实最小化/切 app/切回复测时，重点看“现场声音”队列是否下降到更接近 100-120ms，同时确认 dropped/refill/stutter 不回升；若队列仍高，再查 Windows AudioContext 调度/nextPlayTime 策略，不回到 Mac PCM 源假设。
 - 最新 W2 Windows 侧修复：Windows client 已新增 H.264 live backlog 追实时策略。下一次真实复测重点看现场视频是否出现 `追实时请求 <n> 次`、`原因 live-backlog-keyframe-request` 或 `live-backlog-keyframe-jump-live`，以及本机队列是否从约 117-123ms 回落、实收/绘制是否更接近 60Hz。若仍只有约 33fps 且远端媒体间隔仍 17/21ms，继续查 Windows 浏览器后台 WebSocket handler / WebCodecs output / canvas 绘制调度；不要回到 Mac 产帧或旧 keyframe wait-loop。
 - 最新现场校正：cc8da2aa 后真实复测为 NOT-PASS，关键帧等待循环和 canvas 黑屏不是当前主因；下一步不要继续只围绕 `needsKeyframe` / `queue-overflow-wait-keyframe` 打补丁。Windows 控制端本轮新增远端媒体间隔 vs 本地到达间隔诊断；下一次真实复测或复制诊断时，先看“现场视频”的 `远端媒体平均/最大间隔` 与本地 `平均/最大间隔` 是否分离，再判断是 Mac 产帧/发送节奏、Windows 接收/浏览器后台节流，还是单纯系统时钟导致原始 arrival 偏大。音频同理先看 `远端音频平均/最大间隔` 与本地音频最大间隔/补缓冲。

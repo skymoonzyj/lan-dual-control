@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W2 视频 live 健康标签
+- Windows 控制端在现有 H.264/WebCodecs 队列治理基础上新增本地视频 live 健康标签，不改协议、不改 Mac host。页面 FPS 行、悬停 title 和复制/导出诊断会把多个现场指标折成一句：`视频实时正常`、`本机绘制偏慢`、`视频低 FPS`、`视频追实时`、`视频积压` 或 `视频等关键帧`。判断依据复用现有实收 FPS、协商/请求 Hz、远端媒体间隔、本机 H.264 队列、过期丢帧、live backlog 请求和关键帧状态；diagnosticsOnly 回归覆盖积压场景和健康场景。下一次真实最小化/切 app/切回复测时，先看这个标签，再看本机队列、远端媒体间隔和 reason，能更快区分“健康流动”“Windows 本地绘制/解码慢”和“关键帧恢复/队列积压”。
+
 ## 2026-06-21 W7 音频恢复缓冲低延迟收敛
 - ad3d8b5/c7f8ce6 后真实复测显示音频 dropped/refill/stutter 已明显改善，远端音频间隔 `20/20ms` 正常，但 WebAudio 队列仍约 `188ms` 偏高；这说明当前重点是 Windows 本地播放队列收敛，不是 Mac PCM 源不稳。当前 Windows 控制端已将可见性恢复 / snap-live 后短窗口内的 `queue-underrun-recovery-prebuffer` 收到约 `100ms`，让切回后再次 underrun 时更快贴近实时，同时保留启动期低延迟和重复 underrun 稳定缓冲门禁。本轮补强 `--onlyAudioBufferGuards` 覆盖恢复期再次 underrun 的真实状态：先用不完整恢复场景跑出 failure，再修正为“已播放过足够帧后再次 underrun”，绿灯确认 recovery 分支不被启动期分支误吞。不改系统声音输出、不请求密码、不认证、不发 input/inject。
 
