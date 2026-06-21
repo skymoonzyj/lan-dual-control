@@ -453,6 +453,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const accepted = positiveInteger(value.w8NativeVideoDecoderSessionAcceptedInputFrames);
   const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
+  const queueDrops = positiveInteger(value.w8NativeVideoDroppedFrames);
   const errors = positiveInteger(value.w8NativeVideoErrors);
   const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
   const output = String(value.w8NativeVideoDecoderSessionOutputSubtype || "").trim();
@@ -464,6 +465,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const swapchain = String(value.w8NativeVideoWindowSwapchainStatus || "").trim();
   const codec = String(value.w8NativeVideoCodecString || "").trim();
   const lastError = String(value.w8NativeVideoLastError || "").trim();
+  const queueReason = String(value.w8NativeVideoLastReason || "").trim();
   const reasonText = [
     status,
     output,
@@ -485,20 +487,37 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     presentFrames > 0 ||
     surfaceFrames > 0 ||
     Boolean(status || present || surface || copy || handoff || swapchain || codec || lastError);
+  const presentLower = present.toLowerCase();
+  const isWindowPresenting = presentFrames > 0 && presentLower.includes("presented");
+  const hasNativePipeline =
+    decoded > 0 ||
+    accepted > 0 ||
+    presentFrames > 0 ||
+    surfaceFrames > 0 ||
+    Boolean(status || present || surface || copy || handoff || swapchain);
 
   if (!hasEvidence) return "";
 
   const parts = [];
+  parts.push("ui=html-shell");
+  parts.push(`mainSurface=${isWindowPresenting ? "native-hwnd" : hasNativePipeline ? "native-pending" : "unknown"}`);
+  parts.push("canvasRole=diagnostic-fallback");
   if (status) parts.push(`status=${status}`);
   if (present) parts.push(`present=${present}`);
   if (presentFrames > 0) parts.push(`presentFrames=${presentFrames}`);
   if (decoded > 0 || status) parts.push(`decoded=${decoded}`);
   if (decoded > 0 || presentFrames > 0 || present) {
-    const presentLower = present.toLowerCase();
-    const isWindowPresenting = presentFrames > 0 && presentLower.includes("presented");
     const presentGap = Math.max(0, decoded - presentFrames);
     parts.push(`presenting=${isWindowPresenting ? "yes" : "no"}`);
     parts.push(`presentGap=${presentGap}`);
+  }
+  if (queueDrops > 0) {
+    const queueDropScope = hasNativePipeline ? "predecode" : "queue";
+    parts.push(`queueDrops=${queueDrops}`);
+    parts.push(`queueDropScope=${queueDropScope}`);
+    if (queueReason) {
+      parts.push(`queueReason=${compactBoardSummaryText(queueReason, 60).replace(/\s+/g, "_")}`);
+    }
   }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
   if (framesPushed > 0) parts.push(`pushed=${framesPushed}`);
@@ -671,6 +690,22 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoWindowSwapchainStatus: "ready",
     w8NativeVideoErrors: 0,
   });
+  const w8NativeVideoPredecodeDrops = makeW8NativeVideoRetestSummary({
+    w8NativeVideoDecoderSessionStatus: "latest-frame-presented",
+    w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+    w8NativeVideoNativePresentFrames: 3722,
+    w8NativeVideoDecoderSessionDecodedFrames: 3722,
+    w8NativeVideoDecoderSessionAcceptedInputFrames: 3722,
+    w8NativeVideoFramesPushed: 3722,
+    w8NativeVideoDroppedFrames: 3722,
+    w8NativeVideoLastReason: "waiting-keyframe",
+    w8NativeVideoDecoderSessionOutputSubtype: "NV12",
+    w8NativeVideoNativeSurfaceStatus: "latest-frame-presented",
+    w8NativeVideoNativeSurfaceCopyStatus: "latest-frame-presented",
+    w8NativeVideoFrameHandoffStatus: "latest-frame-ready",
+    w8NativeVideoWindowSwapchainStatus: "ready",
+    w8NativeVideoErrors: 0,
+  });
   const text = makeBoardSummary({
     status: "passed",
     mode: "connect",
@@ -686,16 +721,25 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("present=latest-frame-nv12-converted-presented") &&
     text.includes("presentFrames=188") &&
     text.includes("decoded=188") &&
+    text.includes("ui=html-shell") &&
+    text.includes("mainSurface=native-hwnd") &&
+    text.includes("canvasRole=diagnostic-fallback") &&
     text.includes("presenting=yes") &&
     text.includes("presentGap=0") &&
+    w8NativeVideoBehind.includes("mainSurface=native-pending") &&
     w8NativeVideoBehind.includes("presenting=no") &&
     w8NativeVideoBehind.includes("presentGap=12") &&
+    w8NativeVideoPredecodeDrops.includes("queueDrops=3722") &&
+    w8NativeVideoPredecodeDrops.includes("queueDropScope=predecode") &&
+    w8NativeVideoPredecodeDrops.includes("queueReason=waiting-keyframe") &&
+    w8NativeVideoPredecodeDrops.includes("mainSurface=native-hwnd") &&
+    w8NativeVideoPredecodeDrops.includes("presenting=yes") &&
     text.includes("output=NV12") &&
     text.includes("codec=avc1.420029") &&
     text.includes("streamChange=yes") &&
     text.includes("deviceLost=yes") &&
     text.includes("errors=0");
-  return { ok, text, w8NativeVideo, w8NativeVideoBehind };
+  return { ok, text, w8NativeVideo, w8NativeVideoBehind, w8NativeVideoPredecodeDrops };
 }
 
 function emitBoardSummary(summary) {
@@ -5635,10 +5679,10 @@ async function verifyH264KeyFrameDetection(session) {
                   return {
                     video: {
                       accepted: true,
-                      droppedFrames: 0,
+                      droppedFrames: id === 42 ? 7 : 0,
                       queueMs: id === 42 ? 16 : 0,
                       waitingForKeyframe: false,
-                      reason: "queued",
+                      reason: id === 42 ? "waiting-keyframe" : "queued",
                     },
                     summary: id === 42
                       ? {
@@ -5919,6 +5963,7 @@ async function verifyH264KeyFrameDetection(session) {
           state.w8NativeVideoFramesPushed === 2 &&
           state.hostDiagnostics?.w8NativeVideoFramesPushed === 2 &&
           state.hostDiagnostics?.w8NativeVideoQueueMs === 16 &&
+          state.hostDiagnostics?.w8NativeVideoDroppedFrames === 7 &&
           state.hostDiagnostics?.w8NativeVideoHasDecoderConfig === true &&
           state.hostDiagnostics?.w8NativeVideoCodecString === "avc1.420029" &&
           state.hostDiagnostics?.w8NativeVideoDecoderReady === true &&
@@ -5975,8 +6020,13 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoWindowSwapchainHeight === 1080 &&
           state.hostDiagnostics?.w8NativeVideoWindowSwapchainBufferCount === 2 &&
           state.hostDiagnostics?.w8NativeVideoWindowSwapchainSwapEffect === "flip-discard" &&
+          exportText.includes("界面 HTML 壳") &&
+          exportText.includes("视频主画面 原生链路待 Present") &&
+          exportText.includes("Web canvas 诊断/备用") &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
+          exportText.includes("原生预队列丢旧帧 7") &&
+          !exportText.includes("原生丢旧帧 7") &&
           exportText.includes("原生解码配置 avc1.420029") &&
           exportText.includes("原生解码器 ready") &&
           exportText.includes("D3D11 11_1") &&
@@ -6034,6 +6084,7 @@ async function verifyH264KeyFrameDetection(session) {
           nativeCalls,
           w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
           w8NativeVideoQueueMs: state.hostDiagnostics?.w8NativeVideoQueueMs,
+          w8NativeVideoDroppedFrames: state.hostDiagnostics?.w8NativeVideoDroppedFrames,
           w8NativeVideoHasDecoderConfig: state.hostDiagnostics?.w8NativeVideoHasDecoderConfig,
           w8NativeVideoCodecString: state.hostDiagnostics?.w8NativeVideoCodecString,
           w8NativeVideoDecoderReady: state.hostDiagnostics?.w8NativeVideoDecoderReady,

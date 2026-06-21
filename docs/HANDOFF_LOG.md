@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 原生队列预过滤口径校准
+开发端：Windows Codex
+本轮目标：按通讯板 C4/W10 `PARTIAL-PASS` 结论处理 W8 视频侧，解释并修正“画面已绘制 63.9 FPS 但原生丢旧帧全丢”的诊断矛盾。
+完成内容：定位到 W8 旧 `native-video-queue-mvp` 低延迟队列与长期 native decoder worker 是两层：queue 的 `droppedFrames/waiting-keyframe` 是 predecode 预过滤统计，不会阻止同一个 H.264 access unit 继续进入 native decoder/present。Windows 控制端现在在 native decoder/session/surface/present 有进展时，把现场诊断显示为 `原生预队列丢旧帧`，并明确 `界面 HTML 壳`、`视频主画面 原生 MF/D3D11/HWND|原生链路待 Present`、`Web canvas 诊断/备用`；`W8NativeVideo=` 追加 `ui=html-shell mainSurface=native-hwnd|native-pending canvasRole=diagnostic-fallback queueDrops=<n> queueDropScope=predecode queueReason=<reason>`，避免误判为 Web 主画面或原生呈现全丢。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于旧导出文案仍为 `原生丢旧帧 7` / 缺 `界面 HTML 壳` 等主面标签，且 `W8NativeVideo=` 缺 `queueDropScope=predecode` / `mainSurface=native-hwnd`；实现后 W8/H.264 视频专项转绿。提交前继续跑语法、完整 Windows client diagnosticsOnly、diff check 和冲突扫描。
+遗留问题：这轮校准的是统计口径，不宣称已经解决真实 arrival 9.1s、本机队列 190ms 或 live-backlog 请求偏多；下一次真实长跑仍需看体感、arrival/backlog、`presentFrames/decoded` 是否持续增长和 `errors=0`。
+下一步建议：继续用 `Start-Windows-Desktop-Control-Mac.cmd` 做真实桌面端视频验收；看到 `mainSurface=native-hwnd`、`queueDropScope=predecode` 且 `presenting=yes` 时先不回 Web gate，继续查 arrival/backlog 或 native present 增长趋势。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W10 Windows 恢复总览桌面视频入口
 开发端：Windows Codex
 本轮目标：继续按视频侧主线推进，让开工第一屏直接显示桌面控制端主入口，减少误走 Web/browser 诊断路径。

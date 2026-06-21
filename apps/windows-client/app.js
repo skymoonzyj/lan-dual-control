@@ -6223,6 +6223,16 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoNativePresentReason ||
       "",
   ).trim();
+  const nativeDecoderProgress =
+    nativeDecoderSessionSubmittedFrames > 0 ||
+    nativeDecoderSessionAcceptedInputFrames > 0 ||
+    nativeDecoderSessionDecodedFrames > 0 ||
+    nativeSurfacePresentedFrames > 0 ||
+    nativePresentFrames > 0 ||
+    nativeDecoderSessionActive ||
+    Boolean(nativeSurfaceStatus || nativePresentStatus);
+  const nativeWindowPresenting =
+    nativePresentFrames > 0 && nativePresentStatus.toLowerCase().includes("presented");
   const nativeWindowSwapchainReady = Boolean(
     state.w8NativeVideoWindowSwapchainReady ||
       state.hostDiagnostics?.w8NativeVideoWindowSwapchainReady,
@@ -6313,9 +6323,18 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`SPS/PPS/IDR ${receivedSps}/${receivedPps}/${receivedIdr}`);
   }
   if (lastNalTypes) parts.push(`NAL ${lastNalTypes}`);
+  if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
+    parts.push("界面 HTML 壳");
+    parts.push(
+      `视频主画面 ${nativeWindowPresenting ? "原生 MF/D3D11/HWND" : "原生链路待 Present"}`,
+    );
+    parts.push("Web canvas 诊断/备用");
+  }
   if (nativeFrames > 0) parts.push(`原生队列 ${nativeFrames}`);
   if (nativeQueueMs > 0) parts.push(`原生队列 ${Math.round(nativeQueueMs)} ms`);
-  if (nativeDroppedFrames > 0) parts.push(`原生丢旧帧 ${nativeDroppedFrames}`);
+  if (nativeDroppedFrames > 0) {
+    parts.push(`${nativeDecoderProgress ? "原生预队列丢旧帧" : "原生丢旧帧"} ${nativeDroppedFrames}`);
+  }
   if (nativeCodecString) parts.push(`原生解码配置 ${nativeCodecString}`);
   else if (nativeHasDecoderConfig) parts.push("原生解码配置已到达");
   if (nativeDecoderMode) parts.push(`原生解码器 ${nativeDecoderReady ? "ready" : "blocked"}`);

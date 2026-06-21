@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 原生队列预过滤口径校准
+- C4/W10 用户真实桌面端日志复测为 `PARTIAL-PASS`：入口可用、H.264 真实屏幕已绘制且约 63.9 FPS，但旧诊断同时显示 `原生丢旧帧=3722` / `waiting-keyframe`，容易误判为原生呈现全丢。根因是 W8 旧 `native-video-queue-mvp` 低延迟队列和后续长期 native decoder worker 已经是两层：queue 的 `droppedFrames` 是 predecode/预队列丢旧口径，不会阻止同一个 H.264 access unit 继续进入 native decoder/present。Windows 控制端现在在 decoder/session/surface/present 有进展时把现场诊断显示为 `原生预队列丢旧帧`，复制诊断会明确 `界面 HTML 壳`、`视频主画面 原生 MF/D3D11/HWND|原生链路待 Present`、`Web canvas 诊断/备用`；`W8NativeVideo=` 追加 `ui=html-shell mainSurface=native-hwnd|native-pending canvasRole=diagnostic-fallback queueDrops=<n> queueDropScope=predecode queueReason=<reason>`。本轮不改 Mac、不改协议、不改认证/密码/input/inject，也不回到 Web gate。
+
 ## 2026-06-21 W10 Windows 恢复总览桌面视频入口
 - Windows 恢复总览 `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 现在直接暴露 `WindowsDesktopEntry=`：`start=Start-Windows-Desktop-Control-Mac.cmd`、`build=Build-Windows-Desktop-Control-Mac.cmd`、`status=node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary`、`next=desktop-connect-copy-diagnostics`、`web=diagnostic-only`。这让每天开工第一屏就能看到真实 Windows 控 Mac 视频验收应走 Tauri 桌面端，而不是误把 Web/browser diagnostics 当 W8/W10 主 gate。本轮只做只读状态入口，不启动 app、不请求密码、不认证、不发 input/inject，不改 Mac/协议。
 
