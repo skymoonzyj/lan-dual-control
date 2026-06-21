@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 NV12 HWND resize recovery
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 NV12 VideoProcessor -> HWND Present 后，补上窗口 client resize 时的 swapchain/present texture 恢复。
+完成内容：NV12 原生 Present 路径现在会用真实窗口 client 尺寸初始化 BGRA8 present texture 和 `IDXGISwapChain1` back buffer；如果窗口 client 尺寸变化，下一帧会先 `ResizeBuffers`，重建 BGRA8 present texture，再用 D3D11 `VideoProcessorBlt` 把 NV12 latest-frame 缩放/转换到新 client 尺寸并继续 `Present`。诊断仍为 `nativePresentStatus=latest-frame-nv12-converted-presented`，resize 后 reason 包含 `resized HWND swapchain to <width>x<height>`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 NV12 HWND present width 仍固定 1920；实现后 `native_present_target_resizes_nv12_hwnd_swapchain_to_client_size` 通过，`w8_native_video` Rust 专项 18 项通过。完整验证见本轮提交前命令记录。
+遗留问题：BGRA 旧路径仍保持原有固定 present 目标；后续还需要 stream-change 输出重选、D3D11 device-lost 恢复和真实 Mac 长跑观感验证。
+下一步建议：继续 W8 视频侧：优先做 Media Foundation stream-change 输出重选，随后做 device-lost/native surface 重建；真实 Mac 长跑时重点看 `nativePresentStatus` 和 resize 后 reason。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实长跑需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 NV12 VideoProcessor -> HWND Present
 开发端：Windows Codex
 本轮目标：继续只做视频侧，把上一轮 BGRA8 HWND swapchain Present 推进到 Mac 常见 NV12 decoded sample 也能进入真实窗口 swapchain。

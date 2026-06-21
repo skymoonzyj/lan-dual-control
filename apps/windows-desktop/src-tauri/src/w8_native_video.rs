@@ -32,8 +32,8 @@ use windows::Win32::Graphics::Dxgi::Common::{
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, IDXGIFactory2, IDXGIOutput, IDXGISwapChain1, DXGI_PRESENT,
-    DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
-    DXGI_USAGE_RENDER_TARGET_OUTPUT,
+    DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG,
+    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
 };
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
@@ -1099,6 +1099,7 @@ struct W8NativeSurfaceTargetRuntime {
     _texture: ID3D11Texture2D,
     _present_texture: ID3D11Texture2D,
     _swapchain: Option<IDXGISwapChain1>,
+    _window_present_target: Option<W8NativeWindowPresentTargetConfig>,
     summary: W8NativeSurfaceTargetSummary,
 }
 
@@ -1303,10 +1304,9 @@ pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
         video_queue_hard_max_ms: config.hard_max_queue_ms,
         max_frames: config.max_frames,
         next_native_steps: vec![
-            "attach BGRA8 native present target to a real HWND swapchain or native renderer"
-                .to_string(),
-            "add NV12 shader conversion path for native present".to_string(),
-            "handle stream-change, surface resize, and D3D11 device-lost rebuilds".to_string(),
+            "validate NV12 HWND swapchain resize during real Mac long-running sessions".to_string(),
+            "handle Media Foundation stream-change output reconfiguration".to_string(),
+            "handle D3D11 device-lost rebuilds for native surface and swapchain".to_string(),
         ],
     }
 }
@@ -1533,6 +1533,34 @@ unsafe fn create_d3d11_hwnd_swapchain_for_device(
 }
 
 #[cfg(windows)]
+unsafe fn create_d3d11_bgra_present_texture(
+    device: &ID3D11Device,
+    width: u32,
+    height: u32,
+) -> Result<ID3D11Texture2D, String> {
+    let present_desc = D3D11_TEXTURE2D_DESC {
+        Width: width.max(1),
+        Height: height.max(1),
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE).0 as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: 0,
+    };
+    let mut present_texture = None;
+    device
+        .CreateTexture2D(&present_desc, None, Some(&mut present_texture))
+        .map_err(|error| format!("CreateTexture2D BGRA8 present target failed: {error}"))?;
+    present_texture.ok_or_else(|| "CreateTexture2D returned no BGRA8 present texture".to_string())
+}
+
+#[cfg(windows)]
 fn format_d3d_feature_level(level: D3D_FEATURE_LEVEL) -> String {
     if level == D3D_FEATURE_LEVEL_11_1 {
         "11_1".to_string()
@@ -1583,27 +1611,10 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
         .map_err(|error| format!("CreateTexture2D latest-frame target failed: {error}"))?;
     let texture =
         texture.ok_or_else(|| "CreateTexture2D returned no latest-frame texture".to_string())?;
-    let present_desc = D3D11_TEXTURE2D_DESC {
-        Width: DEFAULT_NATIVE_SURFACE_WIDTH,
-        Height: DEFAULT_NATIVE_SURFACE_HEIGHT,
-        MipLevels: 1,
-        ArraySize: 1,
-        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-        SampleDesc: DXGI_SAMPLE_DESC {
-            Count: 1,
-            Quality: 0,
-        },
-        Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE).0 as u32,
-        CPUAccessFlags: 0,
-        MiscFlags: 0,
-    };
-    let mut present_texture = None;
-    device
-        .CreateTexture2D(&present_desc, None, Some(&mut present_texture))
-        .map_err(|error| format!("CreateTexture2D BGRA8 present target failed: {error}"))?;
-    let present_texture = present_texture
-        .ok_or_else(|| "CreateTexture2D returned no BGRA8 present texture".to_string())?;
+    let present_dimensions =
+        native_present_texture_dimensions_for_target(&surface_format, window_present_target);
+    let present_texture =
+        create_d3d11_bgra_present_texture(&device, present_dimensions.0, present_dimensions.1)?;
     let swapchain = match window_present_target {
         Some(target) => {
             let hwnd = target.hwnd();
@@ -1613,8 +1624,8 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
             Some(create_d3d11_hwnd_swapchain_for_device(
                 &device,
                 hwnd,
-                DEFAULT_NATIVE_SURFACE_WIDTH,
-                DEFAULT_NATIVE_SURFACE_HEIGHT,
+                present_dimensions.0,
+                present_dimensions.1,
             )?)
         }
         None => None,
@@ -1631,8 +1642,8 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
             format_d3d_feature_level(selected),
             target.client_width.max(1),
             target.client_height.max(1),
-            DEFAULT_NATIVE_SURFACE_WIDTH,
-            DEFAULT_NATIVE_SURFACE_HEIGHT
+            present_dimensions.0,
+            present_dimensions.1
         ),
         _ => format!(
             "ready; D3D11 {} BGRA8 present texture target created; waiting for renderer/swapchain",
@@ -1646,6 +1657,7 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
         _texture: texture,
         _present_texture: present_texture,
         _swapchain: swapchain,
+        _window_present_target: window_present_target,
         summary: W8NativeSurfaceTargetSummary {
             ready: true,
             mode: "d3d11-latest-frame-texture-target".to_string(),
@@ -1665,13 +1677,26 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
             native_present_mode: native_present_mode.to_string(),
             native_present_status: "waiting-latest-frame".to_string(),
             native_present_format: "BGRA8".to_string(),
-            native_present_width: DEFAULT_NATIVE_SURFACE_WIDTH,
-            native_present_height: DEFAULT_NATIVE_SURFACE_HEIGHT,
+            native_present_width: present_dimensions.0,
+            native_present_height: present_dimensions.1,
             native_present_frames: 0,
             native_present_last_frame_id: None,
             native_present_reason,
         },
     })
+}
+
+#[cfg(windows)]
+fn native_present_texture_dimensions_for_target(
+    surface_format: &str,
+    window_present_target: Option<W8NativeWindowPresentTargetConfig>,
+) -> (u32, u32) {
+    if surface_format.eq_ignore_ascii_case("NV12") {
+        if let Some(target) = window_present_target {
+            return (target.client_width.max(1), target.client_height.max(1));
+        }
+    }
+    (DEFAULT_NATIVE_SURFACE_WIDTH, DEFAULT_NATIVE_SURFACE_HEIGHT)
 }
 
 #[cfg(windows)]
@@ -1800,6 +1825,7 @@ unsafe fn convert_nv12_latest_frame_for_native_present(
     target: &mut W8NativeSurfaceTargetRuntime,
     frame_id: u64,
 ) -> Result<(), String> {
+    let resized = sync_nv12_hwnd_present_target_size(target)?;
     convert_nv12_latest_frame_to_bgra_present_texture(target)?;
 
     let present_resource: ID3D11Resource = target
@@ -1808,10 +1834,13 @@ unsafe fn convert_nv12_latest_frame_for_native_present(
         .map_err(|error| format!("present texture cast to resource failed: {error}"))?;
     if target._swapchain.is_some() {
         present_bgra_texture_to_hwnd_swapchain(target, frame_id, &present_resource)?;
+        let resize_note = resized
+            .map(|(width, height)| format!("; resized HWND swapchain to {width}x{height}"))
+            .unwrap_or_default();
         target.summary.native_present_status = "latest-frame-nv12-converted-presented".to_string();
         target.summary.native_present_reason = format!(
-            "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture and Present copied it into HWND swapchain; frames={}",
-            target.summary.native_present_frames
+            "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture and Present copied it into HWND swapchain{resize_note}; frames={}",
+            target.summary.native_present_frames,
         );
         return Ok(());
     }
@@ -1824,6 +1853,46 @@ unsafe fn convert_nv12_latest_frame_for_native_present(
         "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture target; frames={present_frames}"
     );
     Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn sync_nv12_hwnd_present_target_size(
+    target: &mut W8NativeSurfaceTargetRuntime,
+) -> Result<Option<(u32, u32)>, String> {
+    if !target.summary.format.eq_ignore_ascii_case("NV12") {
+        return Ok(None);
+    }
+    let Some(window_target) = target._window_present_target else {
+        return Ok(None);
+    };
+    let Some(swapchain) = target._swapchain.as_ref() else {
+        return Ok(None);
+    };
+    let hwnd = window_target.hwnd();
+    if !IsWindow(Some(hwnd)).as_bool() {
+        return Err("desktop window HWND is no longer valid for native present".to_string());
+    }
+    let (width, height) = hwnd_client_size(hwnd)?;
+    if target.summary.native_present_width == width
+        && target.summary.native_present_height == height
+    {
+        return Ok(None);
+    }
+
+    target._context.Flush();
+    swapchain
+        .ResizeBuffers(
+            2,
+            width,
+            height,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+            DXGI_SWAP_CHAIN_FLAG(0),
+        )
+        .map_err(|error| format!("IDXGISwapChain1::ResizeBuffers failed: {error}"))?;
+    target._present_texture = create_d3d11_bgra_present_texture(&target._device, width, height)?;
+    target.summary.native_present_width = width;
+    target.summary.native_present_height = height;
+    Ok(Some((width, height)))
 }
 
 #[cfg(windows)]
@@ -2831,11 +2900,11 @@ mod tests {
         assert!(plan
             .next_native_steps
             .iter()
-            .any(|step| step.contains("real HWND swapchain")));
+            .any(|step| step.contains("NV12 HWND swapchain resize")));
         assert!(plan
             .next_native_steps
             .iter()
-            .any(|step| step.contains("NV12 shader conversion")));
+            .any(|step| step.contains("stream-change")));
         assert!(plan
             .next_native_steps
             .iter()
@@ -3072,8 +3141,8 @@ mod tests {
                 assert!(target.summary.native_present_ready);
                 assert_eq!(target.summary.native_present_mode, "d3d11-hwnd-swapchain");
                 assert_eq!(target.summary.native_present_format, "BGRA8");
-                assert_eq!(target.summary.native_present_width, 1920);
-                assert_eq!(target.summary.native_present_height, 1080);
+                assert_eq!(target.summary.native_present_width, 1280);
+                assert_eq!(target.summary.native_present_height, 720);
                 assert_eq!(
                     target.summary.native_present_status,
                     "latest-frame-nv12-converted-presented"
@@ -3089,6 +3158,57 @@ mod tests {
             let shutdown = MFShutdown();
             assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
             result.expect("native surface copy should succeed");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_present_target_resizes_nv12_hwnd_swapchain_to_client_size() {
+        unsafe {
+            MFStartup(MF_VERSION, MFSTARTUP_LITE).expect("MFStartup should succeed");
+            let result = (|| -> Result<(), String> {
+                let mut window = HiddenPresentTestWindow::create(1280, 720)?;
+                let mut target = create_d3d11_latest_frame_texture_target_for_window(
+                    "NV12",
+                    Some(window.config()),
+                )?;
+                let expected_bytes =
+                    (target.summary.width as usize * target.summary.height as usize * 3) / 2;
+                let frame_bytes = vec![0x66; expected_bytes];
+                let sample = create_mf_sample_from_bytes(&frame_bytes, 0, 16_667)?;
+
+                copy_decoded_sample_to_native_surface(&mut target, &sample, 12)?;
+
+                assert_eq!(target.summary.native_present_mode, "d3d11-hwnd-swapchain");
+                assert_eq!(
+                    target.summary.native_present_status,
+                    "latest-frame-nv12-converted-presented"
+                );
+                assert_eq!(target.summary.native_present_width, 1280);
+                assert_eq!(target.summary.native_present_height, 720);
+                assert_eq!(target.summary.native_present_frames, 1);
+
+                window.resize_client(800, 600)?;
+                let resized_sample = create_mf_sample_from_bytes(&frame_bytes, 16_667, 16_667)?;
+                copy_decoded_sample_to_native_surface(&mut target, &resized_sample, 13)?;
+
+                assert_eq!(
+                    target.summary.native_present_status,
+                    "latest-frame-nv12-converted-presented"
+                );
+                assert_eq!(target.summary.native_present_width, 800);
+                assert_eq!(target.summary.native_present_height, 600);
+                assert_eq!(target.summary.native_present_frames, 2);
+                assert_eq!(target.summary.native_present_last_frame_id, Some(13));
+                assert!(target
+                    .summary
+                    .native_present_reason
+                    .contains("resized HWND swapchain"));
+                Ok(())
+            })();
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+            result.expect("native NV12 present target resize should succeed");
         }
     }
 
@@ -3176,7 +3296,7 @@ mod tests {
             use windows::core::PCWSTR;
             use windows::Win32::UI::WindowsAndMessaging::{
                 CreateWindowExW, RegisterClassW, CW_USEDEFAULT, WINDOW_EX_STYLE, WNDCLASSW,
-                WS_OVERLAPPEDWINDOW,
+                WS_POPUP,
             };
 
             static WINDOW_INDEX: AtomicUsize = AtomicUsize::new(1);
@@ -3196,7 +3316,7 @@ mod tests {
                 WINDOW_EX_STYLE::default(),
                 PCWSTR(class_name.as_ptr()),
                 PCWSTR(title.as_ptr()),
-                WS_OVERLAPPEDWINDOW,
+                WS_POPUP,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 client_width as i32,
@@ -3212,6 +3332,26 @@ mod tests {
                 client_width,
                 client_height,
             })
+        }
+
+        unsafe fn resize_client(
+            &mut self,
+            client_width: u32,
+            client_height: u32,
+        ) -> Result<(), String> {
+            use windows::Win32::UI::WindowsAndMessaging::MoveWindow;
+            MoveWindow(
+                self.hwnd,
+                0,
+                0,
+                client_width.max(1) as i32,
+                client_height.max(1) as i32,
+                false,
+            )
+            .map_err(|error| format!("MoveWindow failed for W8 present test: {error}"))?;
+            self.client_width = client_width.max(1);
+            self.client_height = client_height.max(1);
+            Ok(())
         }
 
         fn config(&self) -> W8NativeWindowPresentTargetConfig {
