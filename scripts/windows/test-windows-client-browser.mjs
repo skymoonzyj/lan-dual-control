@@ -7923,7 +7923,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         const burstQueueMs = getAudioQueueMs();
         const burstExportText = getAudioPerformanceExportStatus();
         const burstArrivalKeepsLowLatency =
-          burstQueueMs <= 140 &&
+          burstQueueMs <= 100 &&
           state.audioDroppedFrames === 0 &&
           (Number(state.audioLatencyTrimmedFrames) || 0) > 0 &&
           state.audioLastBufferReason === "queue-latency-trim-future" &&
