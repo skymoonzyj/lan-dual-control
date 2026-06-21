@@ -27,7 +27,7 @@ Options:
   --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
   --from <name>     Agent Link sender name. Default: ${defaults.from}
-  --send            Post W2W3Retest=/W8NativeVideo=/W8NativeGate= and W2H264BoardDiagnosis= to the board.
+  --send            Post W2W3Retest=/W8NativeVideo=/W8NativeGate=/W8ArrivalBacklog= and W2H264BoardDiagnosis= to the board.
   --noDiagnose      Only post W2W3Retest=; do not run diagnosis.
   --json            Print machine-readable JSON.
   --boardSummary    Print one secret-safe summary line.
@@ -36,8 +36,8 @@ Options:
 Description:
   Safely posts the real Windows client W2/W3 retest result after the user runs
   Run-WinClientRetest.cmd locally. It accepts a redacted W2W3Retest= line and
-  an optional W8NativeVideo= line for native-present long-run evidence, adds a
-  W8NativeGate= next-step summary, rejects password/token/control-event markers before posting, and can run the read-only
+  an optional W8NativeVideo= line for native-present long-run evidence, adds
+  W8NativeGate= and W8ArrivalBacklog= next-step summaries, rejects password/token/control-event markers before posting, and can run the read-only
   W2 H.264 diagnosis helper immediately after posting. It never asks for
   passwords, authenticates a host, or sends real control events.
 `);
@@ -179,6 +179,10 @@ function w8NativeGateStatus(summary) {
   return String(summary || "").match(/\bW8NativeGate=status=([^\s]+)/)?.[1] || "";
 }
 
+function summaryStatus(prefix, summary) {
+  return String(summary || "").match(new RegExp(`\\b${prefix}=status=([^\\s]+)`))?.[1] || "";
+}
+
 function makeW8NativeGateSummary(w8NativeVideoLine) {
   if (!w8NativeVideoLine) return "";
   const fields = parseSummaryFields(w8NativeVideoLine);
@@ -219,6 +223,61 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
     `presentFrames=${presentFrames}`,
     `decoded=${decoded}`,
     `errors=${errors}`,
+    `next=${next}`,
+  ].join(" ");
+}
+
+function numericFromText(text, patterns) {
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (!match) continue;
+    const value = Number.parseInt(match[1], 10);
+    if (Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
+  if (w8NativeGateStatus(w8NativeGateSummary) !== "arrival-backlog-next") return "";
+  const text = String(retestLine || "");
+  const fields = parseSummaryFields(text);
+  const queueMs = numericField(fields, "queueMs") || numericFromText(text, [/本机队列\s*(\d+)\s*ms/u, /\bqueue\s*(\d+)\s*ms\b/i]);
+  const staleDrops =
+    numericField(fields, "staleDrops") ||
+    numericField(fields, "droppedStale") ||
+    numericFromText(text, [/本地过期丢帧\s*(\d+)/u]);
+  const liveBacklogRequests =
+    numericField(fields, "liveBacklogRequests") ||
+    numericField(fields, "liveBacklogReq") ||
+    numericFromText(text, [/追实时请求\s*(\d+)/u]);
+  const maxGapMs =
+    numericField(fields, "maxGapMs") ||
+    numericField(fields, "arrivalMs") ||
+    numericFromText(text, [/最大间隔\s*(\d+)\s*ms/u]);
+  const visibilityRecovery =
+    numericField(fields, "visibilityRecovery") ||
+    numericField(fields, "visibilityRecoveryCount") ||
+    numericFromText(text, [/可见恢复\s*(\d+)/u]);
+  const reason =
+    String(fields.reason || text.match(/原因\s*([^\s,，·]+)/u)?.[1] || "unknown")
+      .trim()
+      .replace(/\s+/g, "_");
+  const blocked =
+    queueMs >= 180 ||
+    staleDrops > 0 ||
+    liveBacklogRequests > 0 ||
+    maxGapMs >= 1000 ||
+    /backlog|queue|wait|recovery/i.test(reason);
+  const status = blocked ? "blocked" : "stable-candidate";
+  const next = blocked ? "investigate-windows-arrival-backlog" : "continue-long-run-observation";
+  return [
+    `W8ArrivalBacklog=status=${status}`,
+    `queueMs=${queueMs}`,
+    `staleDrops=${staleDrops}`,
+    `liveBacklogRequests=${liveBacklogRequests}`,
+    `maxGapMs=${maxGapMs}`,
+    `visibilityRecovery=${visibilityRecovery}`,
+    `reason=${reason || "unknown"}`,
     `next=${next}`,
   ].join(" ");
 }
@@ -282,10 +341,11 @@ function makeRetestMessage(retestLine) {
   ].filter(Boolean).join("\n");
 }
 
-function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary = "") {
+function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary = "", w8ArrivalBacklogSummary = "") {
   return [
     w8NativeVideoLine,
     w8NativeGateSummary,
+    w8ArrivalBacklogSummary,
     "Source=Run-WinClientRetest/native-video-summary.",
     "Safety=no-password-on-board,no-input-inject.",
   ].filter(Boolean).join("\n");
@@ -301,6 +361,7 @@ function makeBoardSummary(payload) {
     `retest=${payload.retestLine ? "present" : "missing"}`,
     `w8NativeVideo=${payload.w8NativeVideoLine ? "present" : "missing"}`,
     payload.w8NativeGateSummary ? `w8NativeGate=${w8NativeGateStatus(payload.w8NativeGateSummary) || "present"}` : "w8NativeGate=missing",
+    payload.w8ArrivalBacklogSummary ? `w8ArrivalBacklog=${summaryStatus("W8ArrivalBacklog", payload.w8ArrivalBacklogSummary) || "present"}` : "w8ArrivalBacklog=missing",
     payload.diagnosisBoardSummary ? `diagnosis=${payload.diagnosisBoardSummary}` : "diagnosis=skipped",
     "Safety=no-password-on-board,no-input-inject.",
   ].join(" ");
@@ -317,6 +378,7 @@ async function main() {
   const retestLine = extractRetestLine(input);
   const w8NativeVideoLine = extractW8NativeVideoLine(input);
   const w8NativeGateSummary = makeW8NativeGateSummary(w8NativeVideoLine);
+  const w8ArrivalBacklogSummary = makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary);
   const payload = {
     ok: true,
     send: Boolean(args.send),
@@ -326,6 +388,7 @@ async function main() {
     retestLine,
     w8NativeVideoLine,
     w8NativeGateSummary,
+    w8ArrivalBacklogSummary,
     diagnosisBoardSummary: "",
   };
 
@@ -333,7 +396,7 @@ async function main() {
     await postMessage(args, makeRetestMessage(retestLine));
     payload.sentRetest = true;
     if (w8NativeVideoLine) {
-      await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary));
+      await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary));
       payload.sentW8NativeVideo = true;
     }
     const diagnosis = runDiagnosis(args);

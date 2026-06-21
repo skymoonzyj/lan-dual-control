@@ -34,7 +34,7 @@ Description:
   foreground retest as Run-WinClientRetest.cmd, captures only the final
   W2W3Retest= evidence line plus optional W8NativeVideo= native-present
   evidence, then calls scripts/windows/post-w2w3-retest-board.mjs to publish
-  the redacted result, W8NativeGate= next-step summary, and the read-only W2 H.264 diagnosis.
+  the redacted result, W8NativeGate=/W8ArrivalBacklog= next-step summaries, and the read-only W2 H.264 diagnosis.
 
   It never puts credentials in command arguments or on Agent Link Board. All
   other options are forwarded to the underlying retest PowerShell wrapper, for

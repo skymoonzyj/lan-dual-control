@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows arrival/backlog 上板摘要
+开发端：Windows Codex
+本轮目标：在 `W8NativeGate=status=arrival-backlog-next` 后，把下一步要查的 Windows 侧 arrival/backlog 信号压成单独上板摘要。
+完成内容：`post-w2w3-retest-board` 现在会从同一次 `W2W3Retest=` 生成 `W8ArrivalBacklog=`，提取 `queueMs/staleDrops/reason/liveBacklogRequests/maxGapMs/visibilityRecovery`，并兼容中文现场视频诊断里的 `本机队列`、`本地过期丢帧`、`追实时请求`、`最大间隔`、`可见恢复`。如果本机队列 >=180ms、过期丢帧/追实时请求存在、最大间隔 >=1000ms 或 reason 带 backlog/queue/wait/recovery，则输出 `status=blocked next=investigate-windows-arrival-backlog`；否则输出 `stable-candidate`。
+修改文件：scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/run-winclient-retest-and-post.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于缺少 `W8ArrivalBacklog=status=blocked`，实现后 `test-post-w2w3-retest-board` 与 `test-run-winclient-retest-and-post` 转绿。提交前继续跑语法、help、diff check 和冲突扫描。
+遗留问题：这是诊断/上板分类增强，没有真实带密码长跑，也不宣称 arrival 9.1s、本机队列 190ms、live-backlog 请求或卡顿已修。
+下一步建议：真实长跑后若 `W8ArrivalBacklog=status=blocked`，继续查 Windows 侧到达/本机队列/live-backlog/可见恢复；若 `stable-candidate`，再进入长时间体感和音频/剪贴板/输入安全日志收口。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 原生主面 gate 上板
 开发端：Windows Codex
 本轮目标：按通讯板最新 W8 TODO，把真实桌面长跑的 `W8NativeVideo=` 自动判读成下一步行动，避免人工误回 Web gate。

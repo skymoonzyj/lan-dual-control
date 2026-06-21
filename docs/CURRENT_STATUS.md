@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows arrival/backlog 上板摘要
+- W8 `W8NativeGate=status=arrival-backlog-next` 后，`post-w2w3-retest-board` 现在会继续从同一次 `W2W3Retest=` 里提取 Windows 侧到达/本机队列信号，并在 W8 原生摘要消息内追加 `W8ArrivalBacklog=`。该摘要会优先读短字段 `queueMs/staleDrops/reason/liveBacklogRequests/maxGapMs/visibilityRecovery`，也兼容长中文诊断里的 `本机队列`、`本地过期丢帧`、`追实时请求`、`最大间隔`、`可见恢复`。如果本机队列 >=180ms、过期丢帧/追实时请求存在、最大间隔 >=1000ms 或 reason 带 backlog/queue/wait/recovery，则输出 `status=blocked next=investigate-windows-arrival-backlog`；否则输出 `stable-candidate`。本轮仍只改 Windows 上板判断和文档，不改 Mac、协议、认证/密码/input/inject，也不宣称真实卡顿已修。
+
 ## 2026-06-21 W8 Windows 原生主面 gate 上板
 - 通讯板最新 W8 验收口径已经确认：UI shell 可以是 HTML，但视频主画面必须用 `mainSurface=native-hwnd`、`presenting=yes`、可接受 `presentGap`、`presentFrames/decoded` 和 `errors` 证明。`post-w2w3-retest-board` 现在从真实复测日志的 `W8NativeVideo=` 自动生成 `W8NativeGate=`：当 `mainSurface=native-hwnd`、`presenting=yes`、`presentFrames/decoded>0`、`presentGap` 在 2% 或至少 2 帧以内且 `errors=0` 时，输出 `status=arrival-backlog-next next=investigate-arrival-backlog`；否则输出 `native-present-next` / `native-error-next` / `evidence-incomplete`，提示继续查原生 Present 或重跑新诊断。本轮只改 Windows 上板判断和文档，不改 Mac、协议、认证/密码/input/inject，也不宣称 arrival/backlog 已修。
 
