@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 原生主面后 WebCodecs 旁路
+- Windows 视频侧继续收口 `W8ArrivalBacklog`：当 Tauri 原生 Present 已有 `nativePresentReady=true`、`nativePresentFrames>0` 且状态包含 `presented` 时，Windows 控制端仍记录 H.264 收帧证据并继续把 H.264 payload 送入 Rust 原生队列，但会旁路 WebCodecs/canvas 解码队列，清掉 Web 本机队列、过期丢帧和 live-backlog 请求统计，并把诊断置为 `native-main-surface`。复制/导出诊断会显示 `WebCodecs 旁路 原生主画面 <n>`，用于区分“原生主画面已接管”与旧 Web 备用队列积压。本轮只改 Windows client 视频侧与本地测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject；仍需真实桌面长跑确认体感和 `W8NativeGate/W8ArrivalBacklog` 上板结果。
+
 ## 2026-06-21 W8 Windows arrival/backlog 上板摘要
 - W8 `W8NativeGate=status=arrival-backlog-next` 后，`post-w2w3-retest-board` 现在会继续从同一次 `W2W3Retest=` 里提取 Windows 侧到达/本机队列信号，并在 W8 原生摘要消息内追加 `W8ArrivalBacklog=`。该摘要会优先读短字段 `queueMs/staleDrops/reason/liveBacklogRequests/maxGapMs/visibilityRecovery`，也兼容长中文诊断里的 `本机队列`、`本地过期丢帧`、`追实时请求`、`最大间隔`、`可见恢复`。如果本机队列 >=180ms、过期丢帧/追实时请求存在、最大间隔 >=1000ms 或 reason 带 backlog/queue/wait/recovery，则输出 `status=blocked next=investigate-windows-arrival-backlog`；否则输出 `stable-candidate`。本轮仍只改 Windows 上板判断和文档，不改 Mac、协议、认证/密码/input/inject，也不宣称真实卡顿已修。
 

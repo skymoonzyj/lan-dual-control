@@ -469,6 +469,7 @@ const videoDecoderStatusLabels = {
   recovering: "恢复中",
   resyncing: "重同步",
   rendering: "已绘制",
+  "native-main-surface": "原生主画面",
   error: "解码错误",
   fallback: "JPEG 回退",
 };
@@ -610,6 +611,9 @@ const state = {
   h264ReceivedIdr: 0,
   h264LastNalTypes: "",
   h264LastKeyFrameId: "",
+  h264WebDecodeBypassedForNativeSurface: 0,
+  h264WebDecodeBypassReason: "",
+  h264WebDecodeBypassLastFrameId: "",
   w8NativeVideoSessionStarted: false,
   w8NativeVideoSessionPromise: null,
   w8NativeVideoPushPromise: null,
@@ -803,6 +807,9 @@ const state = {
     h264ReceivedIdr: 0,
     h264LastNalTypes: "",
     h264LastKeyFrameId: "",
+    h264WebDecodeBypassedForNativeSurface: 0,
+    h264WebDecodeBypassReason: "",
+    h264WebDecodeBypassLastFrameId: "",
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -1097,6 +1104,9 @@ function getEmptyHostDiagnostics() {
     h264ReceivedIdr: 0,
     h264LastNalTypes: "",
     h264LastKeyFrameId: "",
+    h264WebDecodeBypassedForNativeSurface: 0,
+    h264WebDecodeBypassReason: "",
+    h264WebDecodeBypassLastFrameId: "",
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -1509,6 +1519,7 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const receivedPps = Number(diagnostics.h264ReceivedPps);
   const receivedIdr = Number(diagnostics.h264ReceivedIdr);
   const lastNalTypes = String(diagnostics.h264LastNalTypes || "").trim();
+  const webDecodeBypassCount = Number(diagnostics.h264WebDecodeBypassedForNativeSurface);
   const nativeFrames = Number(diagnostics.w8NativeVideoFramesPushed);
   const nativeQueueMs = Number(diagnostics.w8NativeVideoQueueMs);
   const nativeDroppedFrames = Number(diagnostics.w8NativeVideoDroppedFrames);
@@ -1612,6 +1623,9 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (lastNalTypes) {
     parts.push(`NAL ${lastNalTypes}`);
+  }
+  if (Number.isFinite(webDecodeBypassCount) && webDecodeBypassCount > 0) {
+    parts.push(`WebCodecs 旁路 ${Math.round(webDecodeBypassCount)}`);
   }
   if (Number.isFinite(nativeFrames) && nativeFrames > 0) {
     parts.push(`原生队列 ${nativeFrames}`);
@@ -3668,6 +3682,9 @@ function resetH264ReceiveEvidence() {
   state.h264ReceivedIdr = 0;
   state.h264LastNalTypes = "";
   state.h264LastKeyFrameId = "";
+  state.h264WebDecodeBypassedForNativeSurface = 0;
+  state.h264WebDecodeBypassReason = "";
+  state.h264WebDecodeBypassLastFrameId = "";
 }
 
 function resetVideoDecoder({ resetFallback = false } = {}) {
@@ -3701,6 +3718,9 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264LiveBacklogRecoveryLastRequestedAt = 0;
   state.h264LiveBacklogRecoveryCount = 0;
   state.h264DecodedFrames = 0;
+  state.h264WebDecodeBypassedForNativeSurface = 0;
+  state.h264WebDecodeBypassReason = "";
+  state.h264WebDecodeBypassLastFrameId = "";
   if (resetFallback) {
     resetH264ReceiveEvidence();
     state.h264FallbackActive = false;
@@ -6017,6 +6037,11 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const receivedPps = Number(state.h264ReceivedPps || state.hostDiagnostics?.h264ReceivedPps) || 0;
   const receivedIdr = Number(state.h264ReceivedIdr || state.hostDiagnostics?.h264ReceivedIdr) || 0;
   const lastNalTypes = String(state.h264LastNalTypes || state.hostDiagnostics?.h264LastNalTypes || "").trim();
+  const webDecodeBypassCount =
+    Number(
+      state.h264WebDecodeBypassedForNativeSurface ||
+        state.hostDiagnostics?.h264WebDecodeBypassedForNativeSurface,
+    ) || 0;
   const nativeFrames = Number(state.w8NativeVideoFramesPushed || state.hostDiagnostics?.w8NativeVideoFramesPushed) || 0;
   const nativeQueueMs = Number(state.hostDiagnostics?.w8NativeVideoQueueMs) || 0;
   const nativeDroppedFrames =
@@ -6329,6 +6354,9 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       `视频主画面 ${nativeWindowPresenting ? "原生 MF/D3D11/HWND" : "原生链路待 Present"}`,
     );
     parts.push("Web canvas 诊断/备用");
+    if (webDecodeBypassCount > 0) {
+      parts.push(`WebCodecs 旁路 原生主画面 ${Math.round(webDecodeBypassCount)}`);
+    }
   }
   if (nativeFrames > 0) parts.push(`原生队列 ${nativeFrames}`);
   if (nativeQueueMs > 0) parts.push(`原生队列 ${Math.round(nativeQueueMs)} ms`);
@@ -10681,6 +10709,9 @@ function updateH264DecoderDiagnostics(extra = {}) {
     h264ReceivedIdr: state.h264ReceivedIdr,
     h264LastNalTypes: state.h264LastNalTypes,
     h264LastKeyFrameId: state.h264LastKeyFrameId,
+    h264WebDecodeBypassedForNativeSurface: state.h264WebDecodeBypassedForNativeSurface,
+    h264WebDecodeBypassReason: state.h264WebDecodeBypassReason,
+    h264WebDecodeBypassLastFrameId: state.h264WebDecodeBypassLastFrameId,
     videoDecoderQueueMs: state.videoDecoderQueueMs,
     videoDroppedStaleFrames: state.videoDroppedStaleFrames,
     videoLastDropReason: state.videoLastDropReason,
@@ -11366,6 +11397,60 @@ function recordH264ReceiveEvidence({ frame = {}, nalTypes = [], isKeyFrame = fal
   state.h264LastNalTypes = normalizedNalTypes.length ? normalizedNalTypes.slice(0, 8).join("/") : "";
 }
 
+function isW8NativeVideoMainSurfacePresenting() {
+  if (!getTauriInvoke()) return false;
+  const presentReady = Boolean(
+    state.w8NativeVideoNativePresentReady ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentReady,
+  );
+  const presentFrames =
+    Number(
+      state.w8NativeVideoNativePresentFrames ||
+        state.hostDiagnostics?.w8NativeVideoNativePresentFrames,
+    ) || 0;
+  const presentStatus = String(
+    state.w8NativeVideoNativePresentStatus ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentStatus ||
+      "",
+  ).toLowerCase();
+  return presentReady && presentFrames > 0 && presentStatus.includes("presented");
+}
+
+function bypassWebH264DecodeForNativeMainSurface(frame = {}) {
+  if (state.h264Decoder && state.h264Decoder.state !== "closed") {
+    try {
+      state.h264Decoder.close();
+    } catch {
+      // Once native HWND presentation is active, WebCodecs teardown is best-effort.
+    }
+  }
+  state.h264Decoder = null;
+  state.h264DecoderKey = "";
+  state.h264DecoderCodec = "";
+  state.h264DecoderQueue = [];
+  state.h264DecoderLatencyMs = 0;
+  state.videoDecoderQueueMs = 0;
+  state.videoDroppedStaleFrames = 0;
+  state.videoLastDropReason = "";
+  state.h264SkippedDeltaFrames = 0;
+  state.h264DecoderNeedsKeyFrame = false;
+  state.h264RecoveryInFlight = false;
+  state.h264RecoveryKeyFrameReceivedAt = 0;
+  state.h264RecoveryFrameDrawnAt = 0;
+  state.h264RecoveryQueueGraceUntil = 0;
+  state.h264LiveBacklogRecoveryLastRequestedAt = 0;
+  state.h264LiveBacklogRecoveryCount = 0;
+  clearH264KeyFrameWaitTimers();
+  state.h264DecoderStatus = "native-main-surface";
+  state.h264WebDecodeBypassedForNativeSurface =
+    (Number(state.h264WebDecodeBypassedForNativeSurface) || 0) + 1;
+  state.h264WebDecodeBypassReason = "native-main-surface-presenting";
+  state.h264WebDecodeBypassLastFrameId = String(frame.frameId ?? state.videoFrames ?? "");
+  updateH264DecoderDiagnostics();
+  elements.remoteStatusText.textContent =
+    `原生主画面接管中，WebCodecs 已旁路 #${frame.frameId ?? state.videoFrames}`;
+}
+
 async function renderH264VideoFrame(frame) {
   if (!frame.payload) {
     addLog("视频帧", "收到 H.264 视频帧但缺少 payload");
@@ -11413,6 +11498,10 @@ async function renderH264VideoFrame(frame) {
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFrameNalTypes(nalTypes);
     recordH264ReceiveEvidence({ frame, nalTypes, isKeyFrame });
     void pushW8NativeH264AnnexBFrame(frame, frame.payload);
+    if (isW8NativeVideoMainSurfacePresenting()) {
+      bypassWebH264DecodeForNativeMainSurface(frame);
+      return;
+    }
     const latencyResync = maybeResyncH264DecoderQueueForLatency({
       isKeyFrame,
       frameId: frame.frameId ?? state.videoFrames,

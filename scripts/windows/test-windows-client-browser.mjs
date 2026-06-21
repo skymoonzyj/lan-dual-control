@@ -5526,6 +5526,14 @@ async function verifyH264KeyFrameDetection(session) {
         h264DecoderLastError: state.h264DecoderLastError,
         h264DecoderNeedsKeyFrame: state.h264DecoderNeedsKeyFrame,
         h264SkippedDeltaFrames: state.h264SkippedDeltaFrames,
+        h264KeyFrameWaitStartedAt: state.h264KeyFrameWaitStartedAt,
+        h264KeyFrameRecoveryLastRequestedAt: state.h264KeyFrameRecoveryLastRequestedAt,
+        h264RecoveryQueueGraceUntil: state.h264RecoveryQueueGraceUntil,
+        h264RecoveryInFlight: state.h264RecoveryInFlight,
+        h264RecoveryKeyFrameReceivedAt: state.h264RecoveryKeyFrameReceivedAt,
+        h264RecoveryFrameDrawnAt: state.h264RecoveryFrameDrawnAt,
+        h264LiveBacklogRecoveryLastRequestedAt: state.h264LiveBacklogRecoveryLastRequestedAt,
+        h264LiveBacklogRecoveryCount: state.h264LiveBacklogRecoveryCount,
         h264DecodedFrames: state.h264DecodedFrames,
         h264ReceivedFrames: state.h264ReceivedFrames,
         h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5535,6 +5543,9 @@ async function verifyH264KeyFrameDetection(session) {
         h264ReceivedIdr: state.h264ReceivedIdr,
         h264LastNalTypes: state.h264LastNalTypes,
         h264LastKeyFrameId: state.h264LastKeyFrameId,
+        h264WebDecodeBypassedForNativeSurface: state.h264WebDecodeBypassedForNativeSurface,
+        h264WebDecodeBypassReason: state.h264WebDecodeBypassReason,
+        h264WebDecodeBypassLastFrameId: state.h264WebDecodeBypassLastFrameId,
         videoFrames: state.videoFrames,
         videoFrameTimes: Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [],
         videoDecoderQueueMs: state.videoDecoderQueueMs,
@@ -5618,6 +5629,7 @@ async function verifyH264KeyFrameDetection(session) {
         encodedVideoChunkDescriptor: Object.getOwnPropertyDescriptor(window, "EncodedVideoChunk"),
       };
       const nativeCalls = [];
+      let webDecodeCalls = 0;
 
       class FakeVideoDecoder {
         static async isConfigSupported() {
@@ -5632,6 +5644,7 @@ async function verifyH264KeyFrameDetection(session) {
           this.config = config;
         }
         decode() {
+          webDecodeCalls += 1;
           this.decodeQueueSize = 0;
         }
         close() {
@@ -5769,14 +5782,17 @@ async function verifyH264KeyFrameDetection(session) {
                           nativeSurfaceLastFrameId: 1,
                           nativePresentReady: true,
                           nativePresentMode: "d3d11-bgra8-present-texture-target",
-                          nativePresentStatus: "waiting-nv12-renderer",
+                          nativePresentStatus:
+                            id >= 43 ? "latest-frame-nv12-converted-presented" : "waiting-nv12-renderer",
                           nativePresentFormat: "BGRA8",
                           nativePresentWidth: 1920,
                           nativePresentHeight: 1080,
-                          nativePresentFrames: 0,
-                          nativePresentLastFrameId: null,
+                          nativePresentFrames: id >= 43 ? 2 : 0,
+                          nativePresentLastFrameId: id >= 43 ? 43 : null,
                           nativePresentReason:
-                            "ready; latest NV12 frame is staged; waiting for NV12 shader/native renderer",
+                            id >= 43
+                              ? "ready; latest NV12 frame converted and presented to HWND"
+                              : "ready; latest NV12 frame is staged; waiting for NV12 shader/native renderer",
                           reason: "ready; persistent decoder session active",
                         }
                       : null,
@@ -5834,6 +5850,14 @@ async function verifyH264KeyFrameDetection(session) {
         state.h264DecoderLastError = "";
         state.h264DecoderNeedsKeyFrame = true;
         state.h264SkippedDeltaFrames = 0;
+        state.h264KeyFrameWaitStartedAt = 0;
+        state.h264KeyFrameRecoveryLastRequestedAt = 0;
+        state.h264RecoveryQueueGraceUntil = 0;
+        state.h264RecoveryInFlight = false;
+        state.h264RecoveryKeyFrameReceivedAt = 0;
+        state.h264RecoveryFrameDrawnAt = 0;
+        state.h264LiveBacklogRecoveryLastRequestedAt = 0;
+        state.h264LiveBacklogRecoveryCount = 0;
         state.h264DecodedFrames = 0;
         state.h264ReceivedFrames = 0;
         state.h264ReceivedKeyFrames = 0;
@@ -5843,6 +5867,9 @@ async function verifyH264KeyFrameDetection(session) {
         state.h264ReceivedIdr = 0;
         state.h264LastNalTypes = "";
         state.h264LastKeyFrameId = "";
+        state.h264WebDecodeBypassedForNativeSurface = 0;
+        state.h264WebDecodeBypassReason = "";
+        state.h264WebDecodeBypassLastFrameId = "";
         state.videoFrames = 0;
         state.videoFrameTimes = [];
         state.videoDecoderQueueMs = 0;
@@ -6069,19 +6096,79 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("SPS/PPS/IDR 1/1/1") &&
           exportText.includes("NAL 7/8/5");
 
+        const webDecodeCallsBeforeNativeBypass = webDecodeCalls;
+        const webQueueLengthBeforeNativeBypass = Array.isArray(state.h264DecoderQueue)
+          ? state.h264DecoderQueue.length
+          : 0;
+        state.w8NativeVideoNativePresentReady = true;
+        state.w8NativeVideoNativePresentStatus = "latest-frame-nv12-converted-presented";
+        state.w8NativeVideoNativePresentFrames = 1;
+        state.w8NativeVideoNativePresentLastFrameId = 42;
+        state.hostDiagnostics.w8NativeVideoNativePresentReady = true;
+        state.hostDiagnostics.w8NativeVideoNativePresentStatus = "latest-frame-nv12-converted-presented";
+        state.hostDiagnostics.w8NativeVideoNativePresentFrames = 1;
+        state.hostDiagnostics.w8NativeVideoNativePresentLastFrameId = 42;
+        await renderH264VideoFrame({
+          payload: makeBase64(annexbDelta),
+          encoding: "annexb-base64",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 43,
+          keyFrame: false,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const nativePushCallsAfterBypass = nativeCalls.filter(
+          (call) => call.command === "push_w8_native_h264_annexb_frame",
+        );
+        const exportTextAfterNativeBypass = getVideoPerformanceExportStatus();
+        const nativeBypassRecorded =
+          nativePushCallsAfterBypass.length === 3 &&
+          nativePushCallsAfterBypass[2].payload?.request?.id === 43 &&
+          webDecodeCallsBeforeNativeBypass === 1 &&
+          webDecodeCalls === webDecodeCallsBeforeNativeBypass &&
+          webQueueLengthBeforeNativeBypass >= 1 &&
+          Array.isArray(state.h264DecoderQueue) &&
+          state.h264DecoderQueue.length === 0 &&
+          state.videoDecoderQueueMs === 0 &&
+          state.videoDroppedStaleFrames === 0 &&
+          state.h264LiveBacklogRecoveryCount === 0 &&
+          state.h264DecoderNeedsKeyFrame === false &&
+          state.h264DecoderStatus === "native-main-surface" &&
+          state.h264WebDecodeBypassedForNativeSurface === 1 &&
+          state.h264WebDecodeBypassReason === "native-main-surface-presenting" &&
+          String(state.h264WebDecodeBypassLastFrameId) === "43" &&
+          state.hostDiagnostics?.h264WebDecodeBypassedForNativeSurface === 1 &&
+          state.hostDiagnostics?.h264WebDecodeBypassReason === "native-main-surface-presenting" &&
+          String(state.hostDiagnostics?.h264WebDecodeBypassLastFrameId) === "43" &&
+          state.hostDiagnostics?.videoDecoderStatus === "native-main-surface" &&
+          state.hostDiagnostics?.w8NativeVideoNativePresentStatus ===
+            "latest-frame-nv12-converted-presented" &&
+          state.hostDiagnostics?.w8NativeVideoNativePresentFrames === 2 &&
+          exportTextAfterNativeBypass.includes("视频主画面 原生 MF/D3D11/HWND") &&
+          exportTextAfterNativeBypass.includes("WebCodecs 旁路 原生主画面 1") &&
+          exportTextAfterNativeBypass.includes("解码 原生主画面");
+
         return {
           ok:
             isH264KeyFramePayload(annexbKey, "annexb-base64") &&
             !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
             isH264KeyFramePayload(avcKey, "avc") &&
             h264EvidenceRecorded &&
-            nativeQueueRecorded,
+            nativeQueueRecorded &&
+            nativeBypassRecorded,
           annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
           annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
           avcKey: isH264KeyFramePayload(avcKey, "avc"),
           h264EvidenceRecorded,
           nativeQueueRecorded,
+          nativeBypassRecorded,
           nativeCalls,
+          webDecodeCallsBeforeNativeBypass,
+          webDecodeCalls,
+          webQueueLengthBeforeNativeBypass,
           w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
           w8NativeVideoQueueMs: state.hostDiagnostics?.w8NativeVideoQueueMs,
           w8NativeVideoDroppedFrames: state.hostDiagnostics?.w8NativeVideoDroppedFrames,
@@ -6180,7 +6267,12 @@ async function verifyH264KeyFrameDetection(session) {
           h264LastNalTypes: state.h264LastNalTypes,
           h264LastKeyFrameId: state.h264LastKeyFrameId,
           h264DecoderNeedsKeyFrame: state.h264DecoderNeedsKeyFrame,
+          h264DecoderStatus: state.h264DecoderStatus,
+          h264WebDecodeBypassedForNativeSurface: state.h264WebDecodeBypassedForNativeSurface,
+          h264WebDecodeBypassReason: state.h264WebDecodeBypassReason,
+          h264WebDecodeBypassLastFrameId: state.h264WebDecodeBypassLastFrameId,
           exportText,
+          exportTextAfterNativeBypass,
         };
       } finally {
         state.h264Decoder = original.h264Decoder;
@@ -6194,6 +6286,14 @@ async function verifyH264KeyFrameDetection(session) {
         state.h264DecoderLastError = original.h264DecoderLastError;
         state.h264DecoderNeedsKeyFrame = original.h264DecoderNeedsKeyFrame;
         state.h264SkippedDeltaFrames = original.h264SkippedDeltaFrames;
+        state.h264KeyFrameWaitStartedAt = original.h264KeyFrameWaitStartedAt;
+        state.h264KeyFrameRecoveryLastRequestedAt = original.h264KeyFrameRecoveryLastRequestedAt;
+        state.h264RecoveryQueueGraceUntil = original.h264RecoveryQueueGraceUntil;
+        state.h264RecoveryInFlight = original.h264RecoveryInFlight;
+        state.h264RecoveryKeyFrameReceivedAt = original.h264RecoveryKeyFrameReceivedAt;
+        state.h264RecoveryFrameDrawnAt = original.h264RecoveryFrameDrawnAt;
+        state.h264LiveBacklogRecoveryLastRequestedAt = original.h264LiveBacklogRecoveryLastRequestedAt;
+        state.h264LiveBacklogRecoveryCount = original.h264LiveBacklogRecoveryCount;
         state.h264DecodedFrames = original.h264DecodedFrames;
         state.h264ReceivedFrames = original.h264ReceivedFrames;
         state.h264ReceivedKeyFrames = original.h264ReceivedKeyFrames;
@@ -6203,6 +6303,9 @@ async function verifyH264KeyFrameDetection(session) {
         state.h264ReceivedIdr = original.h264ReceivedIdr;
         state.h264LastNalTypes = original.h264LastNalTypes;
         state.h264LastKeyFrameId = original.h264LastKeyFrameId;
+        state.h264WebDecodeBypassedForNativeSurface = original.h264WebDecodeBypassedForNativeSurface;
+        state.h264WebDecodeBypassReason = original.h264WebDecodeBypassReason;
+        state.h264WebDecodeBypassLastFrameId = original.h264WebDecodeBypassLastFrameId;
         state.videoFrames = original.videoFrames;
         state.videoFrameTimes = original.videoFrameTimes;
         state.videoDecoderQueueMs = original.videoDecoderQueueMs;

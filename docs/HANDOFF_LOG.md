@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 原生主面后 WebCodecs 旁路
+开发端：Windows Codex
+本轮目标：按通讯板 W8 arrival/backlog 方向，处理原生主画面已 Present 后浏览器侧仍继续解码、继续制造 Web 本机队列和 live-backlog 指标的问题。
+完成内容：Windows 控制端在 Tauri 原生 Present 已有 `nativePresentReady=true`、`nativePresentFrames>0` 且状态包含 `presented` 时，仍记录 H.264 收帧/NAL 证据并继续调用 `push_w8_native_h264_annexb_frame`，但会旁路 WebCodecs/canvas 解码队列，清空 Web 解码队列、Web stale drop、Web live-backlog 请求和关键帧等待状态，并把 decoder 状态标为 `native-main-surface`。复制/导出诊断新增 `WebCodecs 旁路 原生主画面 <n>` / `解码 原生主画面`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于第 43 帧原生 Present 后 `webDecodeCalls` 从 1 增到 2、状态仍为 `decoding`、导出仍显示 Web 解码队列；实现后同一 `test-windows-client-browser --diagnosticsOnly --onlyH264LatencyQueueGuard` 转绿。提交前继续跑语法、完整 diagnosticsOnly、diff check 和冲突扫描。
+遗留问题：本轮未跑带密码真实桌面长跑，不宣称真实卡顿完全修复；后续仍需用户/现场看 `W8NativeGate`、`W8ArrivalBacklog`、体感、远端媒体间隔和原生 Present 增长趋势。
+下一步建议：真实桌面端长跑若 `mainSurface=native-hwnd presenting=yes` 且旁路计数增长，就不要回 Web gate，继续看 arrival/backlog 是否还来自网络/到达节奏或原生 Present 侧。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows arrival/backlog 上板摘要
 开发端：Windows Codex
 本轮目标：在 `W8NativeGate=status=arrival-backlog-next` 后，把下一步要查的 Windows 侧 arrival/backlog 信号压成单独上板摘要。
