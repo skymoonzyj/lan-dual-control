@@ -111,7 +111,7 @@ function run(extraArgs, args, options = {}) {
 
 const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 h264Frames=300 h264Delta=297 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000 keyGapFramesLast=58 keyGapMsLast=966 keyTailFrames=12 keyTailMs=200 firstKeyParam=yes lastKeyParam=yes keyParamMiss=0";
 const retestLine = "W2W3Retest=video=H.264 surface=none h264=status=waiting-keyframe decoded=0 skippedDelta=68 needsKeyframe=yes queue=9 queueMs=900 staleDrops=68 reason=queue-overflow-wait-keyframe recv=68 key=1 sps=1 pps=1 idr=1 lastNal=1, audio=队列 120 ms";
-const w8NativeLine = "W8NativeVideo=status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
+const w8NativeLine = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 queueDrops=3722 queueDropScope=predecode queueReason=waiting-keyframe output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 
 function makeState(messages) {
   return {
@@ -214,6 +214,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--send", `help ${flag}`);
     assertIncludes(result.stdout, "W2W3Retest", `help ${flag}`);
     assertIncludes(result.stdout, "W8NativeVideo", `help ${flag}`);
+    assertIncludes(result.stdout, "W8NativeGate", `help ${flag}`);
     assertSecretSafe(result.stdout + result.stderr, `help ${flag}`);
   }
   console.log("[OK] W2/W3 retest board-post helper help is safe");
@@ -228,6 +229,9 @@ async function checkDryRunDoesNotPost(args) {
     assert(payload.send === false, "dry-run should not send by default");
     assert(payload.retestLine === retestLine, "dry-run should extract the retest line");
     assert(payload.w8NativeVideoLine === w8NativeLine, "dry-run should extract the W8 native video line");
+    assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=arrival-backlog-next", "dry-run W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "mainSurface=native-hwnd", "dry-run W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "next=investigate-arrival-backlog", "dry-run W8 native gate");
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "dry-run");
     console.log("[OK] W2/W3 retest board-post helper dry-run is no-post and secret-safe");
@@ -243,6 +247,7 @@ async function checkStdinDryRunDoesNotPost(args) {
     assert(payload.send === false, "stdin dry-run should not send by default");
     assert(payload.retestLine === retestLine, "stdin dry-run should extract the retest line");
     assert(payload.w8NativeVideoLine === w8NativeLine, "stdin dry-run should extract the W8 native video line");
+    assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=arrival-backlog-next", "stdin dry-run W8 native gate");
     assert(board.messages.length === 0, `stdin dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "stdin dry-run");
     console.log("[OK] W2/W3 retest board-post helper stdin dry-run is no-post and secret-safe");
@@ -283,12 +288,16 @@ async function checkSendRetestAndDiagnosis(args) {
     assert(payload.sentW8NativeVideo === true, "send should post W8 native video line");
     assert(payload.sentDiagnosis === true, "send should post diagnosis line");
     assert(payload.w8NativeVideoLine === w8NativeLine, "send JSON should include W8 native video line");
+    assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=arrival-backlog-next", "send JSON W8 native gate");
+    assertIncludes(payload.boardSummary, "w8NativeGate=arrival-backlog-next", "send JSON board summary");
     assertIncludes(payload.diagnosisBoardSummary, "W2H264BoardDiagnosis=status=blocked", "send JSON diagnosis");
     assertIncludes(payload.diagnosisBoardSummary, "reason=windows-decode-path", "send JSON diagnosis");
     assert(board.messages.length === 3, `expected three posted messages, got ${board.messages.length}: ${JSON.stringify(board.messages)}`);
     assertIncludes(board.messages[0].text, retestLine, "posted W2W3Retest message");
     assertIncludes(board.messages[0].text, "Safety=no-password-on-board,no-input-inject", "posted W2W3Retest message");
     assertIncludes(board.messages[1].text, w8NativeLine, "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "W8NativeGate=status=arrival-backlog-next", "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "next=investigate-arrival-backlog", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "Source=Run-WinClientRetest/native-video-summary", "posted W8 native video message");
     assertIncludes(board.messages[2].text, "W2H264BoardDiagnosis=status=blocked", "posted diagnosis message");
     assertIncludes(board.messages[2].text, "reason=windows-decode-path", "posted diagnosis message");

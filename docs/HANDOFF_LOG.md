@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 原生主面 gate 上板
+开发端：Windows Codex
+本轮目标：按通讯板最新 W8 TODO，把真实桌面长跑的 `W8NativeVideo=` 自动判读成下一步行动，避免人工误回 Web gate。
+完成内容：`post-w2w3-retest-board` 现在从 `W8NativeVideo=` 生成 `W8NativeGate=`。当 `mainSurface=native-hwnd`、`presenting=yes`、`presentFrames/decoded>0`、`presentGap` 在阈值内且 `errors=0` 时，gate 给出 `status=arrival-backlog-next next=investigate-arrival-backlog`；否则给出 `native-present-next`、`native-error-next` 或 `evidence-incomplete`。`Run-WinClientRetest-And-Post` 通过该 helper 上板时会自动带出 gate。
+修改文件：scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于缺少 `W8NativeGate=status=arrival-backlog-next`，实现后 `test-post-w2w3-retest-board` 和 `test-run-winclient-retest-and-post` 转绿。提交前继续跑语法、diff check 和冲突扫描。
+遗留问题：这只是在上板时自动分类下一步；没有做真实带密码长跑，也不宣称 arrival 9.1s、本机队列 190ms 或 live-backlog 已修。
+下一步建议：真实桌面长跑后优先看 `W8NativeGate=`。如果是 `arrival-backlog-next`，继续查 arrival/backlog/体感；如果是 `native-present-next` 或 `native-error-next`，继续查 native present/swapchain/errors。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 原生队列预过滤口径校准
 开发端：Windows Codex
 本轮目标：按通讯板 C4/W10 `PARTIAL-PASS` 结论处理 W8 视频侧，解释并修正“画面已绘制 63.9 FPS 但原生丢旧帧全丢”的诊断矛盾。

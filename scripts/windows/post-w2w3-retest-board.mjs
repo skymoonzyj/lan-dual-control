@@ -27,7 +27,7 @@ Options:
   --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
   --from <name>     Agent Link sender name. Default: ${defaults.from}
-  --send            Post W2W3Retest=/W8NativeVideo= and W2H264BoardDiagnosis= to the board.
+  --send            Post W2W3Retest=/W8NativeVideo=/W8NativeGate= and W2H264BoardDiagnosis= to the board.
   --noDiagnose      Only post W2W3Retest=; do not run diagnosis.
   --json            Print machine-readable JSON.
   --boardSummary    Print one secret-safe summary line.
@@ -36,8 +36,8 @@ Options:
 Description:
   Safely posts the real Windows client W2/W3 retest result after the user runs
   Run-WinClientRetest.cmd locally. It accepts a redacted W2W3Retest= line and
-  an optional W8NativeVideo= line for native-present long-run evidence, rejects
-  password/token/control-event markers before posting, and can run the read-only
+  an optional W8NativeVideo= line for native-present long-run evidence, adds a
+  W8NativeGate= next-step summary, rejects password/token/control-event markers before posting, and can run the read-only
   W2 H.264 diagnosis helper immediately after posting. It never asks for
   passwords, authenticates a host, or sends real control events.
 `);
@@ -156,6 +156,73 @@ function extractW8NativeVideoLine(input) {
   return w8NativeVideoLine;
 }
 
+function parseSummaryFields(line) {
+  const text = String(line || "");
+  const body = text.startsWith("W8NativeVideo=") ? text.slice("W8NativeVideo=".length) : text;
+  const fields = {};
+  for (const token of body.split(/\s+/)) {
+    const separator = token.indexOf("=");
+    if (separator <= 0) continue;
+    const key = token.slice(0, separator);
+    const value = token.slice(separator + 1).replace(/[.。]\s*$/u, "");
+    if (key) fields[key] = value;
+  }
+  return fields;
+}
+
+function numericField(fields, key) {
+  const value = Number.parseInt(String(fields[key] ?? ""), 10);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function w8NativeGateStatus(summary) {
+  return String(summary || "").match(/\bW8NativeGate=status=([^\s]+)/)?.[1] || "";
+}
+
+function makeW8NativeGateSummary(w8NativeVideoLine) {
+  if (!w8NativeVideoLine) return "";
+  const fields = parseSummaryFields(w8NativeVideoLine);
+  const mainSurface = String(fields.mainSurface || "unknown").trim() || "unknown";
+  const presenting = String(fields.presenting || "unknown").trim() || "unknown";
+  const presentFrames = numericField(fields, "presentFrames");
+  const decoded = numericField(fields, "decoded");
+  const explicitPresentGap = fields.presentGap !== undefined ? numericField(fields, "presentGap") : null;
+  const presentGap = explicitPresentGap ?? Math.max(0, decoded - presentFrames);
+  const presentGapLimit = Math.max(2, Math.ceil(Math.max(decoded, presentFrames) * 0.02));
+  const errors = numericField(fields, "errors");
+  let status = "arrival-backlog-next";
+  let next = "investigate-arrival-backlog";
+
+  if (!fields.mainSurface || !fields.presenting) {
+    status = "evidence-incomplete";
+    next = "rerun-with-updated-w8-diagnostics";
+  } else if (errors > 0) {
+    status = "native-error-next";
+    next = "investigate-native-errors";
+  } else if (mainSurface !== "native-hwnd") {
+    status = "native-present-next";
+    next = "investigate-native-present";
+  } else if (presenting !== "yes" || presentFrames <= 0 || decoded <= 0) {
+    status = "native-present-next";
+    next = "investigate-native-present";
+  } else if (presentGap > presentGapLimit) {
+    status = "native-present-lag-next";
+    next = "investigate-native-present";
+  }
+
+  return [
+    `W8NativeGate=status=${status}`,
+    `mainSurface=${mainSurface}`,
+    `presenting=${presenting}`,
+    `presentGap=${presentGap}`,
+    `presentGapLimit=${presentGapLimit}`,
+    `presentFrames=${presentFrames}`,
+    `decoded=${decoded}`,
+    `errors=${errors}`,
+    `next=${next}`,
+  ].join(" ");
+}
+
 async function postMessage(args, text) {
   const url = new URL("/api/message", args.server);
   const response = await fetch(url, {
@@ -215,12 +282,13 @@ function makeRetestMessage(retestLine) {
   ].filter(Boolean).join("\n");
 }
 
-function makeW8NativeVideoMessage(w8NativeVideoLine) {
+function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary = "") {
   return [
     w8NativeVideoLine,
+    w8NativeGateSummary,
     "Source=Run-WinClientRetest/native-video-summary.",
     "Safety=no-password-on-board,no-input-inject.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function makeDiagnosisMessage(diagnosis) {
@@ -232,6 +300,7 @@ function makeBoardSummary(payload) {
     `W2W3RetestPost=${payload.send ? "sent" : "dry-run"}`,
     `retest=${payload.retestLine ? "present" : "missing"}`,
     `w8NativeVideo=${payload.w8NativeVideoLine ? "present" : "missing"}`,
+    payload.w8NativeGateSummary ? `w8NativeGate=${w8NativeGateStatus(payload.w8NativeGateSummary) || "present"}` : "w8NativeGate=missing",
     payload.diagnosisBoardSummary ? `diagnosis=${payload.diagnosisBoardSummary}` : "diagnosis=skipped",
     "Safety=no-password-on-board,no-input-inject.",
   ].join(" ");
@@ -247,6 +316,7 @@ async function main() {
   const input = readInput(args);
   const retestLine = extractRetestLine(input);
   const w8NativeVideoLine = extractW8NativeVideoLine(input);
+  const w8NativeGateSummary = makeW8NativeGateSummary(w8NativeVideoLine);
   const payload = {
     ok: true,
     send: Boolean(args.send),
@@ -255,6 +325,7 @@ async function main() {
     sentDiagnosis: false,
     retestLine,
     w8NativeVideoLine,
+    w8NativeGateSummary,
     diagnosisBoardSummary: "",
   };
 
@@ -262,7 +333,7 @@ async function main() {
     await postMessage(args, makeRetestMessage(retestLine));
     payload.sentRetest = true;
     if (w8NativeVideoLine) {
-      await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine));
+      await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary));
       payload.sentW8NativeVideo = true;
     }
     const diagnosis = runDiagnosis(args);

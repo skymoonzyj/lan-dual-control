@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 原生主面 gate 上板
+- 通讯板最新 W8 验收口径已经确认：UI shell 可以是 HTML，但视频主画面必须用 `mainSurface=native-hwnd`、`presenting=yes`、可接受 `presentGap`、`presentFrames/decoded` 和 `errors` 证明。`post-w2w3-retest-board` 现在从真实复测日志的 `W8NativeVideo=` 自动生成 `W8NativeGate=`：当 `mainSurface=native-hwnd`、`presenting=yes`、`presentFrames/decoded>0`、`presentGap` 在 2% 或至少 2 帧以内且 `errors=0` 时，输出 `status=arrival-backlog-next next=investigate-arrival-backlog`；否则输出 `native-present-next` / `native-error-next` / `evidence-incomplete`，提示继续查原生 Present 或重跑新诊断。本轮只改 Windows 上板判断和文档，不改 Mac、协议、认证/密码/input/inject，也不宣称 arrival/backlog 已修。
+
 ## 2026-06-21 W8 Windows 原生队列预过滤口径校准
 - C4/W10 用户真实桌面端日志复测为 `PARTIAL-PASS`：入口可用、H.264 真实屏幕已绘制且约 63.9 FPS，但旧诊断同时显示 `原生丢旧帧=3722` / `waiting-keyframe`，容易误判为原生呈现全丢。根因是 W8 旧 `native-video-queue-mvp` 低延迟队列和后续长期 native decoder worker 已经是两层：queue 的 `droppedFrames` 是 predecode/预队列丢旧口径，不会阻止同一个 H.264 access unit 继续进入 native decoder/present。Windows 控制端现在在 decoder/session/surface/present 有进展时把现场诊断显示为 `原生预队列丢旧帧`，复制诊断会明确 `界面 HTML 壳`、`视频主画面 原生 MF/D3D11/HWND|原生链路待 Present`、`Web canvas 诊断/备用`；`W8NativeVideo=` 追加 `ui=html-shell mainSurface=native-hwnd|native-pending canvasRole=diagnostic-fallback queueDrops=<n> queueDropScope=predecode queueReason=<reason>`。本轮不改 Mac、不改协议、不改认证/密码/input/inject，也不回到 Web gate。
 
