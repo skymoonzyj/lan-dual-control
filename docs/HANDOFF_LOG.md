@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 D3D11 device-lost rebuild
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 stream-change 输出重选后，补上 D3D11/DXGI device lost 类错误时的 native surface / present target 重建。
+完成内容：`lan-dual-w8-mf-decoder` worker 新增 D3D11 device-lost 分类，识别 `DXGI_ERROR_DEVICE_REMOVED`、`DXGI_ERROR_DEVICE_RESET`、`DXGI_ERROR_DEVICE_HUNG`、driver internal error 和常见 HRESULT 字符串。decoded sample 写入 latest-frame texture、NV12 `VideoProcessorBlt` 或 HWND Present 这类 native surface/present 路径如果返回 device-lost 类错误，会按当前 output subtype 和窗口目标重建 D3D11 latest-frame surface、BGRA8 present texture 和可用 HWND swapchain 目标，并把 `decoderSession` 状态刷新为 `device-lost-rebuilt`；如果重建失败则显示 `device-lost-rebuild-blocked`，不再误报普通 `surface-copy-blocked` 或 `waiting-decoded-frame`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于缺 `is_d3d11_device_lost_error`、device-lost 状态被覆盖成 `waiting-decoded-frame`、缺 `rebuild_native_surface_target_after_device_lost` 和缺 `handle_native_surface_copy_error`；实现后对应测试转绿。完整验证见本轮提交前命令记录。
+遗留问题：还需要真实 Mac H.264 长跑观感验证，确认偶发 `stream-change-reconfigured` / `device-lost-rebuilt` 后仍继续出帧；如果真实现场发现 decoder MFT 本体也失效，再考虑更高层 decoder session rebuild。
+下一步建议：继续 W8 视频侧：安排真实 Mac H.264 长跑，重点看 `nativePresentStatus`、`stream-change-reconfigured`、`device-lost-rebuilt` 和卡顿体感；Mac 端只需保持 host 在线，不需要改协议。
+是否改了协议：否。
+是否需要另一端配合：后续真实长跑需要 Mac host 在线；本轮不需要 Mac 改代码。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 stream-change 输出重选恢复
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 NV12 resize recovery 后，补上 Media Foundation decoder 输出 stream-change 时的自恢复。

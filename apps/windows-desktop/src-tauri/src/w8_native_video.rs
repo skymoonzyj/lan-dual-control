@@ -947,7 +947,7 @@ impl W8NativeVideoDecoderSessionState {
                 }
             }
         } else if process_result.input_accepted && current.frame_handoff_active {
-            if process_status.contains("stream-change") {
+            if process_status.contains("stream-change") || process_status.contains("device-lost") {
                 current.frame_handoff_status = process_status.clone();
             } else {
                 current.frame_handoff_status = "waiting-decoded-frame".to_string();
@@ -1001,6 +1001,27 @@ fn apply_surface_target_summary_to_decoder_session(
     current.native_present_frames = surface.native_present_frames;
     current.native_present_last_frame_id = surface.native_present_last_frame_id;
     current.native_present_reason = surface.native_present_reason.clone();
+}
+
+#[cfg(windows)]
+fn is_d3d11_device_lost_error(error: &str) -> bool {
+    let normalized = error.to_ascii_lowercase();
+    [
+        "dxgi_error_device_removed",
+        "dxgi_error_device_reset",
+        "dxgi_error_device_hung",
+        "dxgi_error_driver_internal_error",
+        "device removed",
+        "device reset",
+        "device hung",
+        "device lost",
+        "0x887a0005",
+        "0x887a0006",
+        "0x887a0007",
+        "0x887a0020",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1372,7 +1393,7 @@ pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
         max_frames: config.max_frames,
         next_native_steps: vec![
             "validate NV12 HWND swapchain resize during real Mac long-running sessions".to_string(),
-            "handle D3D11 device-lost rebuilds for native surface and swapchain".to_string(),
+            "validate D3D11 device-lost rebuilds during real Mac long-running sessions".to_string(),
             "validate Media Foundation stream-change reconfiguration during real Mac long-running sessions".to_string(),
         ],
     }
@@ -2366,6 +2387,69 @@ impl W8MfH264DecoderWorkerRuntime {
         Ok((output_subtype, surface_summary))
     }
 
+    unsafe fn rebuild_native_surface_target_after_device_lost(
+        &mut self,
+    ) -> Result<W8NativeSurfaceTargetSummary, String> {
+        let window_present_target = self.surface_target._window_present_target;
+        let mut surface_target = create_d3d11_latest_frame_texture_target_for_window(
+            &self.output_subtype,
+            window_present_target,
+        )?;
+        surface_target.summary.reason =
+            "ready; D3D11 native surface target rebuilt after device lost".to_string();
+        surface_target.summary.status = "ready".to_string();
+        surface_target.summary.copy_status = "waiting-decoded-frame".to_string();
+        let surface_summary = surface_target.summary.clone();
+        self.surface_target = surface_target;
+        Ok(surface_summary)
+    }
+
+    unsafe fn handle_native_surface_copy_error(
+        &mut self,
+        error: &str,
+    ) -> W8NativeVideoDecoderSessionProcess {
+        if !is_d3d11_device_lost_error(error) {
+            return W8NativeVideoDecoderSessionProcess {
+                input_accepted: true,
+                output_produced: false,
+                output_byte_len: 0,
+                status: "surface-copy-blocked".to_string(),
+                reason: format!("blocked: {error}"),
+                surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
+            };
+        }
+
+        match self.rebuild_native_surface_target_after_device_lost() {
+            Ok(surface_target) => W8NativeVideoDecoderSessionProcess {
+                input_accepted: true,
+                output_produced: false,
+                output_byte_len: 0,
+                status: "device-lost-rebuilt".to_string(),
+                reason: format!(
+                    "ready; D3D11 device lost during native surface copy; rebuilt native surface target for {}",
+                    self.output_subtype
+                ),
+                surface_copy: None,
+                reconfigured_output_subtype: Some(self.output_subtype.clone()),
+                reconfigured_surface: Some(surface_target),
+            },
+            Err(rebuild_error) => W8NativeVideoDecoderSessionProcess {
+                input_accepted: true,
+                output_produced: false,
+                output_byte_len: 0,
+                status: "device-lost-rebuild-blocked".to_string(),
+                reason: format!(
+                    "blocked: D3D11 device lost during native surface copy and rebuild failed: {rebuild_error}; original error: {error}"
+                ),
+                surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
+            },
+        }
+    }
+
     unsafe fn process(
         &mut self,
         access_unit: &[u8],
@@ -2513,6 +2597,13 @@ impl W8MfH264DecoderWorkerRuntime {
                         surface_copy = Some(copy);
                     }
                     Err(error) => {
+                        if is_d3d11_device_lost_error(&error) {
+                            let output_sample = ManuallyDrop::into_inner(output_buffer.pSample);
+                            let output_events = ManuallyDrop::into_inner(output_buffer.pEvents);
+                            drop(output_sample);
+                            drop(output_events);
+                            return self.handle_native_surface_copy_error(&error);
+                        }
                         status = "surface-copy-blocked".to_string();
                         reason = format!("blocked: {error}");
                     }
@@ -3294,6 +3385,58 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn detects_d3d11_device_lost_errors_from_dxgi_strings() {
+        assert!(is_d3d11_device_lost_error(
+            "CopyResource failed: DXGI_ERROR_DEVICE_REMOVED"
+        ));
+        assert!(is_d3d11_device_lost_error(
+            "IDXGISwapChain1::Present failed: HRESULT(0x887A0005)"
+        ));
+        assert!(is_d3d11_device_lost_error(
+            "VideoProcessorBlt failed: device reset during present"
+        ));
+        assert!(is_d3d11_device_lost_error(
+            "D3D11 device hung while presenting"
+        ));
+        assert!(!is_d3d11_device_lost_error(
+            "CreateTexture2D BGRA8 present target failed"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_session_applies_device_lost_rebuilt_surface_summary() {
+        let mut state = W8NativeVideoDecoderSessionState::default();
+        state.summary = Some(test_decoder_session_summary("NV12"));
+        let surface = test_surface_target_summary("NV12", 1920, 1080);
+        let process = W8NativeVideoDecoderSessionProcess {
+            input_accepted: true,
+            output_produced: false,
+            output_byte_len: 0,
+            status: "device-lost-rebuilt".to_string(),
+            reason: "ready; D3D11 device lost during native surface copy; rebuilt native surface target for NV12".to_string(),
+            surface_copy: None,
+            reconfigured_output_subtype: Some("NV12".to_string()),
+            reconfigured_surface: Some(surface),
+        };
+
+        let updated = state
+            .apply_decoder_process_result(process, 5)
+            .expect("decoder session summary should still be active");
+
+        assert_eq!(updated.output_subtype, "NV12");
+        assert_eq!(updated.latest_frame_format, "NV12");
+        assert_eq!(updated.frame_handoff_status, "device-lost-rebuilt");
+        assert_eq!(updated.last_status, "device-lost-rebuilt");
+        assert!(updated.reason.contains("D3D11 device lost"));
+        assert_eq!(updated.native_surface_status, "ready");
+        assert_eq!(updated.native_present_status, "waiting-latest-frame");
+        assert_eq!(updated.accepted_input_frames, 1);
+        assert_eq!(updated.decoded_frames, 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn decoder_worker_runtime_rebuilds_surface_target_after_stream_change() {
         unsafe {
             let sequence_header = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce]]);
@@ -3316,6 +3459,71 @@ mod tests {
             assert!(surface.native_present_ready);
             assert_eq!(surface.native_present_format, "BGRA8");
             assert_eq!(surface.native_present_status, "waiting-latest-frame");
+
+            drop(runtime);
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_worker_runtime_rebuilds_surface_target_after_device_lost() {
+        unsafe {
+            let sequence_header = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce]]);
+            let mut runtime = W8MfH264DecoderWorkerRuntime::start(&sequence_header, None)
+                .expect("native decoder worker runtime should start");
+            let original_output = runtime.output_subtype.clone();
+
+            let surface = runtime
+                .rebuild_native_surface_target_after_device_lost()
+                .expect("device-lost should rebuild native surface target");
+
+            assert_eq!(runtime.output_subtype, original_output);
+            assert_eq!(surface.format, original_output);
+            assert!(surface.ready);
+            assert_eq!(surface.mode, "d3d11-latest-frame-texture-target");
+            assert_eq!(surface.status, "ready");
+            assert_eq!(surface.copy_status, "waiting-decoded-frame");
+            assert_eq!(surface.width, 1920);
+            assert_eq!(surface.height, 1080);
+            assert!(surface.reason.contains("device lost"));
+            assert!(surface.native_present_ready);
+            assert_eq!(surface.native_present_format, "BGRA8");
+            assert_eq!(surface.native_present_status, "waiting-latest-frame");
+
+            drop(runtime);
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn decoder_worker_runtime_reports_device_lost_rebuild_process_result() {
+        unsafe {
+            let sequence_header = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce]]);
+            let mut runtime = W8MfH264DecoderWorkerRuntime::start(&sequence_header, None)
+                .expect("native decoder worker runtime should start");
+
+            let process = runtime
+                .handle_native_surface_copy_error("CopyResource failed: DXGI_ERROR_DEVICE_REMOVED");
+
+            assert!(process.input_accepted);
+            assert!(!process.output_produced);
+            assert_eq!(process.status, "device-lost-rebuilt");
+            assert!(process.reason.contains("rebuilt native surface target"));
+            assert_eq!(
+                process.reconfigured_output_subtype.as_deref(),
+                Some(runtime.output_subtype.as_str())
+            );
+            let surface = process
+                .reconfigured_surface
+                .expect("device-lost rebuild should include surface summary");
+            assert!(surface.ready);
+            assert_eq!(surface.status, "ready");
+            assert_eq!(surface.copy_status, "waiting-decoded-frame");
+            assert_eq!(surface.format, runtime.output_subtype);
 
             drop(runtime);
             let shutdown = MFShutdown();

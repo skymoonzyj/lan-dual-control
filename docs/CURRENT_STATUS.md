@@ -4,8 +4,11 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 D3D11 device-lost rebuild
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在会识别 D3D11/DXGI device lost 类错误，包括 `DXGI_ERROR_DEVICE_REMOVED`、`DXGI_ERROR_DEVICE_RESET`、`DXGI_ERROR_DEVICE_HUNG` 和常见 HRESULT 字符串。decoded sample 写入 / native Present 路径如果遇到这类错误，不再只报 `surface-copy-blocked`；worker 会按当前 output subtype 和已有窗口目标重建 D3D11 latest-frame surface、BGRA8 present texture 和可用 HWND swapchain 目标，并把 `decoderSession` 刷新为 `device-lost-rebuilt`。如果重建失败，会显示 `device-lost-rebuild-blocked`，方便现场区分“已恢复”和“需要重启/重建更高层会话”。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；下一步做真实 Mac H.264 长跑观感验证，重点看 device-lost 后是否继续出帧。
+
 ## 2026-06-21 W8 Windows 桌面控制端 stream-change 输出重选恢复
-- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在遇到 Media Foundation `MF_E_TRANSFORM_STREAM_CHANGE` 时，不再只把状态停在 `stream-change`；它会重新 `GetOutputAvailableType` / `SetOutputType`，用新的输出 subtype 重建 D3D11 latest-frame surface、BGRA8 present texture 和可用的 HWND swapchain 目标，并把 `decoderSession.outputSubtype`、`latestFrameFormat`、`nativeSurface*`、`nativePresent*` 同步刷新到诊断。成功恢复时状态为 `stream-change-reconfigured`，reason 会带 `reselected output ... and rebuilt D3D11 native surface target`。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject；下一步集中补 D3D11 device-lost rebuild 和真实 Mac 长跑观感验证。
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在遇到 Media Foundation `MF_E_TRANSFORM_STREAM_CHANGE` 时，不再只把状态停在 `stream-change`；它会重新 `GetOutputAvailableType` / `SetOutputType`，用新的输出 subtype 重建 D3D11 latest-frame surface、BGRA8 present texture 和可用的 HWND swapchain 目标，并把 `decoderSession.outputSubtype`、`latestFrameFormat`、`nativeSurface*`、`nativePresent*` 同步刷新到诊断。成功恢复时状态为 `stream-change-reconfigured`，reason 会带 `reselected output ... and rebuilt D3D11 native surface target`。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 
 ## 2026-06-21 W8 Windows 桌面控制端 NV12 HWND resize recovery
 - Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 的 NV12 原生 Present 路径现在会把 BGRA8 present texture 和 HWND swapchain back buffer 初始化为真实窗口 client 尺寸；窗口 client 尺寸变化时，下一帧会先 `ResizeBuffers`，重建 BGRA8 present texture，再用 D3D11 `VideoProcessorBlt` 把 1920x1080 NV12 latest-frame 缩放/转换到新 client 尺寸并继续 `Present`。诊断保持 `nativePresentMode=d3d11-hwnd-swapchain` / `nativePresentStatus=latest-frame-nv12-converted-presented`，resize 后的 reason 会带 `resized HWND swapchain to <width>x<height>`。BGRA8 输出仍保持原 `latest-frame-swapchain-presented` 路径。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
