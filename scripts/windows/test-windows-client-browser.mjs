@@ -5382,6 +5382,13 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoLatestFrameFormat: state.w8NativeVideoLatestFrameFormat,
         w8NativeVideoLatestFrameBytes: state.w8NativeVideoLatestFrameBytes,
         w8NativeVideoLatestFrameId: state.w8NativeVideoLatestFrameId,
+        w8NativeVideoNativeSurfaceReady: state.w8NativeVideoNativeSurfaceReady,
+        w8NativeVideoNativeSurfaceMode: state.w8NativeVideoNativeSurfaceMode,
+        w8NativeVideoNativeSurfaceStatus: state.w8NativeVideoNativeSurfaceStatus,
+        w8NativeVideoNativeSurfaceFormat: state.w8NativeVideoNativeSurfaceFormat,
+        w8NativeVideoNativeSurfaceWidth: state.w8NativeVideoNativeSurfaceWidth,
+        w8NativeVideoNativeSurfaceHeight: state.w8NativeVideoNativeSurfaceHeight,
+        w8NativeVideoNativeSurfaceReason: state.w8NativeVideoNativeSurfaceReason,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5529,6 +5536,12 @@ async function verifyH264KeyFrameDetection(session) {
                           frameHandoffStatus: "waiting-decoded-frame",
                           latestFrameFormat: "NV12",
                           latestFrameBytes: 0,
+                          nativeSurfaceReady: true,
+                          nativeSurfaceMode: "d3d11-latest-frame-texture-target",
+                          nativeSurfaceStatus: "ready",
+                          nativeSurfaceFormat: "NV12",
+                          nativeSurfaceWidth: 1920,
+                          nativeSurfaceHeight: 1080,
                           reason: "ready; persistent decoder session active",
                         }
                       : null,
@@ -5627,6 +5640,13 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoLatestFrameFormat = "";
         state.w8NativeVideoLatestFrameBytes = 0;
         state.w8NativeVideoLatestFrameId = null;
+        state.w8NativeVideoNativeSurfaceReady = false;
+        state.w8NativeVideoNativeSurfaceMode = "";
+        state.w8NativeVideoNativeSurfaceStatus = "";
+        state.w8NativeVideoNativeSurfaceFormat = "";
+        state.w8NativeVideoNativeSurfaceWidth = 0;
+        state.w8NativeVideoNativeSurfaceHeight = 0;
+        state.w8NativeVideoNativeSurfaceReason = "";
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5698,6 +5718,12 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoFrameHandoffMode === "native-latest-frame-handoff" &&
           state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus === "waiting-decoded-frame" &&
           state.hostDiagnostics?.w8NativeVideoLatestFrameFormat === "NV12" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceReady === true &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceMode === "d3d11-latest-frame-texture-target" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceStatus === "ready" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceFormat === "NV12" &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceWidth === 1920 &&
+          state.hostDiagnostics?.w8NativeVideoNativeSurfaceHeight === 1080 &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
           exportText.includes("原生解码配置 avc1.420029") &&
@@ -5715,7 +5741,10 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生解码线程 active") &&
           exportText.includes("原生帧交接 active") &&
           exportText.includes("原生最新帧 NV12") &&
-          exportText.includes("原生帧状态 waiting-decoded-frame");
+          exportText.includes("原生帧状态 waiting-decoded-frame") &&
+          exportText.includes("原生表面 ready") &&
+          exportText.includes("原生表面目标 D3D11 1920x1080 NV12") &&
+          exportText.includes("原生表面状态 ready");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5780,6 +5809,18 @@ async function verifyH264KeyFrameDetection(session) {
             state.hostDiagnostics?.w8NativeVideoFrameHandoffStatus,
           w8NativeVideoLatestFrameFormat:
             state.hostDiagnostics?.w8NativeVideoLatestFrameFormat,
+          w8NativeVideoNativeSurfaceReady:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceReady,
+          w8NativeVideoNativeSurfaceMode:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceMode,
+          w8NativeVideoNativeSurfaceStatus:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceStatus,
+          w8NativeVideoNativeSurfaceFormat:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceFormat,
+          w8NativeVideoNativeSurfaceWidth:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceWidth,
+          w8NativeVideoNativeSurfaceHeight:
+            state.hostDiagnostics?.w8NativeVideoNativeSurfaceHeight,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5860,6 +5901,13 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoLatestFrameFormat = original.w8NativeVideoLatestFrameFormat;
         state.w8NativeVideoLatestFrameBytes = original.w8NativeVideoLatestFrameBytes;
         state.w8NativeVideoLatestFrameId = original.w8NativeVideoLatestFrameId;
+        state.w8NativeVideoNativeSurfaceReady = original.w8NativeVideoNativeSurfaceReady;
+        state.w8NativeVideoNativeSurfaceMode = original.w8NativeVideoNativeSurfaceMode;
+        state.w8NativeVideoNativeSurfaceStatus = original.w8NativeVideoNativeSurfaceStatus;
+        state.w8NativeVideoNativeSurfaceFormat = original.w8NativeVideoNativeSurfaceFormat;
+        state.w8NativeVideoNativeSurfaceWidth = original.w8NativeVideoNativeSurfaceWidth;
+        state.w8NativeVideoNativeSurfaceHeight = original.w8NativeVideoNativeSurfaceHeight;
+        state.w8NativeVideoNativeSurfaceReason = original.w8NativeVideoNativeSurfaceReason;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;

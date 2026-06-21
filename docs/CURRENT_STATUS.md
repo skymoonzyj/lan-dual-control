@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 D3D11 native surface target preflight
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在会在启动 decoder session 时创建 D3D11 latest-frame texture target：启用 `Win32_Graphics_Dxgi_Common`，用 D3D11 hardware device 创建 `1920x1080` texture，NV12 输出走 `DXGI_FORMAT_NV12`，其他输出回退 BGRA8。`decoderSession` 新增 `nativeSurfaceReady/nativeSurfaceMode/nativeSurfaceStatus/nativeSurfaceFormat/nativeSurfaceWidth/nativeSurfaceHeight/nativeSurfaceReason`；Windows 控制端诊断/复制导出新增 `原生表面 ready|blocked`、`原生表面目标 D3D11 ...` 和 `原生表面状态 ...`。本轮仍未把 decoded sample 写入/呈现到 surface，也未替换 WebCodecs/canvas；下一步是 decoded sample -> texture/surface 的 copy/present 路径和 stream-change/resize/device-lost 恢复。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 decoded frame handoff 诊断底座
 - Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`w8_native_video` 的专用 `lan-dual-w8-mf-decoder` worker 现在会把 decoded frame handoff / latest-frame 摘要并入 `decoderSession`：`frameHandoffActive/frameHandoffMode/frameHandoffStatus/latestFrameFormat/latestFrameBytes/latestFrameId`。有 decoded sample 时记录最新帧格式、长度和序号；当前样本仍 `need-more-input` 时明确显示 `waiting-decoded-frame`，不宣称已经完成原生绘制。Windows 控制端诊断/复制导出新增 `原生帧交接 active|blocked`、`原生最新帧 ...` 和 `原生帧状态 ...`。下一步是把这个 latest-frame 摘要接到 D3D11/native surface 绘制；本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 

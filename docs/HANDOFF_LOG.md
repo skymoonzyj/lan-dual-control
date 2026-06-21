@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 D3D11 native surface target preflight
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 decoded frame handoff 后让 worker 创建 D3D11 latest-frame texture target，为下一步 decoded sample copy/present 到 native surface 做真实接线准备。
+完成内容：`Cargo.toml` 启用 `Win32_Graphics_Dxgi_Common`；`lan-dual-w8-mf-decoder` worker 启动时创建 D3D11 hardware device 和 `1920x1080` latest-frame texture target，NV12 输出使用 `DXGI_FORMAT_NV12`，其他输出回退 BGRA8。`decoderSession` 新增 `nativeSurfaceReady/nativeSurfaceMode/nativeSurfaceStatus/nativeSurfaceFormat/nativeSurfaceWidth/nativeSurfaceHeight/nativeSurfaceReason`。Windows 控制端诊断/复制导出新增 `原生表面 ready|blocked`、`原生表面目标 D3D11 ...` 和 `原生表面状态 ...`。
+修改文件：apps/windows-desktop/src-tauri/Cargo.toml；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `native_surface_*` 字段，前端专项失败于缺 `原生表面 ready` / `原生表面目标 D3D11 1920x1080 NV12`；绿灯后验证通过：W8 Rust 专项 13 项通过、桌面端 `cargo test` 全量 6+23+doc 通过、`cargo check` 通过、H.264 页面专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`cargo fmt --check` 通过、`git diff --check` 通过、冲突扫描无命中。
+遗留问题：本轮创建了 D3D11 texture target，但还没有把 decoded sample copy/present 到 texture/native surface，也没有替换 WebCodecs/canvas。
+下一步建议：继续 W8：把 decoded sample copy/present 到 D3D11 texture/native surface，并处理 stream-change、surface resize、device lost 等恢复路径。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续 native surface 真连验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 decoded frame handoff 诊断底座
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在上一轮专用 native decoder worker 后，让 worker 输出 decoded frame handoff / latest-frame 摘要，为下一步 D3D11/native surface 绘制提供可验证入口。

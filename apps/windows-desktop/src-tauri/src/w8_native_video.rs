@@ -14,8 +14,13 @@ use windows::Win32::Graphics::Direct3D::{
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_SDK_VERSION,
+    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, D3D11_BIND_DECODER,
+    D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
+    D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+};
+#[cfg(windows)]
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_SAMPLE_DESC,
 };
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
@@ -36,6 +41,8 @@ use windows::Win32::System::Com::CoTaskMemFree;
 const DEFAULT_TARGET_QUEUE_MS: u64 = 80;
 const DEFAULT_HARD_MAX_QUEUE_MS: u64 = 180;
 const DEFAULT_MAX_FRAMES: usize = 96;
+const DEFAULT_NATIVE_SURFACE_WIDTH: u32 = 1920;
+const DEFAULT_NATIVE_SURFACE_HEIGHT: u32 = 1080;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -175,6 +182,13 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub latest_frame_format: String,
     pub latest_frame_bytes: u64,
     pub latest_frame_id: Option<u64>,
+    pub native_surface_ready: bool,
+    pub native_surface_mode: String,
+    pub native_surface_status: String,
+    pub native_surface_format: String,
+    pub native_surface_width: u32,
+    pub native_surface_height: u32,
+    pub native_surface_reason: String,
     pub reason: String,
 }
 
@@ -727,13 +741,20 @@ impl W8NativeVideoDecoderSessionState {
             latest_frame_format: "pending".to_string(),
             latest_frame_bytes: 0,
             latest_frame_id: None,
+            native_surface_ready: false,
+            native_surface_mode: "none".to_string(),
+            native_surface_status: "starting".to_string(),
+            native_surface_format: "pending".to_string(),
+            native_surface_width: 0,
+            native_surface_height: 0,
+            native_surface_reason: "starting native surface target preflight".to_string(),
             reason: "starting persistent decoder session".to_string(),
         };
 
         #[cfg(windows)]
         {
             match W8NativeVideoDecoderWorker::start(self.decoder_config_bytes.clone()) {
-                Ok((worker, output_subtype)) => {
+                Ok((worker, output_subtype, surface_target)) => {
                     started.active = true;
                     started.output_subtype = output_subtype;
                     started.last_status = "active".to_string();
@@ -744,6 +765,13 @@ impl W8NativeVideoDecoderSessionState {
                     started.frame_handoff_mode = "native-latest-frame-handoff".to_string();
                     started.frame_handoff_status = "waiting-decoded-frame".to_string();
                     started.latest_frame_format = started.output_subtype.clone();
+                    started.native_surface_ready = surface_target.ready;
+                    started.native_surface_mode = surface_target.mode;
+                    started.native_surface_status = surface_target.status;
+                    started.native_surface_format = surface_target.format;
+                    started.native_surface_width = surface_target.width;
+                    started.native_surface_height = surface_target.height;
+                    started.native_surface_reason = surface_target.reason;
                     started.reason = "ready; dedicated native decoder worker active".to_string();
                     self.worker = Some(worker);
                 }
@@ -751,6 +779,8 @@ impl W8NativeVideoDecoderSessionState {
                     started.last_status = "start-blocked".to_string();
                     started.worker_status = "start-blocked".to_string();
                     started.frame_handoff_status = "start-blocked".to_string();
+                    started.native_surface_status = "start-blocked".to_string();
+                    started.native_surface_reason = format!("blocked: {error}");
                     started.reason = format!("blocked: {error}");
                     self.worker = None;
                 }
@@ -760,6 +790,9 @@ impl W8NativeVideoDecoderSessionState {
         {
             started.last_status = "unsupported".to_string();
             started.worker_status = "unsupported".to_string();
+            started.native_surface_status = "unsupported".to_string();
+            started.native_surface_reason =
+                "blocked: Windows-only D3D11 native surface target".to_string();
             started.reason =
                 "blocked: Windows-only Media Foundation persistent decoder session".to_string();
         }
@@ -819,7 +852,9 @@ struct W8NativeVideoDecoderWorker {
 
 #[cfg(windows)]
 impl W8NativeVideoDecoderWorker {
-    fn start(sequence_header: Vec<u8>) -> Result<(Self, String), String> {
+    fn start(
+        sequence_header: Vec<u8>,
+    ) -> Result<(Self, String, W8NativeSurfaceTargetSummary), String> {
         let (command_sender, command_receiver) = mpsc::channel();
         let (init_sender, init_receiver) = mpsc::channel();
         let handle = thread::Builder::new()
@@ -828,7 +863,8 @@ impl W8NativeVideoDecoderWorker {
                 move || match unsafe { W8MfH264DecoderWorkerRuntime::start(&sequence_header) } {
                     Ok(mut runtime) => {
                         let output_subtype = runtime.output_subtype.clone();
-                        let _ = init_sender.send(Ok(output_subtype));
+                        let surface_target = runtime.surface_target.summary.clone();
+                        let _ = init_sender.send(Ok((output_subtype, surface_target)));
                         while let Ok(command) = command_receiver.recv() {
                             match command {
                                 W8NativeVideoDecoderWorkerCommand::Decode {
@@ -850,12 +886,13 @@ impl W8NativeVideoDecoderWorker {
             .map_err(|error| format!("spawn native decoder worker failed: {error}"))?;
 
         match init_receiver.recv_timeout(Duration::from_millis(3000)) {
-            Ok(Ok(output_subtype)) => Ok((
+            Ok(Ok((output_subtype, surface_target))) => Ok((
                 Self {
                     sender: command_sender,
                     handle: Some(handle),
                 },
                 output_subtype,
+                surface_target,
             )),
             Ok(Err(error)) => {
                 let _ = handle.join();
@@ -910,6 +947,27 @@ impl Drop for W8NativeVideoDecoderWorker {
 struct W8MfH264DecoderWorkerRuntime {
     transform: IMFTransform,
     output_subtype: String,
+    surface_target: W8NativeSurfaceTargetRuntime,
+}
+
+#[cfg(windows)]
+struct W8NativeSurfaceTargetRuntime {
+    _device: ID3D11Device,
+    _context: ID3D11DeviceContext,
+    _texture: ID3D11Texture2D,
+    summary: W8NativeSurfaceTargetSummary,
+}
+
+#[cfg(windows)]
+#[derive(Clone)]
+struct W8NativeSurfaceTargetSummary {
+    ready: bool,
+    mode: String,
+    status: String,
+    format: String,
+    width: u32,
+    height: u32,
+    reason: String,
 }
 
 #[cfg(windows)]
@@ -1093,6 +1151,12 @@ pub fn preflight_h264_decode_step(
 
 #[cfg(windows)]
 unsafe fn probe_d3d11_feature_level() -> Result<String, String> {
+    create_d3d11_video_device().map(|(_, _, selected)| format_d3d_feature_level(selected))
+}
+
+#[cfg(windows)]
+unsafe fn create_d3d11_video_device(
+) -> Result<(ID3D11Device, ID3D11DeviceContext, D3D_FEATURE_LEVEL), String> {
     let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
     let mut device: Option<ID3D11Device> = None;
     let mut context: Option<ID3D11DeviceContext> = None;
@@ -1109,9 +1173,10 @@ unsafe fn probe_d3d11_feature_level() -> Result<String, String> {
         Some(&mut context),
     )
     .map_err(|error| format!("D3D11CreateDevice failed: {error}"))?;
-    device.ok_or_else(|| "D3D11CreateDevice returned no device".to_string())?;
-    context.ok_or_else(|| "D3D11CreateDevice returned no immediate context".to_string())?;
-    Ok(format_d3d_feature_level(selected))
+    let device = device.ok_or_else(|| "D3D11CreateDevice returned no device".to_string())?;
+    let context =
+        context.ok_or_else(|| "D3D11CreateDevice returned no immediate context".to_string())?;
+    Ok((device, context, selected))
 }
 
 #[cfg(windows)]
@@ -1122,6 +1187,62 @@ fn format_d3d_feature_level(level: D3D_FEATURE_LEVEL) -> String {
         "11_0".to_string()
     } else {
         format!("{:?}", level)
+    }
+}
+
+#[cfg(windows)]
+unsafe fn create_d3d11_latest_frame_texture_target(
+    output_subtype: &str,
+) -> Result<W8NativeSurfaceTargetRuntime, String> {
+    let (device, context, selected) = create_d3d11_video_device()?;
+    let (dxgi_format, surface_format) = dxgi_format_for_surface_output(output_subtype);
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: DEFAULT_NATIVE_SURFACE_WIDTH,
+        Height: DEFAULT_NATIVE_SURFACE_HEIGHT,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: dxgi_format,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: (D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE).0 as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: 0,
+    };
+    let mut texture = None;
+    device
+        .CreateTexture2D(&desc, None, Some(&mut texture))
+        .map_err(|error| format!("CreateTexture2D latest-frame target failed: {error}"))?;
+    let texture =
+        texture.ok_or_else(|| "CreateTexture2D returned no latest-frame texture".to_string())?;
+
+    Ok(W8NativeSurfaceTargetRuntime {
+        _device: device,
+        _context: context,
+        _texture: texture,
+        summary: W8NativeSurfaceTargetSummary {
+            ready: true,
+            mode: "d3d11-latest-frame-texture-target".to_string(),
+            status: "ready".to_string(),
+            format: surface_format,
+            width: DEFAULT_NATIVE_SURFACE_WIDTH,
+            height: DEFAULT_NATIVE_SURFACE_HEIGHT,
+            reason: format!(
+                "ready; D3D11 {} latest-frame texture target created",
+                format_d3d_feature_level(selected)
+            ),
+        },
+    })
+}
+
+#[cfg(windows)]
+fn dxgi_format_for_surface_output(output_subtype: &str) -> (DXGI_FORMAT, String) {
+    if output_subtype.eq_ignore_ascii_case("NV12") {
+        (DXGI_FORMAT_NV12, "NV12".to_string())
+    } else {
+        (DXGI_FORMAT_B8G8R8A8_UNORM, "BGRA8".to_string())
     }
 }
 
@@ -1289,9 +1410,11 @@ impl W8MfH264DecoderWorkerRuntime {
             transform
                 .SetOutputType(0, &output_type, 0)
                 .map_err(|error| format!("SetOutputType {output_subtype} failed: {error}"))?;
+            let surface_target = create_d3d11_latest_frame_texture_target(&output_subtype)?;
             Ok(Self {
                 transform,
                 output_subtype,
+                surface_target,
             })
         })();
         if started.is_err() {
@@ -2011,6 +2134,18 @@ mod tests {
             second_session.latest_frame_format,
             second_session.output_subtype
         );
+        assert!(second_session.native_surface_ready);
+        assert_eq!(
+            second_session.native_surface_mode,
+            "d3d11-latest-frame-texture-target"
+        );
+        assert_eq!(second_session.native_surface_status, "ready");
+        assert_eq!(
+            second_session.native_surface_format,
+            second_session.output_subtype
+        );
+        assert_eq!(second_session.native_surface_width, 1920);
+        assert_eq!(second_session.native_surface_height, 1080);
         assert!(second_session.accepted_input_frames <= second_session.submitted_frames);
         assert!(second_session.decoded_frames <= second_session.accepted_input_frames);
         assert!(!second_session.output_subtype.trim().is_empty());
