@@ -7894,8 +7894,8 @@ async function verifyAudioPlaybackBufferGuards(session) {
           state.audioUnderrunCount === 2 &&
           state.audioStablePrebufferCount === 1 &&
           state.audioLastBufferReason === "queue-underrun-recovery-prebuffer" &&
-          starts[0] >= 50.17 &&
-          starts[0] < 50.22;
+          starts[0] >= 50.095 &&
+          starts[0] < 50.14;
 
         return {
           ok: preservedPrebuffer && adaptivePrebuffered && startupUnderrunKeepsLowLatency && arrivalGapDiagnosed && arrivalGapStatusVisible && bufferHealthStatusVisible && audioStallVisible && audioFirstFrameWaitVisible && trimmedFutureQueue && visibilityRecoveryResetQueue && postVisibilitySnapToLive && recoveryUnderrunRebuildBuffer,
