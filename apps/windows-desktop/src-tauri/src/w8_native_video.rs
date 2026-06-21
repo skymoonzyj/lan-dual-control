@@ -2,7 +2,7 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Mutex};
 #[cfg(windows)]
-use std::{ffi::c_void, mem::ManuallyDrop, ptr};
+use std::{ffi::c_void, mem::ManuallyDrop, ptr, sync::mpsc, thread, time::Duration};
 
 #[cfg(windows)]
 use windows::core::GUID;
@@ -166,6 +166,9 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub accepted_input_frames: u64,
     pub decoded_frames: u64,
     pub last_status: String,
+    pub worker_thread: bool,
+    pub worker_mode: String,
+    pub worker_status: String,
     pub reason: String,
 }
 
@@ -629,12 +632,18 @@ struct W8NativeVideoDecodeStepRuntime {
 struct W8NativeVideoDecoderSessionState {
     summary: Option<W8NativeVideoDecoderSessionSummary>,
     decoder_config_bytes: Vec<u8>,
+    #[cfg(windows)]
+    worker: Option<W8NativeVideoDecoderWorker>,
 }
 
 impl W8NativeVideoDecoderSessionState {
     fn reset(&mut self) {
         self.summary = None;
         self.decoder_config_bytes.clear();
+        #[cfg(windows)]
+        {
+            self.worker = None;
+        }
     }
 
     fn push_h264_access_unit(
@@ -693,38 +702,37 @@ impl W8NativeVideoDecoderSessionState {
             accepted_input_frames: 0,
             decoded_frames: 0,
             last_status: "starting".to_string(),
+            worker_thread: false,
+            worker_mode: "none".to_string(),
+            worker_status: "starting".to_string(),
             reason: "starting persistent decoder session".to_string(),
         };
 
         #[cfg(windows)]
         {
-            match unsafe { preflight_media_foundation_h264_decoder(&self.decoder_config_bytes) } {
-                Ok((input_type_set, output_subtypes))
-                    if input_type_set && !output_subtypes.is_empty() =>
-                {
+            match W8NativeVideoDecoderWorker::start(self.decoder_config_bytes.clone()) {
+                Ok((worker, output_subtype)) => {
                     started.active = true;
-                    started.output_subtype = output_subtypes
-                        .first()
-                        .cloned()
-                        .unwrap_or_else(|| "unknown".to_string());
+                    started.output_subtype = output_subtype;
                     started.last_status = "active".to_string();
-                    started.reason =
-                        "ready; persistent decoder session diagnostics active".to_string();
-                }
-                Ok((_, _)) => {
-                    started.last_status = "start-blocked".to_string();
-                    started.reason =
-                        "blocked: Media Foundation decoder output type is unavailable".to_string();
+                    started.worker_thread = true;
+                    started.worker_mode = "dedicated-native-decoder-thread".to_string();
+                    started.worker_status = "active".to_string();
+                    started.reason = "ready; dedicated native decoder worker active".to_string();
+                    self.worker = Some(worker);
                 }
                 Err(error) => {
                     started.last_status = "start-blocked".to_string();
+                    started.worker_status = "start-blocked".to_string();
                     started.reason = format!("blocked: {error}");
+                    self.worker = None;
                 }
             }
         }
         #[cfg(not(windows))]
         {
             started.last_status = "unsupported".to_string();
+            started.worker_status = "unsupported".to_string();
             started.reason =
                 "blocked: Windows-only Media Foundation persistent decoder session".to_string();
         }
@@ -735,19 +743,14 @@ impl W8NativeVideoDecoderSessionState {
     fn process(&mut self, summary: &NativeH264AnnexBSummary) -> W8NativeVideoDecoderSessionProcess {
         #[cfg(windows)]
         {
-            if self.decoder_config_bytes.is_empty() {
-                return W8NativeVideoDecoderSessionProcess {
-                    input_accepted: false,
-                    output_produced: false,
-                    status: "missing-config".to_string(),
-                    reason: "blocked: persistent decoder session has no decoder config".to_string(),
-                };
+            if let Some(worker) = self.worker.as_ref() {
+                return worker.process(summary.access_unit_bytes.clone());
             }
-            unsafe {
-                persistent_h264_decoder_session_step(
-                    &self.decoder_config_bytes,
-                    &summary.access_unit_bytes,
-                )
+            W8NativeVideoDecoderSessionProcess {
+                input_accepted: false,
+                output_produced: false,
+                status: "worker-inactive".to_string(),
+                reason: "blocked: dedicated native decoder worker is not active".to_string(),
             }
         }
         #[cfg(not(windows))]
@@ -767,6 +770,123 @@ struct W8NativeVideoDecoderSessionProcess {
     output_produced: bool,
     status: String,
     reason: String,
+}
+
+#[cfg(windows)]
+enum W8NativeVideoDecoderWorkerCommand {
+    Decode {
+        access_unit: Vec<u8>,
+        response: mpsc::Sender<W8NativeVideoDecoderSessionProcess>,
+    },
+    Stop,
+}
+
+#[cfg(windows)]
+struct W8NativeVideoDecoderWorker {
+    sender: mpsc::Sender<W8NativeVideoDecoderWorkerCommand>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+#[cfg(windows)]
+impl W8NativeVideoDecoderWorker {
+    fn start(sequence_header: Vec<u8>) -> Result<(Self, String), String> {
+        let (command_sender, command_receiver) = mpsc::channel();
+        let (init_sender, init_receiver) = mpsc::channel();
+        let handle = thread::Builder::new()
+            .name("lan-dual-w8-mf-decoder".to_string())
+            .spawn(
+                move || match unsafe { W8MfH264DecoderWorkerRuntime::start(&sequence_header) } {
+                    Ok(mut runtime) => {
+                        let output_subtype = runtime.output_subtype.clone();
+                        let _ = init_sender.send(Ok(output_subtype));
+                        while let Ok(command) = command_receiver.recv() {
+                            match command {
+                                W8NativeVideoDecoderWorkerCommand::Decode {
+                                    access_unit,
+                                    response,
+                                } => {
+                                    let process = unsafe { runtime.process(&access_unit) };
+                                    let _ = response.send(process);
+                                }
+                                W8NativeVideoDecoderWorkerCommand::Stop => break,
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        let _ = init_sender.send(Err(error));
+                    }
+                },
+            )
+            .map_err(|error| format!("spawn native decoder worker failed: {error}"))?;
+
+        match init_receiver.recv_timeout(Duration::from_millis(3000)) {
+            Ok(Ok(output_subtype)) => Ok((
+                Self {
+                    sender: command_sender,
+                    handle: Some(handle),
+                },
+                output_subtype,
+            )),
+            Ok(Err(error)) => {
+                let _ = handle.join();
+                Err(error)
+            }
+            Err(_) => {
+                let _ = command_sender.send(W8NativeVideoDecoderWorkerCommand::Stop);
+                Err("native decoder worker startup timed out".to_string())
+            }
+        }
+    }
+
+    fn process(&self, access_unit: Vec<u8>) -> W8NativeVideoDecoderSessionProcess {
+        let (response_sender, response_receiver) = mpsc::channel();
+        if let Err(error) = self.sender.send(W8NativeVideoDecoderWorkerCommand::Decode {
+            access_unit,
+            response: response_sender,
+        }) {
+            return W8NativeVideoDecoderSessionProcess {
+                input_accepted: false,
+                output_produced: false,
+                status: "worker-send-blocked".to_string(),
+                reason: format!("blocked: native decoder worker command send failed: {error}"),
+            };
+        }
+
+        match response_receiver.recv_timeout(Duration::from_millis(750)) {
+            Ok(process) => process,
+            Err(error) => W8NativeVideoDecoderSessionProcess {
+                input_accepted: false,
+                output_produced: false,
+                status: "worker-timeout".to_string(),
+                reason: format!("blocked: native decoder worker response timed out: {error}"),
+            },
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for W8NativeVideoDecoderWorker {
+    fn drop(&mut self) {
+        let _ = self.sender.send(W8NativeVideoDecoderWorkerCommand::Stop);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+#[cfg(windows)]
+struct W8MfH264DecoderWorkerRuntime {
+    transform: IMFTransform,
+    output_subtype: String,
+}
+
+#[cfg(windows)]
+impl Drop for W8MfH264DecoderWorkerRuntime {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = MFShutdown();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -1123,23 +1243,115 @@ unsafe fn preflight_media_foundation_h264_decode_step_inner(
 }
 
 #[cfg(windows)]
-unsafe fn persistent_h264_decoder_session_step(
-    sequence_header: &[u8],
-    access_unit: &[u8],
-) -> W8NativeVideoDecoderSessionProcess {
-    match preflight_media_foundation_h264_decode_step(sequence_header, access_unit) {
-        Ok(runtime) => W8NativeVideoDecoderSessionProcess {
-            input_accepted: runtime.input_accepted,
-            output_produced: runtime.output_produced,
-            status: runtime.output_status,
-            reason: runtime.reason,
-        },
-        Err(error) => W8NativeVideoDecoderSessionProcess {
-            input_accepted: false,
-            output_produced: false,
-            status: "process-blocked".to_string(),
-            reason: format!("blocked: {error}"),
-        },
+impl W8MfH264DecoderWorkerRuntime {
+    unsafe fn start(sequence_header: &[u8]) -> Result<Self, String> {
+        MFStartup(MF_VERSION, MFSTARTUP_LITE)
+            .map_err(|error| format!("MFStartup failed: {error}"))?;
+        let started = (|| {
+            let transform = activate_first_h264_decoder_mft()?;
+            let input_type = create_h264_decoder_input_type(sequence_header)?;
+            transform
+                .SetInputType(0, &input_type, 0)
+                .map_err(|error| format!("SetInputType H.264 failed: {error}"))?;
+            let (output_type, output_subtype) = first_decoder_output_type(&transform)?;
+            transform
+                .SetOutputType(0, &output_type, 0)
+                .map_err(|error| format!("SetOutputType {output_subtype} failed: {error}"))?;
+            Ok(Self {
+                transform,
+                output_subtype,
+            })
+        })();
+        if started.is_err() {
+            let _ = MFShutdown();
+        }
+        started
+    }
+
+    unsafe fn process(&mut self, access_unit: &[u8]) -> W8NativeVideoDecoderSessionProcess {
+        let input_sample = match create_mf_sample_from_bytes(access_unit, 0, 16_667) {
+            Ok(sample) => sample,
+            Err(error) => {
+                return W8NativeVideoDecoderSessionProcess {
+                    input_accepted: false,
+                    output_produced: false,
+                    status: "sample-create-blocked".to_string(),
+                    reason: format!("blocked: {error}"),
+                };
+            }
+        };
+
+        if let Err(error) = self.transform.ProcessInput(0, &input_sample, 0) {
+            return W8NativeVideoDecoderSessionProcess {
+                input_accepted: false,
+                output_produced: false,
+                status: "process-input-blocked".to_string(),
+                reason: format!("blocked: native worker ProcessInput failed: {error}"),
+            };
+        }
+
+        let output_sample = match create_decoder_output_sample(&self.transform) {
+            Ok(sample) => sample,
+            Err(error) => {
+                return W8NativeVideoDecoderSessionProcess {
+                    input_accepted: true,
+                    output_produced: false,
+                    status: "output-sample-blocked".to_string(),
+                    reason: format!("blocked: {error}"),
+                };
+            }
+        };
+
+        let mut output_buffer = MFT_OUTPUT_DATA_BUFFER {
+            dwStreamID: 0,
+            pSample: ManuallyDrop::new(output_sample),
+            dwStatus: 0,
+            pEvents: ManuallyDrop::new(None),
+        };
+        let mut process_status = 0_u32;
+        let output_result = self.transform.ProcessOutput(
+            0,
+            std::slice::from_mut(&mut output_buffer),
+            &mut process_status,
+        );
+        let output_produced = output_result.is_ok() && output_buffer.pSample.is_some();
+        let status = match output_result {
+            Ok(()) if output_produced => "decoded-output".to_string(),
+            Ok(()) => "no-output".to_string(),
+            Err(error) if error.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => {
+                "need-more-input".to_string()
+            }
+            Err(error) if error.code() == MF_E_TRANSFORM_STREAM_CHANGE => {
+                "stream-change".to_string()
+            }
+            Err(error) => format!("process-output-blocked:{:?}", error.code()),
+        };
+        let reason = match status.as_str() {
+            "decoded-output" => format!(
+                "ready; native worker produced {} frame",
+                self.output_subtype
+            ),
+            "need-more-input" => {
+                "ready; native worker accepted input and needs more data".to_string()
+            }
+            "stream-change" => {
+                "ready; native worker accepted input and requested stream change".to_string()
+            }
+            "no-output" => "ready; native worker returned no sample".to_string(),
+            _ => format!("blocked: native worker ProcessOutput failed with {status}"),
+        };
+
+        let output_sample = ManuallyDrop::into_inner(output_buffer.pSample);
+        let output_events = ManuallyDrop::into_inner(output_buffer.pEvents);
+        drop(output_sample);
+        drop(output_events);
+
+        W8NativeVideoDecoderSessionProcess {
+            input_accepted: true,
+            output_produced,
+            status,
+            reason,
+        }
     }
 }
 
@@ -1729,9 +1941,13 @@ mod tests {
             first_session.mode,
             "media-foundation-h264-persistent-decoder-session"
         );
+        assert!(first_session.worker_thread);
+        assert_eq!(first_session.worker_mode, "dedicated-native-decoder-thread");
         assert_eq!(first_session.codec_string.as_deref(), Some("avc1.420029"));
         assert_eq!(first_session.submitted_frames, 1);
         assert_eq!(second_session.submitted_frames, 2);
+        assert!(second_session.worker_thread);
+        assert_eq!(second_session.worker_status, "active");
         assert!(second_session.accepted_input_frames <= second_session.submitted_frames);
         assert!(second_session.decoded_frames <= second_session.accepted_input_frames);
         assert!(!second_session.output_subtype.trim().is_empty());

@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows 桌面控制端 native decoder worker 线程：`w8_native_video` 现在把长期持有 Media Foundation H.264 `IMFTransform` 的 runtime 放进专用 worker 线程，Tauri state 只保存可 Send 的通道/线程句柄和摘要；Windows 控制端诊断/导出新增 `原生解码线程 active|blocked` 和 `原生线程状态 ...`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步接 decoded frame handoff 和 native surface latest-frame 绘制。
 - [x] W8 Windows 桌面控制端 MF H.264 持续解码会话诊断：`push_w8_native_h264_annexb_frame` 现在会在原生侧维护 decoder session 摘要，累计 `submittedFrames`、`acceptedInputFrames`、`decodedFrames`、`outputSubtype` 和 `lastStatus`；Windows 控制端诊断/导出新增 `原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...` 和 `原生会话状态 ...`。不改协议、不改 Mac、不请求密码、不发 input/inject；由于 `IMFTransform` 不适合直接跨线程放入 Tauri 状态，下一步是专用 native decoder/renderer 线程和 native surface latest-frame 绘制。
 - [x] W8 Windows 桌面控制端 MF H.264 sample decode step preflight：`push_w8_native_h264_annexb_frame` 首次收到带 SPS/PPS/IDR 的 H.264 payload 时，Rust 原生侧会保留完整 access unit，创建 MF sample，设置 decoder 输出 subtype，调用 `ProcessInput` 并尝试 `ProcessOutput`；Windows 控制端诊断/导出新增 `原生解码步进 ready|blocked` 和 `原生步进状态 ...`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步把一次性 preflight 升级为持续 decoder 会话、decoded frame 计数和 native surface 绘制。
 - [x] W8 Windows 桌面控制端 MF H.264 decoder init preflight：`push_w8_native_h264_annexb_frame` 首次收到带 SPS/PPS 的 H.264 payload 时，Rust 原生侧会保留参数集、创建 Media Foundation H.264 decoder MFT、设置 H.264 输入类型并枚举输出 subtype；Windows 控制端诊断/导出新增 `原生解码初始化 ready|blocked` 和 `原生输出 NV12/ARGB32/...`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步喂 Annex B access unit 跑 `ProcessInput/ProcessOutput` 并接 native surface 绘制。

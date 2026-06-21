@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 native decoder worker thread
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在把真正长期持有 Media Foundation H.264 `IMFTransform` 的 runtime 放进专用 `lan-dual-w8-mf-decoder` worker 线程；Tauri 全局状态只保存可跨线程安全移动的 worker 通道/线程句柄和诊断摘要。首个 SPS/PPS decoder config 到达后会启动 worker、设置 H.264 input type 和输出 subtype，后续 access unit 通过 worker 命令队列进入同一个 MF decoder，并返回 `submittedFrames`、`acceptedInputFrames`、`decodedFrames`、`outputSubtype`、`lastStatus`、`workerThread/workerMode/workerStatus`。Windows 控制端诊断/复制导出新增 `原生解码线程 active|blocked` 和 `原生线程状态 ...`。这一步仍未把 decoded frame 交给 native surface，也未替换 WebCodecs/canvas；下一步是 native renderer/surface latest-frame 绘制和 decoded frame handoff。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 MF H.264 persistent decoder session diagnostics
 - Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会在 H.264 Annex B payload 进入原生层后维护一份持续 decoder session 诊断摘要：第一次看到 SPS/PPS decoder config 时创建会话摘要，后续帧会累计 `submittedFrames`、`acceptedInputFrames`、`decodedFrames`、`outputSubtype`、`lastStatus` 和阻塞/ready 原因。Windows 控制端诊断/复制导出新增 `原生解码会话 active|blocked`、`原生会话输出 ...`、`原生会话输入 ...`、`原生会话解码 ...`、`原生会话状态 ...`。由于 Media Foundation 的 `IMFTransform` 不能直接放入 Tauri 全局状态跨线程保存，本轮保留的是安全的会话诊断状态和每帧 MF 步进证据；下一步仍需把真正长期 decoder 放到专用 native renderer/decoder 线程，再接 native surface latest-frame 绘制。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 

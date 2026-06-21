@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 native decoder worker thread
+开发端：Windows Codex
+本轮目标：继续只做视频侧，把上一轮 session diagnostics 推进到专用 native decoder worker 线程，让长期 MF decoder 不再停留在同步 preflight 层。
+完成内容：`w8_native_video` 新增 `W8NativeVideoDecoderWorker`，Tauri state 只保存可 Send 的命令通道/线程句柄；worker 线程内创建并持有 Media Foundation H.264 `IMFTransform`，后续 access unit 通过命令队列送入同一个 decoder。`decoderSession` 摘要新增 `workerThread/workerMode/workerStatus`，Windows 控制端诊断/复制导出新增 `原生解码线程 active|blocked` 和 `原生线程状态 ...`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `worker_thread/worker_mode/worker_status`，前端专项失败于缺 `原生解码线程 active`；绿灯后验证通过：W8 Rust 专项 13 项通过、桌面端 `cargo test` 全量 6+23+doc 通过、`cargo check` 通过、H.264 页面专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`git diff --check` 通过、冲突扫描无命中。
+遗留问题：worker 线程已经持有长期 MF decoder，但还没有把 decoded frame 交给 native surface，也没有替换 WebCodecs/canvas。
+下一步建议：继续 W8：在 worker/renderer 线程里做 decoded frame handoff，接 D3D11/native surface latest-frame 绘制；Web 仍只作诊断备用。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续 native surface 真连验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 MF H.264 persistent decoder session diagnostics
 开发端：Windows Codex
 本轮目标：继续只做视频侧，把上一轮一次性 sample decode step preflight 推进为可持续累计的 decoder session 诊断摘要。
