@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W7 音频恢复缓冲低延迟收敛
+开发端：Windows Codex
+本轮目标：响应 ad3d8b5 后真实复测结果，把音频剩余工作从 Mac PCM cadence 转为 Windows WebAudio 队列低延迟收敛。
+完成内容：确认当前 Windows 控制端恢复期 `queue-underrun-recovery-prebuffer` 已为约 100ms，补强音频缓冲守卫测试，使 recovery underrun 场景模拟“已播放过足够帧后再次 underrun”，避免被启动期低延迟分支误吞；README 和交接文档同步 100ms 口径。
+修改文件：scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：`node --check apps/windows-client/app.js`；`node --check scripts/windows/test-windows-client-browser.mjs`；`node scripts/windows/test-windows-client-browser.mjs --onlyAudioBufferGuards --clientPort 5207 --debugPort 9347 --timeoutMs 45000`。其中第一次专项测试暴露恢复期场景被启动期分支吞掉，修正测试状态后绿灯。
+遗留问题：本轮只巩固 W7 低延迟队列口径与测试，不宣称真实体验已完全收口；下一次真实最小化/切 app/切回复测看“现场声音”queue 是否从约 188ms 下探到更接近 100-120ms，同时 dropped/refill/stutter 不回升。
+下一步建议：双方拉最新；Mac host 保持在线即可。若新复测队列仍高，继续查 Windows AudioContext 调度、`audioNextPlayTime` 和 source 排队策略；不要回到 Mac PCM 源不稳假设，除非远端音频间隔本身变差。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；需要用户后续真实复测。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 Windows H.264 live backlog 追实时
 开发端：Windows Codex
 本轮目标：响应 d923e7f 后真实复测 NOT-PASS 且 Mac 远端媒体 17/21ms 正常，把 W2 修复集中到 Windows 本地 H.264/WebCodecs 队列追实时。

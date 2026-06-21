@@ -7873,7 +7873,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioContext = makeFakeContext(50);
         state.audioGain = { gain: { value: 0 } };
         state.audioNextPlayTime = 49.99;
-        state.audioPlayedFrames = 0;
+        state.audioPlayedFrames = 9;
         state.audioDroppedFrames = 0;
         state.audioResyncCount = 0;
         state.audioUnderrunCount = 1;
