@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端视频侧 MVP
+- 通讯板确认用户已批准切到 Windows 桌面控制端主线，不再把 WebCodecs/canvas/rAF 作为最终体验路径。本轮 Windows 端新增桌面原生视频队列模块 `apps/windows-desktop/src-tauri/src/w8_native_video.rs`，并通过 Tauri 命令暴露 W8 视频计划、启动/停止会话、推入视频帧元数据和读取队列快照。队列策略默认目标约 80ms、硬上限约 180ms：积压且有较新关键帧时丢旧跳到最新关键帧；没有可用关键帧时清 delta 积压并进入等待关键帧，避免后台/切 app 后继续攒 600ms+ 旧帧。本轮不改协议、不改 Mac host、不认证、不请求密码、不发 input/inject；当前仍是视频队列/接口 MVP，下一步才接 Windows Media Foundation/D3D11 或独立 native renderer 做 H.264 解码和原生绘制。
+
 ## 2026-06-21 W2 视频真实复测预检收窄为 H.264 专项
 - Windows 真实复测入口 `run-winclient-retest-and-post --preflightOnly` 现在不再跑完整 diagnosticsOnly 大杂烩，而是保留 Mac `/discovery` 目标发现后只执行 H.264 关键帧/低延迟队列专项 guard：`h264-keyframe`、`h264-latency-queue`、`w2w3-h264-summary`。这样 W2 视频复测前不会被独立的音频/重连 UI guard 拦住；同时修复 `--preflightOnly --timeoutMs <ms>` 转发到 PowerShell 时和默认 `-TimeoutMs 45000` 重复导致预检直接失败的问题，用户传入的 timeout 会覆盖默认值。已新增 `--printCommandJson` 只读诊断模式，方便验证生成子命令不启动浏览器、不请求密码。真实无密预检已在当前 Mac 目标 `192.168.31.122:43770` 通过，输出 `WinClientRetestPreflight=ready`。不改协议、不认证、不请求密码、不发 input/inject。
 

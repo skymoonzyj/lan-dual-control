@@ -2,6 +2,8 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows 桌面控制端视频侧 MVP：根据通讯板和用户确认，Windows 端切到桌面控制端主线。`apps/windows-desktop` 新增 Rust 原生 `w8_native_video` 队列和 Tauri 命令，先完成低延迟队列策略：正常帧保留、积压跳到最新关键帧、无关键帧时清 delta 并等待关键帧。当前不改协议、不改 Mac host、不宣称硬解码/原生绘制完成；下一步接 Windows Media Foundation / D3D11 或独立 native renderer。
+
 - [x] C3 Agent Link Board 结构化 presence API：`codex-link-server` 新增 `/api/presence` 并在重启时保留 `userPresence` / `pinnedTasks`；`codex-link-client presence --status present|away` 可命令行同步用户在场/离开。该状态只作为授权前门禁输入，不能跳过提示音、目标说明、安全边界和预计耗时；当前权威仍以 `/api/state.userPresence` 为准。不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 一次性反控授权消费 `userPresence`：`allow-windows-reverse-control --checkBoard` 和 PowerShell `-CheckBoard` 会在打开临时反控授权前只读读取 Agent Link Board `/api/state.userPresence`；`present` 输出 `UserPresenceAction=explain-before-grant` 并允许本机 loopback grant，`away` 输出 `BLOCKED_BY_USER_AWAY` 且不打开授权。默认不加 `--checkBoard` 的旧本机行为保持兼容；不认证、不请求或发送密码、不发 input/inject。
 - [x] Windows 手工体验第一屏消费 `userPresence`：`check-windows-manual-ux-status` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史，`away` 将手工体验第一屏降为 waiting 并显示 `BLOCKED_BY_USER_AWAY`，只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。

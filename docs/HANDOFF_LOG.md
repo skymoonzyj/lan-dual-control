@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端视频侧 MVP
+开发端：Windows Codex
+本轮目标：按通讯板 W8 和用户要求，主要完成 Windows 桌面控制端视频侧修改，停止把 Web 渲染路径作为最终体验主线。
+完成内容：新增 `w8_native_video` Rust 原生视频队列模块和 Tauri 命令入口：可读取 W8 视频计划、启动/停止会话、推入视频帧元数据、读取队列快照。队列策略默认目标约 80ms、硬上限约 180ms；积压且有较新关键帧时丢旧跳到最新关键帧，没有可用关键帧时清掉 delta 积压并等待关键帧，避免后台/切 app 后继续攒 600ms+ 旧帧。桌面 README 和 W8 视频计划文档已同步。
+修改文件：apps/windows-desktop/src-tauri/src/main.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-desktop/README.md；docs/w8-windows-desktop-video-plan.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：先用视频队列测试跑出缺少 `NativeVideoQueue` / `NativeVideoFrame` 的红灯；实现后 `cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml w8_native_video` 通过；`cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml` 通过。
+遗留问题：本轮是视频原生队列/接口 MVP，不是完整 H.264 硬解码播放器；下一步需要把 Mac H.264 接收接到 native 侧，并接 Windows Media Foundation / D3D11 或独立 native renderer 做原生解码/绘制。
+下一步建议：Windows 端继续 W8 视频主线，优先做 H.264 接收和 native renderer；Mac 端暂不改协议，只保持 host 在线并提供只读证据。Web 控制端保留诊断/备用，不再无限扩 W2/W7。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实 native 渲染联调需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 视频真实复测预检专项化
 开发端：Windows Codex
 本轮目标：按用户要求主要完成视频侧修改，修复 W2 真测前第二步预检卡住的问题，避免视频复测入口被无关 diagnostics guard 阻断。

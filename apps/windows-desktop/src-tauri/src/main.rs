@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod w8_native_video;
+
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -2204,6 +2206,7 @@ fn main() {
         .manage(WindowsHostProcessState::default())
         .manage(ClipboardFileTransferState::default())
         .manage(ClipboardFileReadState::default())
+        .manage(w8_native_video::W8NativeVideoState::default())
         .invoke_handler(tauri::generate_handler![
             write_files_to_clipboard,
             begin_clipboard_file_write,
@@ -2224,7 +2227,12 @@ fn main() {
             start_windows_host,
             stop_windows_host,
             get_windows_host_status,
-            grant_windows_host_reverse_control
+            grant_windows_host_reverse_control,
+            w8_native_video::get_w8_native_video_plan,
+            w8_native_video::start_w8_native_video_session,
+            w8_native_video::push_w8_native_video_frame,
+            w8_native_video::get_w8_native_video_snapshot,
+            w8_native_video::stop_w8_native_video_session
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {

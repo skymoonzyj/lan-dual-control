@@ -3,6 +3,7 @@
 最后更新：2026-06-21
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- W8 最新主线：Windows 桌面控制端视频侧已经有 Rust 原生实时队列 MVP 和 Tauri 命令入口。下一步不要继续把 Web canvas 当最终渲染主线；优先把 Mac H.264 接收路径接到桌面原生侧或独立 native renderer，然后接 Windows Media Foundation / D3D11 解码与原生画面绘制。验收看最小化 / 切 app / 切回时视频队列是否保持在约 80-180ms，而不是 Web 路径里出现的 600ms+ 积压。Mac 端先不改协议，只保持 host 在线和提供只读证据；不发密码/input。
 - 最新 W2 真实复测入口口径：`Run-WinClientRetest-And-Post.cmd -PreflightOnly` / `run-winclient-retest-and-post --preflightOnly` 已改为视频专项预检：先 discovery 找 Mac，再只跑 H.264 keyframe/latency queue/W2W3 h264 summary guard，不再被完整 diagnosticsOnly 里的独立音频或重连 UI 检查拦住。`--timeoutMs <ms>` 也不再和默认 `-TimeoutMs 45000` 重复；用户传入值优先。下一次用户真测前可先跑预检，看到 `WinClientRetestPreflight=ready` 后再运行正式 `Run-WinClientRetest-And-Post.cmd`，密码只在当前黑色终端隐藏输入，仍不要发通讯板，不发 input/inject。
 - 最新 W2 视频侧口径：Windows client 已把中等 H.264 live backlog 改成“不断流请求关键帧，关键帧到达再跳实时”。下一次真实最小化/切 app/切回复测时，若现场视频出现 `原因 live-backlog-keyframe-request`，表示控制端保留当前解码链路并请求下一 IDR；随后重点看是否出现 `live-backlog-keyframe-jump-live`、本机队列是否从约 121ms 回落、实收/绘制是否接近 60Hz。中等积压下不应再因为一次请求就出现新增本地过期丢帧、跳过 delta 或长期 `需要关键帧`；若仍长期积压，再查 Windows 浏览器/WebCodecs/canvas 后台调度。只有 `recv/key/sps/pps/idr` 缺失才让 Mac 补证据。
 - 最新 W1 一键入口口径：如果 `check-windows-resume-status --checkBoard --boardSummary` 显示 `WinClientPorts=occupied(...;stale-diagnostics)`，现在 `WinClientRetest=` 和 `WinClientRetestPs=` 会和 `Next=` / formal checklist 一样自动使用备用端口，不再把主复测命令指向被占用的旧 `5197/9337`。下一次用户真测前先看 `WinClientPortsNext=`；如果是 `default-ok` 直接用 `Run-WinClientRetest-And-Post.cmd`，如果提示备用端口，直接复制摘要里的 `WinClientRetest=` 或 PowerShell 命令即可。仍不要把密码发通讯板，不发 input/inject。
