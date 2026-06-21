@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 HWND swapchain 预检
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 BGRA8 native present texture target 后，把真实 Tauri 窗口 HWND swapchain 入口变成可运行探针，并透到 Windows 控制端诊断。
+完成内容：新增 `probe_w8_native_video_window_swapchain` Tauri 命令：获取桌面窗口 HWND、读取 client 尺寸，并用 D3D11 创建 BGRA8 / 2 buffers / flip-discard `CreateSwapChainForHwnd` 预检；新增 `d3d11_hwnd_swapchain_desc` 锁定低延迟 flip model 参数。Windows 控制端 W8 原生视频会话启动后会自动调用该探针，诊断/复制导出新增 `原生窗口交换链 ready|blocked`、`原生窗口交换链 D3D11 ... BGRA8`、`原生窗口交换链状态 ...` 和 `原生窗口交换链参数 2 buffers / flip-discard`。
+修改文件：apps/windows-desktop/src-tauri/Cargo.toml；apps/windows-desktop/src-tauri/src/main.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `d3d11_hwnd_swapchain_desc`，前端专项失败于未调用 `probe_w8_native_video_window_swapchain` 且导出缺 `原生窗口交换链 ...`；绿灯后专项通过。完整验证见本轮提交前命令记录。
+遗留问题：本轮是 HWND swapchain 预检和诊断接线，仍未把 latest-frame/native present texture 真实 Present 到窗口；NV12 仍需 shader/native renderer 转换，stream-change/resize/device-lost 恢复还未做。
+下一步建议：继续 W8：实现 native renderer，把 BGRA8 present texture / NV12 shader 输出接到真实窗口 surface，并补窗口 resize、stream-change 和 device lost 重建。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实呈现验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 native present target 预接线
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 decoded sample -> D3D11 latest-frame texture copy 后，建立可被真实窗口/native renderer 消费的 BGRA8 present texture target，并把状态透到 Windows 控制端诊断。

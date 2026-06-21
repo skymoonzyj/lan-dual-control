@@ -667,6 +667,16 @@ const state = {
   w8NativeVideoNativePresentFrames: 0,
   w8NativeVideoNativePresentLastFrameId: null,
   w8NativeVideoNativePresentReason: "",
+  w8NativeVideoWindowSwapchainProbePromise: null,
+  w8NativeVideoWindowSwapchainReady: false,
+  w8NativeVideoWindowSwapchainMode: "",
+  w8NativeVideoWindowSwapchainStatus: "",
+  w8NativeVideoWindowSwapchainFormat: "",
+  w8NativeVideoWindowSwapchainWidth: 0,
+  w8NativeVideoWindowSwapchainHeight: 0,
+  w8NativeVideoWindowSwapchainBufferCount: 0,
+  w8NativeVideoWindowSwapchainSwapEffect: "",
+  w8NativeVideoWindowSwapchainReason: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -847,6 +857,15 @@ const state = {
     w8NativeVideoNativePresentFrames: 0,
     w8NativeVideoNativePresentLastFrameId: null,
     w8NativeVideoNativePresentReason: "",
+    w8NativeVideoWindowSwapchainReady: false,
+    w8NativeVideoWindowSwapchainMode: "",
+    w8NativeVideoWindowSwapchainStatus: "",
+    w8NativeVideoWindowSwapchainFormat: "",
+    w8NativeVideoWindowSwapchainWidth: 0,
+    w8NativeVideoWindowSwapchainHeight: 0,
+    w8NativeVideoWindowSwapchainBufferCount: 0,
+    w8NativeVideoWindowSwapchainSwapEffect: "",
+    w8NativeVideoWindowSwapchainReason: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1132,6 +1151,15 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoNativePresentFrames: 0,
     w8NativeVideoNativePresentLastFrameId: null,
     w8NativeVideoNativePresentReason: "",
+    w8NativeVideoWindowSwapchainReady: false,
+    w8NativeVideoWindowSwapchainMode: "",
+    w8NativeVideoWindowSwapchainStatus: "",
+    w8NativeVideoWindowSwapchainFormat: "",
+    w8NativeVideoWindowSwapchainWidth: 0,
+    w8NativeVideoWindowSwapchainHeight: 0,
+    w8NativeVideoWindowSwapchainBufferCount: 0,
+    w8NativeVideoWindowSwapchainSwapEffect: "",
+    w8NativeVideoWindowSwapchainReason: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1550,6 +1578,17 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativePresentHeight = Number(diagnostics.w8NativeVideoNativePresentHeight);
   const nativePresentFrames = Number(diagnostics.w8NativeVideoNativePresentFrames);
   const nativePresentReason = String(diagnostics.w8NativeVideoNativePresentReason || "").trim();
+  const nativeWindowSwapchainReady = Boolean(diagnostics.w8NativeVideoWindowSwapchainReady);
+  const nativeWindowSwapchainMode = String(diagnostics.w8NativeVideoWindowSwapchainMode || "").trim();
+  const nativeWindowSwapchainStatus = String(diagnostics.w8NativeVideoWindowSwapchainStatus || "").trim();
+  const nativeWindowSwapchainFormat = String(diagnostics.w8NativeVideoWindowSwapchainFormat || "").trim();
+  const nativeWindowSwapchainWidth = Number(diagnostics.w8NativeVideoWindowSwapchainWidth);
+  const nativeWindowSwapchainHeight = Number(diagnostics.w8NativeVideoWindowSwapchainHeight);
+  const nativeWindowSwapchainBufferCount = Number(diagnostics.w8NativeVideoWindowSwapchainBufferCount);
+  const nativeWindowSwapchainSwapEffect = String(
+    diagnostics.w8NativeVideoWindowSwapchainSwapEffect || "",
+  ).trim();
+  const nativeWindowSwapchainReason = String(diagnostics.w8NativeVideoWindowSwapchainReason || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1710,6 +1749,27 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativePresentReason && !nativePresentReady) {
     parts.push(`原生呈现原因 ${nativePresentReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeWindowSwapchainMode || nativeWindowSwapchainReady) {
+    parts.push(`原生窗口交换链 ${nativeWindowSwapchainReady ? "ready" : "blocked"}`);
+  }
+  if (nativeWindowSwapchainFormat) {
+    const swapchainSize =
+      Number.isFinite(nativeWindowSwapchainWidth) && nativeWindowSwapchainWidth > 0 &&
+      Number.isFinite(nativeWindowSwapchainHeight) && nativeWindowSwapchainHeight > 0
+        ? `${Math.round(nativeWindowSwapchainWidth)}x${Math.round(nativeWindowSwapchainHeight)} `
+        : "";
+    parts.push(`原生窗口交换链 D3D11 ${swapchainSize}${nativeWindowSwapchainFormat}`.trim());
+  }
+  if (nativeWindowSwapchainStatus) {
+    parts.push(`原生窗口交换链状态 ${nativeWindowSwapchainStatus}`);
+  }
+  if (Number.isFinite(nativeWindowSwapchainBufferCount) && nativeWindowSwapchainBufferCount > 0) {
+    const effect = nativeWindowSwapchainSwapEffect ? ` / ${nativeWindowSwapchainSwapEffect}` : "";
+    parts.push(`原生窗口交换链参数 ${Math.round(nativeWindowSwapchainBufferCount)} buffers${effect}`);
+  }
+  if (nativeWindowSwapchainReason && !nativeWindowSwapchainReady) {
+    parts.push(`原生窗口交换链原因 ${nativeWindowSwapchainReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -6163,6 +6223,50 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoNativePresentReason ||
       "",
   ).trim();
+  const nativeWindowSwapchainReady = Boolean(
+    state.w8NativeVideoWindowSwapchainReady ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainReady,
+  );
+  const nativeWindowSwapchainMode = String(
+    state.w8NativeVideoWindowSwapchainMode ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainMode ||
+      "",
+  ).trim();
+  const nativeWindowSwapchainStatus = String(
+    state.w8NativeVideoWindowSwapchainStatus ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainStatus ||
+      "",
+  ).trim();
+  const nativeWindowSwapchainFormat = String(
+    state.w8NativeVideoWindowSwapchainFormat ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainFormat ||
+      "",
+  ).trim();
+  const nativeWindowSwapchainWidth =
+    Number(
+      state.w8NativeVideoWindowSwapchainWidth ||
+        state.hostDiagnostics?.w8NativeVideoWindowSwapchainWidth,
+    ) || 0;
+  const nativeWindowSwapchainHeight =
+    Number(
+      state.w8NativeVideoWindowSwapchainHeight ||
+        state.hostDiagnostics?.w8NativeVideoWindowSwapchainHeight,
+    ) || 0;
+  const nativeWindowSwapchainBufferCount =
+    Number(
+      state.w8NativeVideoWindowSwapchainBufferCount ||
+        state.hostDiagnostics?.w8NativeVideoWindowSwapchainBufferCount,
+    ) || 0;
+  const nativeWindowSwapchainSwapEffect = String(
+    state.w8NativeVideoWindowSwapchainSwapEffect ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainSwapEffect ||
+      "",
+  ).trim();
+  const nativeWindowSwapchainReason = String(
+    state.w8NativeVideoWindowSwapchainReason ||
+      state.hostDiagnostics?.w8NativeVideoWindowSwapchainReason ||
+      "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -6293,6 +6397,24 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   if (nativePresentReason && !nativePresentReady) {
     parts.push(`原生呈现原因 ${nativePresentReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeWindowSwapchainMode || nativeWindowSwapchainReady) {
+    parts.push(`原生窗口交换链 ${nativeWindowSwapchainReady ? "ready" : "blocked"}`);
+  }
+  if (nativeWindowSwapchainFormat) {
+    const swapchainSize =
+      nativeWindowSwapchainWidth > 0 && nativeWindowSwapchainHeight > 0
+        ? `${Math.round(nativeWindowSwapchainWidth)}x${Math.round(nativeWindowSwapchainHeight)} `
+        : "";
+    parts.push(`原生窗口交换链 D3D11 ${swapchainSize}${nativeWindowSwapchainFormat}`.trim());
+  }
+  if (nativeWindowSwapchainStatus) parts.push(`原生窗口交换链状态 ${nativeWindowSwapchainStatus}`);
+  if (nativeWindowSwapchainBufferCount > 0) {
+    const effect = nativeWindowSwapchainSwapEffect ? ` / ${nativeWindowSwapchainSwapEffect}` : "";
+    parts.push(`原生窗口交换链参数 ${Math.round(nativeWindowSwapchainBufferCount)} buffers${effect}`);
+  }
+  if (nativeWindowSwapchainReason && !nativeWindowSwapchainReady) {
+    parts.push(`原生窗口交换链原因 ${nativeWindowSwapchainReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -7769,6 +7891,16 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoNativePresentFrames = 0;
   state.w8NativeVideoNativePresentLastFrameId = null;
   state.w8NativeVideoNativePresentReason = "";
+  state.w8NativeVideoWindowSwapchainProbePromise = null;
+  state.w8NativeVideoWindowSwapchainReady = false;
+  state.w8NativeVideoWindowSwapchainMode = "";
+  state.w8NativeVideoWindowSwapchainStatus = "";
+  state.w8NativeVideoWindowSwapchainFormat = "";
+  state.w8NativeVideoWindowSwapchainWidth = 0;
+  state.w8NativeVideoWindowSwapchainHeight = 0;
+  state.w8NativeVideoWindowSwapchainBufferCount = 0;
+  state.w8NativeVideoWindowSwapchainSwapEffect = "";
+  state.w8NativeVideoWindowSwapchainReason = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -8001,6 +8133,43 @@ function updateW8NativeVideoDecoderProbeDiagnostics(probe) {
   });
 }
 
+function updateW8NativeVideoWindowSwapchainDiagnostics(probe) {
+  if (!probe || typeof probe !== "object") return;
+  state.w8NativeVideoWindowSwapchainReady = probe.ready === true;
+  state.w8NativeVideoWindowSwapchainMode = String(probe.mode || "").trim();
+  state.w8NativeVideoWindowSwapchainStatus = String(
+    probe.status || (probe.ready ? "ready" : "blocked"),
+  ).trim();
+  state.w8NativeVideoWindowSwapchainFormat = String(probe.format || "").trim();
+  state.w8NativeVideoWindowSwapchainWidth = Math.max(
+    0,
+    Math.trunc(Number(probe.windowClientWidth) || Number(probe.width) || 0),
+  );
+  state.w8NativeVideoWindowSwapchainHeight = Math.max(
+    0,
+    Math.trunc(Number(probe.windowClientHeight) || Number(probe.height) || 0),
+  );
+  state.w8NativeVideoWindowSwapchainBufferCount = Math.max(
+    0,
+    Math.trunc(Number(probe.bufferCount) || 0),
+  );
+  state.w8NativeVideoWindowSwapchainSwapEffect = String(probe.swapEffect || "").trim();
+  state.w8NativeVideoWindowSwapchainReason = String(probe.reason || "")
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
+  updateHostDiagnostics({
+    w8NativeVideoWindowSwapchainReady: state.w8NativeVideoWindowSwapchainReady,
+    w8NativeVideoWindowSwapchainMode: state.w8NativeVideoWindowSwapchainMode,
+    w8NativeVideoWindowSwapchainStatus: state.w8NativeVideoWindowSwapchainStatus,
+    w8NativeVideoWindowSwapchainFormat: state.w8NativeVideoWindowSwapchainFormat,
+    w8NativeVideoWindowSwapchainWidth: state.w8NativeVideoWindowSwapchainWidth,
+    w8NativeVideoWindowSwapchainHeight: state.w8NativeVideoWindowSwapchainHeight,
+    w8NativeVideoWindowSwapchainBufferCount: state.w8NativeVideoWindowSwapchainBufferCount,
+    w8NativeVideoWindowSwapchainSwapEffect: state.w8NativeVideoWindowSwapchainSwapEffect,
+    w8NativeVideoWindowSwapchainReason: state.w8NativeVideoWindowSwapchainReason,
+  });
+}
+
 function probeW8NativeVideoDecoder() {
   const invoke = getTauriInvoke();
   if (!invoke) return Promise.resolve(null);
@@ -8031,6 +8200,44 @@ function probeW8NativeVideoDecoder() {
   return state.w8NativeVideoDecoderProbePromise;
 }
 
+function probeW8NativeVideoWindowSwapchain() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return Promise.resolve(null);
+  if (state.w8NativeVideoWindowSwapchainProbePromise) {
+    return state.w8NativeVideoWindowSwapchainProbePromise;
+  }
+  state.w8NativeVideoWindowSwapchainProbePromise = invoke("probe_w8_native_video_window_swapchain")
+    .then((probe) => {
+      updateW8NativeVideoWindowSwapchainDiagnostics(probe);
+      return probe;
+    })
+    .catch((error) => {
+      state.w8NativeVideoWindowSwapchainReady = false;
+      state.w8NativeVideoWindowSwapchainMode = "d3d11-hwnd-swapchain-preflight";
+      state.w8NativeVideoWindowSwapchainStatus = "blocked";
+      state.w8NativeVideoWindowSwapchainFormat = "BGRA8";
+      state.w8NativeVideoWindowSwapchainBufferCount = 2;
+      state.w8NativeVideoWindowSwapchainSwapEffect = "flip-discard";
+      state.w8NativeVideoWindowSwapchainReason = String(error?.message || error || "probe failed")
+        .replace(/\s+/g, " ")
+        .slice(0, 160);
+      updateHostDiagnostics({
+        w8NativeVideoWindowSwapchainReady: state.w8NativeVideoWindowSwapchainReady,
+        w8NativeVideoWindowSwapchainMode: state.w8NativeVideoWindowSwapchainMode,
+        w8NativeVideoWindowSwapchainStatus: state.w8NativeVideoWindowSwapchainStatus,
+        w8NativeVideoWindowSwapchainFormat: state.w8NativeVideoWindowSwapchainFormat,
+        w8NativeVideoWindowSwapchainBufferCount: state.w8NativeVideoWindowSwapchainBufferCount,
+        w8NativeVideoWindowSwapchainSwapEffect: state.w8NativeVideoWindowSwapchainSwapEffect,
+        w8NativeVideoWindowSwapchainReason: state.w8NativeVideoWindowSwapchainReason,
+      });
+      return null;
+    })
+    .finally(() => {
+      state.w8NativeVideoWindowSwapchainProbePromise = null;
+    });
+  return state.w8NativeVideoWindowSwapchainProbePromise;
+}
+
 async function ensureW8NativeVideoSession() {
   const invoke = getTauriInvoke();
   if (!invoke) return null;
@@ -8058,6 +8265,7 @@ async function ensureW8NativeVideoSession() {
       state.w8NativeVideoLastError = "";
       updateW8NativeVideoDiagnostics({ snapshot });
       void probeW8NativeVideoDecoder();
+      void probeW8NativeVideoWindowSwapchain();
       return snapshot || null;
     })
     .catch((error) => {

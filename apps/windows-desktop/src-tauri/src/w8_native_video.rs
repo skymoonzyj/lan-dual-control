@@ -7,7 +7,7 @@ use std::{ffi::c_void, mem::ManuallyDrop, ptr, slice, sync::mpsc, thread, time::
 #[cfg(windows)]
 use windows::core::{Interface, GUID};
 #[cfg(windows)]
-use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Foundation::{HMODULE, HWND, RECT};
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
@@ -20,7 +20,13 @@ use windows::Win32::Graphics::Direct3D11::{
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_SAMPLE_DESC,
+    DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12,
+    DXGI_SAMPLE_DESC,
+};
+#[cfg(windows)]
+use windows::Win32::Graphics::Dxgi::{
+    CreateDXGIFactory1, IDXGIFactory2, IDXGIOutput, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1,
+    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
 };
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
@@ -37,6 +43,8 @@ use windows::Win32::Media::MediaFoundation::{
 };
 #[cfg(windows)]
 use windows::Win32::System::Com::CoTaskMemFree;
+#[cfg(windows)]
+use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, IsWindow};
 
 const DEFAULT_TARGET_QUEUE_MS: u64 = 80;
 const DEFAULT_HARD_MAX_QUEUE_MS: u64 = 180;
@@ -1101,6 +1109,22 @@ pub struct W8NativeVideoDecoderProbe {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct W8NativeVideoWindowSwapchainProbe {
+    pub mode: String,
+    pub attempted: bool,
+    pub ready: bool,
+    pub hwnd_available: bool,
+    pub window_client_width: u32,
+    pub window_client_height: u32,
+    pub format: String,
+    pub buffer_count: u32,
+    pub swap_effect: String,
+    pub status: String,
+    pub reason: String,
+}
+
 impl W8NativeVideoDecoderProbe {
     fn summarize(
         d3d_feature_level: Result<String, String>,
@@ -1170,6 +1194,61 @@ impl W8NativeVideoDecoderProbe {
     }
 }
 
+impl W8NativeVideoWindowSwapchainProbe {
+    fn blocked(hwnd_available: bool, width: u32, height: u32, reason: String) -> Self {
+        Self {
+            mode: "d3d11-hwnd-swapchain-preflight".to_string(),
+            attempted: true,
+            ready: false,
+            hwnd_available,
+            window_client_width: width,
+            window_client_height: height,
+            format: "BGRA8".to_string(),
+            buffer_count: 2,
+            swap_effect: "flip-discard".to_string(),
+            status: "blocked".to_string(),
+            reason,
+        }
+    }
+
+    fn ready(width: u32, height: u32) -> Self {
+        Self {
+            mode: "d3d11-hwnd-swapchain-preflight".to_string(),
+            attempted: true,
+            ready: true,
+            hwnd_available: true,
+            window_client_width: width,
+            window_client_height: height,
+            format: "BGRA8".to_string(),
+            buffer_count: 2,
+            swap_effect: "flip-discard".to_string(),
+            status: "ready".to_string(),
+            reason: format!(
+                "ready; HWND swapchain created with BGRA8 flip-discard {}x{}",
+                width.max(1),
+                height.max(1)
+            ),
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn unsupported() -> Self {
+        Self {
+            mode: "d3d11-hwnd-swapchain-preflight".to_string(),
+            attempted: false,
+            ready: false,
+            hwnd_available: false,
+            window_client_width: 0,
+            window_client_height: 0,
+            format: "BGRA8".to_string(),
+            buffer_count: 2,
+            swap_effect: "flip-discard".to_string(),
+            status: "unsupported".to_string(),
+            reason: "blocked: Windows-only HWND swapchain preflight".to_string(),
+        }
+    }
+}
+
 #[tauri::command]
 pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
     let config = NativeVideoQueueConfig::default();
@@ -1195,6 +1274,21 @@ pub fn probe_w8_native_video_decoder() -> W8NativeVideoDecoderProbe {
     probe_w8_native_video_decoder_runtime()
 }
 
+#[tauri::command]
+pub fn probe_w8_native_video_window_swapchain(
+    window: tauri::Window,
+) -> W8NativeVideoWindowSwapchainProbe {
+    #[cfg(windows)]
+    {
+        probe_w8_native_video_window_swapchain_runtime(window)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        W8NativeVideoWindowSwapchainProbe::unsupported()
+    }
+}
+
 pub fn probe_w8_native_video_decoder_runtime() -> W8NativeVideoDecoderProbe {
     #[cfg(windows)]
     {
@@ -1205,6 +1299,49 @@ pub fn probe_w8_native_video_decoder_runtime() -> W8NativeVideoDecoderProbe {
     #[cfg(not(windows))]
     {
         W8NativeVideoDecoderProbe::unsupported()
+    }
+}
+
+#[cfg(windows)]
+fn probe_w8_native_video_window_swapchain_runtime(
+    window: tauri::Window,
+) -> W8NativeVideoWindowSwapchainProbe {
+    let hwnd = match window.hwnd() {
+        Ok(hwnd) => hwnd,
+        Err(error) => {
+            return W8NativeVideoWindowSwapchainProbe::blocked(
+                false,
+                0,
+                0,
+                format!("blocked: desktop window HWND unavailable: {error}"),
+            );
+        }
+    };
+
+    if unsafe { !IsWindow(Some(hwnd)).as_bool() } {
+        return W8NativeVideoWindowSwapchainProbe::blocked(
+            false,
+            0,
+            0,
+            "blocked: desktop window HWND is not valid".to_string(),
+        );
+    }
+
+    let (width, height) = match unsafe { hwnd_client_size(hwnd) } {
+        Ok(size) => size,
+        Err(error) => {
+            return W8NativeVideoWindowSwapchainProbe::blocked(true, 0, 0, error);
+        }
+    };
+
+    match unsafe { probe_d3d11_hwnd_swapchain(hwnd, width, height) } {
+        Ok(()) => W8NativeVideoWindowSwapchainProbe::ready(width, height),
+        Err(error) => W8NativeVideoWindowSwapchainProbe::blocked(
+            true,
+            width,
+            height,
+            format!("blocked: {error}"),
+        ),
     }
 }
 
@@ -1284,6 +1421,47 @@ unsafe fn create_d3d11_video_device(
     let context =
         context.ok_or_else(|| "D3D11CreateDevice returned no immediate context".to_string())?;
     Ok((device, context, selected))
+}
+
+#[cfg(windows)]
+fn d3d11_hwnd_swapchain_desc(width: u32, height: u32) -> DXGI_SWAP_CHAIN_DESC1 {
+    DXGI_SWAP_CHAIN_DESC1 {
+        Width: width.max(1),
+        Height: height.max(1),
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        Stereo: false.into(),
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        BufferCount: 2,
+        Scaling: DXGI_SCALING_STRETCH,
+        SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        AlphaMode: DXGI_ALPHA_MODE_IGNORE,
+        Flags: 0,
+    }
+}
+
+#[cfg(windows)]
+unsafe fn hwnd_client_size(hwnd: HWND) -> Result<(u32, u32), String> {
+    let mut rect = RECT::default();
+    GetClientRect(hwnd, &mut rect).map_err(|error| format!("GetClientRect failed: {error}"))?;
+    let width = (rect.right - rect.left).max(1) as u32;
+    let height = (rect.bottom - rect.top).max(1) as u32;
+    Ok((width, height))
+}
+
+#[cfg(windows)]
+unsafe fn probe_d3d11_hwnd_swapchain(hwnd: HWND, width: u32, height: u32) -> Result<(), String> {
+    let (device, _, _) = create_d3d11_video_device()?;
+    let factory: IDXGIFactory2 =
+        CreateDXGIFactory1().map_err(|error| format!("CreateDXGIFactory1 failed: {error}"))?;
+    let desc = d3d11_hwnd_swapchain_desc(width, height);
+    let _swapchain = factory
+        .CreateSwapChainForHwnd(&device, hwnd, &desc, None, None::<&IDXGIOutput>)
+        .map_err(|error| format!("CreateSwapChainForHwnd failed: {error}"))?;
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -2504,6 +2682,34 @@ mod tests {
         assert!(!second_session.output_subtype.trim().is_empty());
         assert!(!second_session.last_status.trim().is_empty());
         assert!(!second_session.reason.trim().is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn hwnd_swapchain_desc_uses_bgra_flip_model() {
+        use windows::Win32::Graphics::Dxgi::Common::{
+            DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_B8G8R8A8_UNORM,
+        };
+        use windows::Win32::Graphics::Dxgi::{
+            DXGI_SCALING_STRETCH, DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        };
+
+        let desc = d3d11_hwnd_swapchain_desc(2560, 1440);
+
+        assert_eq!(desc.Width, 2560);
+        assert_eq!(desc.Height, 1440);
+        assert_eq!(desc.Format, DXGI_FORMAT_B8G8R8A8_UNORM);
+        assert_eq!(desc.SampleDesc.Count, 1);
+        assert_eq!(desc.SampleDesc.Quality, 0);
+        assert_eq!(desc.BufferUsage, DXGI_USAGE_RENDER_TARGET_OUTPUT);
+        assert_eq!(desc.BufferCount, 2);
+        assert_eq!(desc.Scaling, DXGI_SCALING_STRETCH);
+        assert_eq!(desc.SwapEffect, DXGI_SWAP_EFFECT_FLIP_DISCARD);
+        assert_eq!(desc.AlphaMode, DXGI_ALPHA_MODE_IGNORE);
+
+        let fallback = d3d11_hwnd_swapchain_desc(0, 0);
+        assert_eq!(fallback.Width, 1);
+        assert_eq!(fallback.Height, 1);
     }
 
     #[cfg(windows)]

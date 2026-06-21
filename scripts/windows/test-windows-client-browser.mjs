@@ -5398,6 +5398,16 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoNativePresentFrames: state.w8NativeVideoNativePresentFrames,
         w8NativeVideoNativePresentLastFrameId: state.w8NativeVideoNativePresentLastFrameId,
         w8NativeVideoNativePresentReason: state.w8NativeVideoNativePresentReason,
+        w8NativeVideoWindowSwapchainProbePromise: state.w8NativeVideoWindowSwapchainProbePromise,
+        w8NativeVideoWindowSwapchainReady: state.w8NativeVideoWindowSwapchainReady,
+        w8NativeVideoWindowSwapchainMode: state.w8NativeVideoWindowSwapchainMode,
+        w8NativeVideoWindowSwapchainStatus: state.w8NativeVideoWindowSwapchainStatus,
+        w8NativeVideoWindowSwapchainFormat: state.w8NativeVideoWindowSwapchainFormat,
+        w8NativeVideoWindowSwapchainWidth: state.w8NativeVideoWindowSwapchainWidth,
+        w8NativeVideoWindowSwapchainHeight: state.w8NativeVideoWindowSwapchainHeight,
+        w8NativeVideoWindowSwapchainBufferCount: state.w8NativeVideoWindowSwapchainBufferCount,
+        w8NativeVideoWindowSwapchainSwapEffect: state.w8NativeVideoWindowSwapchainSwapEffect,
+        w8NativeVideoWindowSwapchainReason: state.w8NativeVideoWindowSwapchainReason,
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
@@ -5585,6 +5595,20 @@ async function verifyH264KeyFrameDetection(session) {
                     reason: "ready",
                   };
                 }
+                if (command === "probe_w8_native_video_window_swapchain") {
+                  return {
+                    mode: "d3d11-hwnd-swapchain-preflight",
+                    attempted: true,
+                    ready: true,
+                    hwndAvailable: true,
+                    windowClientWidth: 1920,
+                    windowClientHeight: 1080,
+                    format: "BGRA8",
+                    bufferCount: 2,
+                    swapEffect: "flip-discard",
+                    reason: "ready; HWND swapchain created",
+                  };
+                }
                 throw new Error("unexpected invoke " + command);
               },
             },
@@ -5684,6 +5708,16 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativePresentFrames = 0;
         state.w8NativeVideoNativePresentLastFrameId = null;
         state.w8NativeVideoNativePresentReason = "";
+        state.w8NativeVideoWindowSwapchainProbePromise = null;
+        state.w8NativeVideoWindowSwapchainReady = false;
+        state.w8NativeVideoWindowSwapchainMode = "";
+        state.w8NativeVideoWindowSwapchainStatus = "";
+        state.w8NativeVideoWindowSwapchainFormat = "";
+        state.w8NativeVideoWindowSwapchainWidth = 0;
+        state.w8NativeVideoWindowSwapchainHeight = 0;
+        state.w8NativeVideoWindowSwapchainBufferCount = 0;
+        state.w8NativeVideoWindowSwapchainSwapEffect = "";
+        state.w8NativeVideoWindowSwapchainReason = "";
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
@@ -5714,10 +5748,12 @@ async function verifyH264KeyFrameDetection(session) {
         const nativeStartCalls = nativeCalls.filter((call) => call.command === "start_w8_native_video_session");
         const nativePushCalls = nativeCalls.filter((call) => call.command === "push_w8_native_h264_annexb_frame");
         const nativeProbeCalls = nativeCalls.filter((call) => call.command === "probe_w8_native_video_decoder");
+        const nativeSwapchainProbeCalls = nativeCalls.filter((call) => call.command === "probe_w8_native_video_window_swapchain");
         const nativeQueueRecorded =
           nativeStartCalls.length === 1 &&
           nativePushCalls.length === 2 &&
           nativeProbeCalls.length === 1 &&
+          nativeSwapchainProbeCalls.length === 1 &&
           nativeStartCalls[0].payload?.request?.host === "192.168.31.122" &&
           nativeStartCalls[0].payload?.request?.port === 43770 &&
           nativePushCalls[0].payload?.request?.id === 41 &&
@@ -5774,6 +5810,14 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoNativePresentHeight === 1080 &&
           state.hostDiagnostics?.w8NativeVideoNativePresentFrames === 0 &&
           state.hostDiagnostics?.w8NativeVideoNativePresentLastFrameId === null &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainReady === true &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainMode === "d3d11-hwnd-swapchain-preflight" &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainStatus === "ready" &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainFormat === "BGRA8" &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainWidth === 1920 &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainHeight === 1080 &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainBufferCount === 2 &&
+          state.hostDiagnostics?.w8NativeVideoWindowSwapchainSwapEffect === "flip-discard" &&
           exportText.includes("原生队列 2") &&
           exportText.includes("原生队列 16 ms") &&
           exportText.includes("原生解码配置 avc1.420029") &&
@@ -5799,7 +5843,10 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生表面呈现 1") &&
           exportText.includes("原生呈现目标 ready") &&
           exportText.includes("原生呈现目标 D3D11 1920x1080 BGRA8") &&
-          exportText.includes("原生呈现状态 waiting-nv12-renderer");
+          exportText.includes("原生呈现状态 waiting-nv12-renderer") &&
+          exportText.includes("原生窗口交换链 ready") &&
+          exportText.includes("原生窗口交换链 D3D11 1920x1080 BGRA8") &&
+          exportText.includes("原生窗口交换链状态 ready");
         const h264EvidenceRecorded =
           state.h264ReceivedFrames === 2 &&
           state.h264ReceivedDeltaFrames === 1 &&
@@ -5900,6 +5947,22 @@ async function verifyH264KeyFrameDetection(session) {
             state.hostDiagnostics?.w8NativeVideoNativePresentFrames,
           w8NativeVideoNativePresentLastFrameId:
             state.hostDiagnostics?.w8NativeVideoNativePresentLastFrameId,
+          w8NativeVideoWindowSwapchainReady:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainReady,
+          w8NativeVideoWindowSwapchainMode:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainMode,
+          w8NativeVideoWindowSwapchainStatus:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainStatus,
+          w8NativeVideoWindowSwapchainFormat:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainFormat,
+          w8NativeVideoWindowSwapchainWidth:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainWidth,
+          w8NativeVideoWindowSwapchainHeight:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainHeight,
+          w8NativeVideoWindowSwapchainBufferCount:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainBufferCount,
+          w8NativeVideoWindowSwapchainSwapEffect:
+            state.hostDiagnostics?.w8NativeVideoWindowSwapchainSwapEffect,
           h264ReceivedFrames: state.h264ReceivedFrames,
           h264ReceivedDeltaFrames: state.h264ReceivedDeltaFrames,
           h264ReceivedKeyFrames: state.h264ReceivedKeyFrames,
@@ -5996,6 +6059,16 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativePresentFrames = original.w8NativeVideoNativePresentFrames;
         state.w8NativeVideoNativePresentLastFrameId = original.w8NativeVideoNativePresentLastFrameId;
         state.w8NativeVideoNativePresentReason = original.w8NativeVideoNativePresentReason;
+        state.w8NativeVideoWindowSwapchainProbePromise = original.w8NativeVideoWindowSwapchainProbePromise;
+        state.w8NativeVideoWindowSwapchainReady = original.w8NativeVideoWindowSwapchainReady;
+        state.w8NativeVideoWindowSwapchainMode = original.w8NativeVideoWindowSwapchainMode;
+        state.w8NativeVideoWindowSwapchainStatus = original.w8NativeVideoWindowSwapchainStatus;
+        state.w8NativeVideoWindowSwapchainFormat = original.w8NativeVideoWindowSwapchainFormat;
+        state.w8NativeVideoWindowSwapchainWidth = original.w8NativeVideoWindowSwapchainWidth;
+        state.w8NativeVideoWindowSwapchainHeight = original.w8NativeVideoWindowSwapchainHeight;
+        state.w8NativeVideoWindowSwapchainBufferCount = original.w8NativeVideoWindowSwapchainBufferCount;
+        state.w8NativeVideoWindowSwapchainSwapEffect = original.w8NativeVideoWindowSwapchainSwapEffect;
+        state.w8NativeVideoWindowSwapchainReason = original.w8NativeVideoWindowSwapchainReason;
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;
