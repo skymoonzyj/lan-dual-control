@@ -622,6 +622,10 @@ const state = {
   w8NativeVideoDecoderMode: "",
   w8NativeVideoDecoderReason: "",
   w8NativeVideoD3dFeatureLevel: "",
+  w8NativeVideoDecoderInitReady: false,
+  w8NativeVideoDecoderInitMode: "",
+  w8NativeVideoDecoderInitReason: "",
+  w8NativeVideoDecoderInitOutputSubtypes: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -757,6 +761,10 @@ const state = {
     w8NativeVideoDecoderMode: "",
     w8NativeVideoDecoderReason: "",
     w8NativeVideoD3dFeatureLevel: "",
+    w8NativeVideoDecoderInitReady: false,
+    w8NativeVideoDecoderInitMode: "",
+    w8NativeVideoDecoderInitReason: "",
+    w8NativeVideoDecoderInitOutputSubtypes: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -997,6 +1005,10 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDecoderMode: "",
     w8NativeVideoDecoderReason: "",
     w8NativeVideoD3dFeatureLevel: "",
+    w8NativeVideoDecoderInitReady: false,
+    w8NativeVideoDecoderInitMode: "",
+    w8NativeVideoDecoderInitReason: "",
+    w8NativeVideoDecoderInitOutputSubtypes: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1355,6 +1367,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDecoderMode = String(diagnostics.w8NativeVideoDecoderMode || "").trim();
   const nativeDecoderReason = String(diagnostics.w8NativeVideoDecoderReason || "").trim();
   const nativeD3dFeatureLevel = String(diagnostics.w8NativeVideoD3dFeatureLevel || "").trim();
+  const nativeDecoderInitReady = Boolean(diagnostics.w8NativeVideoDecoderInitReady);
+  const nativeDecoderInitMode = String(diagnostics.w8NativeVideoDecoderInitMode || "").trim();
+  const nativeDecoderInitReason = String(diagnostics.w8NativeVideoDecoderInitReason || "").trim();
+  const nativeDecoderInitOutputSubtypes = String(diagnostics.w8NativeVideoDecoderInitOutputSubtypes || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1401,6 +1417,15 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeDecoderReason && !nativeDecoderReady) {
     parts.push(`原生解码器原因 ${nativeDecoderReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderInitMode) {
+    parts.push(`原生解码初始化 ${nativeDecoderInitReady ? "ready" : "blocked"}`);
+  }
+  if (nativeDecoderInitOutputSubtypes) {
+    parts.push(`原生输出 ${nativeDecoderInitOutputSubtypes}`);
+  }
+  if (nativeDecoderInitReason && !nativeDecoderInitReady) {
+    parts.push(`原生初始化原因 ${nativeDecoderInitReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) {
     parts.push(`原生原因 ${nativeLastReason}`);
@@ -5667,6 +5692,20 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeD3dFeatureLevel = String(
     state.w8NativeVideoD3dFeatureLevel || state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel || "",
   ).trim();
+  const nativeDecoderInitReady = Boolean(
+    state.w8NativeVideoDecoderInitReady || state.hostDiagnostics?.w8NativeVideoDecoderInitReady,
+  );
+  const nativeDecoderInitMode = String(
+    state.w8NativeVideoDecoderInitMode || state.hostDiagnostics?.w8NativeVideoDecoderInitMode || "",
+  ).trim();
+  const nativeDecoderInitReason = String(
+    state.w8NativeVideoDecoderInitReason || state.hostDiagnostics?.w8NativeVideoDecoderInitReason || "",
+  ).trim();
+  const nativeDecoderInitOutputSubtypes = String(
+    state.w8NativeVideoDecoderInitOutputSubtypes ||
+      state.hostDiagnostics?.w8NativeVideoDecoderInitOutputSubtypes ||
+      "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -5722,6 +5761,11 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeD3dFeatureLevel) parts.push(`D3D11 ${nativeD3dFeatureLevel}`);
   if (nativeDecoderReason && !nativeDecoderReady) {
     parts.push(`原生解码器原因 ${nativeDecoderReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderInitMode) parts.push(`原生解码初始化 ${nativeDecoderInitReady ? "ready" : "blocked"}`);
+  if (nativeDecoderInitOutputSubtypes) parts.push(`原生输出 ${nativeDecoderInitOutputSubtypes}`);
+  if (nativeDecoderInitReason && !nativeDecoderInitReady) {
+    parts.push(`原生初始化原因 ${nativeDecoderInitReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeLastReason) parts.push(`原生原因 ${nativeLastReason}`);
   if (nativeErrors > 0) parts.push(`原生错误 ${nativeErrors}`);
@@ -7150,6 +7194,10 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDecoderMode = "";
   state.w8NativeVideoDecoderReason = "";
   state.w8NativeVideoD3dFeatureLevel = "";
+  state.w8NativeVideoDecoderInitReady = false;
+  state.w8NativeVideoDecoderInitMode = "";
+  state.w8NativeVideoDecoderInitReason = "";
+  state.w8NativeVideoDecoderInitOutputSubtypes = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7191,6 +7239,17 @@ function updateW8NativeVideoDiagnostics({
   if (summary.hasDecoderConfig === true || codecString) {
     state.w8NativeVideoHasDecoderConfig = true;
   }
+  const decoderInit = pushResult?.decoderInit || summary.decoderInit || null;
+  if (decoderInit && typeof decoderInit === "object") {
+    state.w8NativeVideoDecoderInitReady = decoderInit.ready === true;
+    state.w8NativeVideoDecoderInitMode = String(decoderInit.mode || "").trim();
+    state.w8NativeVideoDecoderInitReason = String(decoderInit.reason || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 160);
+    state.w8NativeVideoDecoderInitOutputSubtypes = Array.isArray(decoderInit.outputSubtypes)
+      ? decoderInit.outputSubtypes.map((item) => String(item || "").trim()).filter(Boolean).join("/")
+      : String(decoderInit.outputSubtypes || "").trim();
+  }
 
   updateHostDiagnostics({
     w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
@@ -7202,6 +7261,10 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
     w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,
     w8NativeVideoD3dFeatureLevel: state.w8NativeVideoD3dFeatureLevel,
+    w8NativeVideoDecoderInitReady: state.w8NativeVideoDecoderInitReady,
+    w8NativeVideoDecoderInitMode: state.w8NativeVideoDecoderInitMode,
+    w8NativeVideoDecoderInitReason: state.w8NativeVideoDecoderInitReason,
+    w8NativeVideoDecoderInitOutputSubtypes: state.w8NativeVideoDecoderInitOutputSubtypes,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

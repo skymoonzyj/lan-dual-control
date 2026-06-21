@@ -5,6 +5,8 @@ use std::{collections::VecDeque, sync::Mutex};
 use std::{ffi::c_void, ptr};
 
 #[cfg(windows)]
+use windows::core::GUID;
+#[cfg(windows)]
 use windows::Win32::Foundation::HMODULE;
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D::{
@@ -17,9 +19,14 @@ use windows::Win32::Graphics::Direct3D11::{
 };
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
-    MFMediaType_Video, MFShutdown, MFStartup, MFTEnumEx, MFVideoFormat_H264, MFSTARTUP_LITE,
+    IMFTransform, MFCreateMediaType, MFMediaType_Video, MFShutdown, MFStartup, MFTEnumEx,
+    MFVideoFormat_ARGB32, MFVideoFormat_H264, MFVideoFormat_IYUV, MFVideoFormat_NV12,
+    MFVideoFormat_RGB32, MFVideoFormat_YUY2, MFVideoInterlace_Progressive, MFSTARTUP_LITE,
     MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG, MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_LOCALMFT,
-    MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT, MFT_REGISTER_TYPE_INFO, MF_VERSION,
+    MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT, MFT_REGISTER_TYPE_INFO,
+    MF_MT_ALL_SAMPLES_INDEPENDENT, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE,
+    MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG_SEQUENCE_HEADER, MF_MT_PIXEL_ASPECT_RATIO,
+    MF_MT_SUBTYPE, MF_VERSION,
 };
 #[cfg(windows)]
 use windows::Win32::System::Com::CoTaskMemFree;
@@ -89,6 +96,8 @@ pub struct NativeH264AnnexBSummary {
     pub has_decoder_config: bool,
     pub codec_string: Option<String>,
     pub byte_len: u64,
+    #[serde(skip)]
+    pub decoder_config_bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -106,6 +115,20 @@ pub struct NativeVideoPushResult {
 pub struct NativeH264AnnexBPushResult {
     pub video: NativeVideoPushResult,
     pub summary: NativeH264AnnexBSummary,
+    pub decoder_init: Option<W8NativeVideoDecoderInitPreflight>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct W8NativeVideoDecoderInitPreflight {
+    pub mode: String,
+    pub attempted: bool,
+    pub ready: bool,
+    pub codec_string: Option<String>,
+    pub input_type_set: bool,
+    pub output_type_available: bool,
+    pub output_subtypes: Vec<String>,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -204,7 +227,11 @@ impl NativeVideoQueue {
             byte_len: summary.byte_len,
         });
 
-        NativeH264AnnexBPushResult { video, summary }
+        NativeH264AnnexBPushResult {
+            video,
+            summary,
+            decoder_init: None,
+        }
     }
 
     pub fn queue_ms(&self) -> u64 {
@@ -270,6 +297,7 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
     let mut sps_count = 0;
     let mut pps_count = 0;
     let mut codec_string = None;
+    let mut decoder_config_bytes = Vec::new();
     let mut cursor = 0;
 
     while let Some((start, prefix_len)) = find_annexb_start_code(data, cursor) {
@@ -286,8 +314,10 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
                 if codec_string.is_none() {
                     codec_string = codec_string_from_sps(nal);
                 }
+                push_annexb_nal(&mut decoder_config_bytes, nal);
             } else if nal_type == 8 {
                 pps_count += 1;
+                push_annexb_nal(&mut decoder_config_bytes, nal);
             }
         }
         cursor = nal_end;
@@ -299,8 +329,10 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
         if nal_type == 7 {
             sps_count += 1;
             codec_string = codec_string_from_sps(data);
+            push_annexb_nal(&mut decoder_config_bytes, data);
         } else if nal_type == 8 {
             pps_count += 1;
+            push_annexb_nal(&mut decoder_config_bytes, data);
         }
     }
 
@@ -320,6 +352,7 @@ pub fn inspect_h264_annexb(data: &[u8]) -> NativeH264AnnexBSummary {
         has_decoder_config,
         codec_string,
         byte_len: data.len() as u64,
+        decoder_config_bytes,
     }
 }
 
@@ -328,6 +361,11 @@ fn codec_string_from_sps(sps: &[u8]) -> Option<String> {
         return None;
     }
     Some(format!("avc1.{:02X}{:02X}{:02X}", sps[1], sps[2], sps[3]))
+}
+
+fn push_annexb_nal(output: &mut Vec<u8>, nal: &[u8]) {
+    output.extend_from_slice(&[0, 0, 0, 1]);
+    output.extend_from_slice(nal);
 }
 
 fn find_annexb_start_code(data: &[u8], from: usize) -> Option<(usize, usize)> {
@@ -359,6 +397,7 @@ struct W8NativeVideoSession {
     requested_fps: u32,
     renderer_mode: String,
     queue: NativeVideoQueue,
+    decoder_init: Option<W8NativeVideoDecoderInitPreflight>,
 }
 
 impl Default for W8NativeVideoSession {
@@ -370,6 +409,7 @@ impl Default for W8NativeVideoSession {
             requested_fps: 60,
             renderer_mode: "native-video-queue-mvp".to_string(),
             queue: NativeVideoQueue::new(NativeVideoQueueConfig::default()),
+            decoder_init: None,
         }
     }
 }
@@ -416,6 +456,63 @@ pub struct W8NativeVideoSnapshot {
     pub requested_fps: u32,
     pub renderer_mode: String,
     pub queue: NativeVideoQueueSnapshot,
+}
+
+impl W8NativeVideoDecoderInitPreflight {
+    fn missing_config() -> Self {
+        Self {
+            mode: "media-foundation-h264-decoder-init-preflight".to_string(),
+            attempted: false,
+            ready: false,
+            codec_string: None,
+            input_type_set: false,
+            output_type_available: false,
+            output_subtypes: Vec::new(),
+            reason: "blocked: SPS/PPS decoder config is required before MF decoder init"
+                .to_string(),
+        }
+    }
+
+    fn from_runtime_result(
+        codec_string: Option<String>,
+        result: Result<(bool, Vec<String>), String>,
+    ) -> Self {
+        let (input_type_set, output_subtypes, runtime_error) = match result {
+            Ok((input_type_set, output_subtypes)) => (input_type_set, output_subtypes, None),
+            Err(error) => (false, Vec::new(), Some(error)),
+        };
+        let output_type_available = !output_subtypes.is_empty();
+        let ready = input_type_set && output_type_available;
+        let reason = if ready {
+            format!(
+                "ready; codec={}; output={}",
+                codec_string.as_deref().unwrap_or("unknown"),
+                output_subtypes.join("/")
+            )
+        } else {
+            format!(
+                "blocked: {}",
+                runtime_error.unwrap_or_else(|| {
+                    if !input_type_set {
+                        "Media Foundation input type was not accepted".to_string()
+                    } else {
+                        "no Media Foundation decoder output type available".to_string()
+                    }
+                })
+            )
+        };
+
+        Self {
+            mode: "media-foundation-h264-decoder-init-preflight".to_string(),
+            attempted: true,
+            ready,
+            codec_string,
+            input_type_set,
+            output_type_available,
+            output_subtypes,
+            reason,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -538,6 +635,29 @@ pub fn probe_w8_native_video_decoder_runtime() -> W8NativeVideoDecoderProbe {
     }
 }
 
+pub fn preflight_h264_decoder_init(
+    summary: &NativeH264AnnexBSummary,
+) -> W8NativeVideoDecoderInitPreflight {
+    if !summary.has_decoder_config {
+        return W8NativeVideoDecoderInitPreflight::missing_config();
+    }
+
+    #[cfg(windows)]
+    {
+        W8NativeVideoDecoderInitPreflight::from_runtime_result(
+            summary.codec_string.clone(),
+            unsafe { preflight_media_foundation_h264_decoder(&summary.decoder_config_bytes) },
+        )
+    }
+    #[cfg(not(windows))]
+    {
+        W8NativeVideoDecoderInitPreflight::from_runtime_result(
+            summary.codec_string.clone(),
+            Err("Windows-only Media Foundation decoder init preflight".to_string()),
+        )
+    }
+}
+
 #[cfg(windows)]
 unsafe fn probe_d3d11_feature_level() -> Result<String, String> {
     let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
@@ -573,6 +693,35 @@ fn format_d3d_feature_level(level: D3D_FEATURE_LEVEL) -> String {
 }
 
 #[cfg(windows)]
+unsafe fn preflight_media_foundation_h264_decoder(
+    sequence_header: &[u8],
+) -> Result<(bool, Vec<String>), String> {
+    MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|error| format!("MFStartup failed: {error}"))?;
+    let result = preflight_media_foundation_h264_decoder_inner(sequence_header);
+    let shutdown = MFShutdown();
+    match (result, shutdown) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(format!("MFShutdown failed: {error}")),
+    }
+}
+
+#[cfg(windows)]
+unsafe fn preflight_media_foundation_h264_decoder_inner(
+    sequence_header: &[u8],
+) -> Result<(bool, Vec<String>), String> {
+    let transform = activate_first_h264_decoder_mft()?;
+    let input_type = create_h264_decoder_input_type(sequence_header)?;
+    transform
+        .SetInputType(0, &input_type, 0)
+        .map_err(|error| format!("SetInputType H.264 failed: {error}"))?;
+    let output_subtypes = collect_decoder_output_subtypes(&transform);
+    drop(input_type);
+    drop(transform);
+    Ok((true, output_subtypes))
+}
+
+#[cfg(windows)]
 unsafe fn probe_media_foundation_h264_decoders() -> Result<(u32, u32), String> {
     MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|error| format!("MFStartup failed: {error}"))?;
 
@@ -589,6 +738,134 @@ unsafe fn probe_media_foundation_h264_decoders() -> Result<(u32, u32), String> {
     let hardware_count = hardware_count?;
     shutdown.map_err(|error| format!("MFShutdown failed: {error}"))?;
     Ok((decoder_count, hardware_count))
+}
+
+#[cfg(windows)]
+unsafe fn activate_first_h264_decoder_mft() -> Result<IMFTransform, String> {
+    let input_type = MFT_REGISTER_TYPE_INFO {
+        guidMajorType: MFMediaType_Video,
+        guidSubtype: MFVideoFormat_H264,
+    };
+    let flags = MFT_ENUM_FLAG_SYNCMFT
+        | MFT_ENUM_FLAG_LOCALMFT
+        | MFT_ENUM_FLAG_HARDWARE
+        | MFT_ENUM_FLAG_SORTANDFILTER;
+    let mut activates = ptr::null_mut();
+    let mut count = 0_u32;
+    MFTEnumEx(
+        MFT_CATEGORY_VIDEO_DECODER,
+        flags,
+        Some(&input_type),
+        None,
+        &mut activates,
+        &mut count,
+    )
+    .map_err(|error| format!("MFTEnumEx H.264 decoder failed: {error}"))?;
+
+    if activates.is_null() || count == 0 {
+        release_mft_activates(activates, count);
+        return Err("no Media Foundation H.264 decoder MFT found".to_string());
+    }
+
+    let slice = std::slice::from_raw_parts_mut(activates, count as usize);
+    let mut activated_transform = None;
+    let mut last_error = None;
+    for activate in slice.iter().filter_map(|candidate| candidate.as_ref()) {
+        match activate.ActivateObject::<IMFTransform>() {
+            Ok(transform) => {
+                activated_transform = Some(transform);
+                break;
+            }
+            Err(error) => last_error = Some(format!("{error}")),
+        }
+    }
+    release_mft_activates(activates, count);
+
+    activated_transform.ok_or_else(|| {
+        format!(
+            "no H.264 decoder MFT could be activated{}",
+            last_error
+                .map(|error| format!(": {error}"))
+                .unwrap_or_default()
+        )
+    })
+}
+
+#[cfg(windows)]
+unsafe fn create_h264_decoder_input_type(
+    sequence_header: &[u8],
+) -> Result<windows::Win32::Media::MediaFoundation::IMFMediaType, String> {
+    let media_type =
+        MFCreateMediaType().map_err(|error| format!("MFCreateMediaType failed: {error}"))?;
+    media_type
+        .SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)
+        .map_err(|error| format!("SetGUID major video failed: {error}"))?;
+    media_type
+        .SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)
+        .map_err(|error| format!("SetGUID H.264 subtype failed: {error}"))?;
+    media_type
+        .SetUINT64(&MF_MT_FRAME_SIZE, pack_mf_ratio(1920, 1080))
+        .map_err(|error| format!("Set frame size failed: {error}"))?;
+    media_type
+        .SetUINT64(&MF_MT_FRAME_RATE, pack_mf_ratio(60, 1))
+        .map_err(|error| format!("Set frame rate failed: {error}"))?;
+    media_type
+        .SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack_mf_ratio(1, 1))
+        .map_err(|error| format!("Set pixel aspect ratio failed: {error}"))?;
+    media_type
+        .SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)
+        .map_err(|error| format!("Set interlace mode failed: {error}"))?;
+    media_type
+        .SetUINT32(&MF_MT_ALL_SAMPLES_INDEPENDENT, 0)
+        .map_err(|error| format!("Set sample independence failed: {error}"))?;
+    media_type
+        .SetUINT32(&MF_MT_AVG_BITRATE, 20_000_000)
+        .map_err(|error| format!("Set bitrate failed: {error}"))?;
+    if !sequence_header.is_empty() {
+        media_type
+            .SetBlob(&MF_MT_MPEG_SEQUENCE_HEADER, sequence_header)
+            .map_err(|error| format!("Set sequence header failed: {error}"))?;
+    }
+    Ok(media_type)
+}
+
+#[cfg(windows)]
+fn pack_mf_ratio(numerator: u32, denominator: u32) -> u64 {
+    ((numerator as u64) << 32) | denominator as u64
+}
+
+#[cfg(windows)]
+unsafe fn collect_decoder_output_subtypes(transform: &IMFTransform) -> Vec<String> {
+    let mut output_subtypes = Vec::new();
+    for index in 0..32 {
+        let Ok(media_type) = transform.GetOutputAvailableType(0, index) else {
+            break;
+        };
+        if let Ok(subtype) = media_type.GetGUID(&MF_MT_SUBTYPE) {
+            let label = video_subtype_label(subtype);
+            if !output_subtypes.contains(&label) {
+                output_subtypes.push(label);
+            }
+        }
+    }
+    output_subtypes
+}
+
+#[cfg(windows)]
+fn video_subtype_label(subtype: GUID) -> String {
+    if subtype == MFVideoFormat_NV12 {
+        "NV12".to_string()
+    } else if subtype == MFVideoFormat_ARGB32 {
+        "ARGB32".to_string()
+    } else if subtype == MFVideoFormat_RGB32 {
+        "RGB32".to_string()
+    } else if subtype == MFVideoFormat_YUY2 {
+        "YUY2".to_string()
+    } else if subtype == MFVideoFormat_IYUV {
+        "IYUV".to_string()
+    } else {
+        format!("{subtype:?}")
+    }
 }
 
 #[cfg(windows)]
@@ -654,6 +931,7 @@ pub fn start_w8_native_video_session(
         .renderer_mode
         .unwrap_or_else(|| "native-video-queue-mvp".to_string());
     session.queue = NativeVideoQueue::new(config);
+    session.decoder_init = None;
     Ok(session.snapshot())
 }
 
@@ -687,11 +965,16 @@ pub fn push_w8_native_h264_annexb_frame(
     if !session.running {
         return Err("W8 视频会话尚未启动".to_string());
     }
-    Ok(session.queue.push_h264_annexb(NativeH264AnnexBFrame {
+    let mut result = session.queue.push_h264_annexb(NativeH264AnnexBFrame {
         id: request.id,
         received_at_ms: request.received_at_ms,
         data,
-    }))
+    });
+    if result.summary.has_decoder_config && session.decoder_init.is_none() {
+        session.decoder_init = Some(preflight_h264_decoder_init(&result.summary));
+    }
+    result.decoder_init = session.decoder_init.clone();
+    Ok(result)
 }
 
 #[tauri::command]
@@ -767,6 +1050,10 @@ mod tests {
         assert_eq!(summary.pps_count, 1);
         assert!(summary.has_decoder_config);
         assert_eq!(summary.codec_string.as_deref(), Some("avc1.420029"));
+        assert_eq!(
+            summary.decoder_config_bytes,
+            annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce]])
+        );
         assert_eq!(summary.byte_len, payload.len() as u64);
     }
 
@@ -783,6 +1070,7 @@ mod tests {
         assert_eq!(summary.pps_count, 0);
         assert!(!summary.has_decoder_config);
         assert_eq!(summary.codec_string, None);
+        assert!(summary.decoder_config_bytes.is_empty());
     }
 
     #[test]
@@ -808,6 +1096,37 @@ mod tests {
                 && probe.media_foundation_available
                 && probe.h264_decoder_available
         );
+    }
+
+    #[test]
+    fn decoder_init_preflight_requires_parameter_sets() {
+        let payload = annexb_payload(&[&[0x65, 0x88]]);
+        let summary = inspect_h264_annexb(&payload);
+
+        let init = preflight_h264_decoder_init(&summary);
+
+        assert_eq!(init.mode, "media-foundation-h264-decoder-init-preflight");
+        assert!(!init.attempted);
+        assert!(!init.ready);
+        assert_eq!(init.codec_string, None);
+        assert!(init.reason.contains("SPS/PPS"));
+    }
+
+    #[test]
+    fn decoder_init_preflight_reports_input_and_output_status() {
+        let payload = annexb_payload(&[&[0x67, 0x42, 0x00, 0x29], &[0x68, 0xce], &[0x65, 0x88]]);
+        let summary = inspect_h264_annexb(&payload);
+
+        let init = preflight_h264_decoder_init(&summary);
+
+        assert_eq!(init.mode, "media-foundation-h264-decoder-init-preflight");
+        assert!(init.attempted);
+        assert_eq!(init.codec_string.as_deref(), Some("avc1.420029"));
+        assert_eq!(
+            init.ready,
+            init.input_type_set && init.output_type_available
+        );
+        assert!(!init.reason.trim().is_empty());
     }
 
     #[test]

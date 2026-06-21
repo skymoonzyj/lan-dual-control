@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows 桌面控制端 MF H.264 decoder init preflight：`push_w8_native_h264_annexb_frame` 首次收到带 SPS/PPS 的 H.264 payload 时，Rust 原生侧会保留参数集、创建 Media Foundation H.264 decoder MFT、设置 H.264 输入类型并枚举输出 subtype；Windows 控制端诊断/导出新增 `原生解码初始化 ready|blocked` 和 `原生输出 NV12/ARGB32/...`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步喂 Annex B access unit 跑 `ProcessInput/ProcessOutput` 并接 native surface 绘制。
 - [x] W8 Windows 桌面控制端 MF/D3D11 解码能力探测：新增 Tauri 命令 `probe_w8_native_video_decoder`，原生侧只读探测 D3D11 hardware device feature level 与 Media Foundation H.264 decoder MFT，Windows 控制端诊断/导出新增 `原生解码器 ready|blocked` 和 `D3D11 11_x`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步用 SPS/PPS decoder config 和 probe 结果初始化 MF/D3D11 decoder 并输出 decoded frame/native surface。
 - [x] W8 Windows 桌面控制端原生解码配置准备：`w8_native_video` 从 Annex B H.264 SPS/PPS 提取 `spsCount/ppsCount/hasDecoderConfig/codecString`，例如 `avc1.420029`，并随 `push_w8_native_h264_annexb_frame` 结果透到 Windows 控制端诊断/导出里的 `原生解码配置`。不改协议、不改 Mac、不请求密码、不发 input/inject；下一步接 Windows Media Foundation / D3D11 解码和原生绘制。
 - [x] W8 Windows 桌面控制端原生视频队列接线：桌面壳前端收到 H.264 Annex B base64 帧时，按到达顺序串行调用 `start_w8_native_video_session` / `push_w8_native_h264_annexb_frame`，并把原生队列帧数、队列毫秒、丢旧帧、最近原因和错误并入诊断；普通浏览器预览版保持 WebCodecs/canvas 路径。不改协议、不改 Mac、不请求密码、不发 input/inject。

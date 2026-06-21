@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 MF H.264 decoder init preflight
+- Windows 主线继续推进 W8 视频侧，不碰 W9 音频。`w8_native_video` 现在会把首个带 SPS/PPS 的 Annex B H.264 帧里的参数集保留在 Rust 内部，用于 Media Foundation input type；`push_w8_native_h264_annexb_frame` 在会话内第一次看到 decoder config 时会尝试创建 H.264 decoder MFT、设置 1920x1080/60 的 H.264 输入类型并枚举输出 subtype，然后把 `decoderInit` 摘要随 push 结果返回。Windows 控制端诊断/复制导出新增 `原生解码初始化 ready|blocked` 和 `原生输出 NV12/ARGB32/...`。这一步仍不向 decoder 喂真实帧、不输出 decoded frame、不做原生 surface 绘制；下一步才是 ProcessInput/ProcessOutput 和 latest-frame native surface。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 MF/D3D11 解码能力探测
 - Windows 主线继续推进 W8 视频侧，不碰 W9 音频。Windows 桌面端 `w8_native_video` 新增 `probe_w8_native_video_decoder` Tauri 命令，真实调用 D3D11 硬件 device 创建和 Media Foundation H.264 decoder MFT 枚举，返回 `media-foundation-h264-d3d11-probe`、D3D feature level、H.264 decoder 数量、硬件 decoder 数量、`ready` 和阻塞原因。Windows 控制端桌面壳启动 W8 原生视频会话后会自动 probe 一次，并在诊断/复制导出里显示 `原生解码器 ready|blocked` 和 `D3D11 11_x`。这一步仍不解码和绘制真实帧，但已经把“能不能初始化 MF/D3D11 H.264 解码路径”从文档计划变成可运行证据。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 
