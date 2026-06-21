@@ -493,6 +493,13 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   if (present) parts.push(`present=${present}`);
   if (presentFrames > 0) parts.push(`presentFrames=${presentFrames}`);
   if (decoded > 0 || status) parts.push(`decoded=${decoded}`);
+  if (decoded > 0 || presentFrames > 0 || present) {
+    const presentLower = present.toLowerCase();
+    const isWindowPresenting = presentFrames > 0 && presentLower.includes("presented");
+    const presentGap = Math.max(0, decoded - presentFrames);
+    parts.push(`presenting=${isWindowPresenting ? "yes" : "no"}`);
+    parts.push(`presentGap=${presentGap}`);
+  }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
   if (framesPushed > 0) parts.push(`pushed=${framesPushed}`);
   if (output) parts.push(`output=${output}`);
@@ -528,7 +535,7 @@ function makeBoardSummary(summary) {
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
-    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 300)}`);
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 420)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -633,7 +640,37 @@ function verifyW2W3RetestAudioStabilityGate() {
 }
 
 function verifyW8NativeVideoRetestSummary() {
-  const w8NativeVideo = "status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
+  const w8NativeVideo = makeW8NativeVideoRetestSummary({
+    w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
+    w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+    w8NativeVideoNativePresentFrames: 188,
+    w8NativeVideoDecoderSessionDecodedFrames: 188,
+    w8NativeVideoDecoderSessionAcceptedInputFrames: 190,
+    w8NativeVideoFramesPushed: 192,
+    w8NativeVideoDecoderSessionOutputSubtype: "NV12",
+    w8NativeVideoCodecString: "avc1.420029",
+    w8NativeVideoNativeSurfaceStatus: "latest-frame-presented",
+    w8NativeVideoNativeSurfaceCopyStatus: "latest-frame-presented",
+    w8NativeVideoFrameHandoffStatus: "latest-frame-ready",
+    w8NativeVideoWindowSwapchainStatus: "ready",
+    w8NativeVideoDecoderSessionReason: "stream-change reconfigured after long run",
+    w8NativeVideoNativePresentReason: "device-lost rebuilt; Present copied frames into HWND swapchain",
+    w8NativeVideoErrors: 0,
+  });
+  const w8NativeVideoBehind = makeW8NativeVideoRetestSummary({
+    w8NativeVideoDecoderSessionStatus: "active",
+    w8NativeVideoNativePresentStatus: "waiting-nv12-renderer",
+    w8NativeVideoNativePresentFrames: 0,
+    w8NativeVideoDecoderSessionDecodedFrames: 12,
+    w8NativeVideoDecoderSessionAcceptedInputFrames: 14,
+    w8NativeVideoFramesPushed: 16,
+    w8NativeVideoDecoderSessionOutputSubtype: "NV12",
+    w8NativeVideoNativeSurfaceStatus: "latest-frame-presented",
+    w8NativeVideoNativeSurfaceCopyStatus: "latest-frame-presented",
+    w8NativeVideoFrameHandoffStatus: "latest-frame-ready",
+    w8NativeVideoWindowSwapchainStatus: "ready",
+    w8NativeVideoErrors: 0,
+  });
   const text = makeBoardSummary({
     status: "passed",
     mode: "connect",
@@ -649,11 +686,16 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("present=latest-frame-nv12-converted-presented") &&
     text.includes("presentFrames=188") &&
     text.includes("decoded=188") &&
+    text.includes("presenting=yes") &&
+    text.includes("presentGap=0") &&
+    w8NativeVideoBehind.includes("presenting=no") &&
+    w8NativeVideoBehind.includes("presentGap=12") &&
     text.includes("output=NV12") &&
+    text.includes("codec=avc1.420029") &&
     text.includes("streamChange=yes") &&
     text.includes("deviceLost=yes") &&
     text.includes("errors=0");
-  return { ok, text, w8NativeVideo };
+  return { ok, text, w8NativeVideo, w8NativeVideoBehind };
 }
 
 function emitBoardSummary(summary) {

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端原生呈现进度摘要
+- Windows 主线继续只做视频侧，不碰 Mac/协议/认证/密码/input。`test-windows-client-browser --boardSummary` 的 `W8NativeVideo=` 现在新增 `presenting=yes|no` 和 `presentGap=<decoded-presentFrames>`，并放宽 W8 摘要压缩上限，保证 `streamChange/deviceLost/errors` 不被截断。下一次真实 Mac H.264 长跑上板后，`presenting=yes presentGap=0` 表示原生窗口 Present 跟上解码；`presenting=no presentGap>0` 表示 MF/D3D11 已解码但原生窗口呈现没跟上，需要继续看 `present/status/swapchain/errors` 定位。
+
 ## 2026-06-21 W8 Windows 桌面控制端长跑复测摘要
 - Windows 主线继续只做视频侧，不碰 Mac/协议/认证/密码/input。`test-windows-client-browser --boardSummary` 现在会把页面 snapshot 里的 W8 原生视频诊断压成脱敏 `W8NativeVideo=` 一行，字段包含 `status`、`present`、`presentFrames`、`decoded`、`output`、`surface`、`copy`、`handoff`、`swapchain`、`streamChange`、`deviceLost` 和 `errors`。`run-winclient-retest-and-post` / `post-w2w3-retest-board` 会从真实复测输出中提取可选 `W8NativeVideo=`，和旧 `W2W3Retest=`、`W2H264BoardDiagnosis=` 分开发到通讯板，避免 W8 的 `decoded/present` 字段污染旧 W2 H.264 对照诊断。下一次真实 Mac H.264 长跑时，看通讯板里的 `W8NativeVideo=present=latest-frame-nv12-converted-presented|latest-frame-swapchain-presented`、`presentFrames>0`、`streamChange=yes/no`、`deviceLost=yes/no` 和 `errors=0`。
 

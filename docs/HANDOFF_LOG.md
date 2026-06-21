@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端原生呈现进度摘要
+开发端：Windows Codex
+本轮目标：继续只做视频侧，让真实 Mac H.264 长跑上板后能直接判断原生窗口 Present 是否跟上解码。
+完成内容：`test-windows-client-browser --boardSummary` 的 `W8NativeVideo=` 新增 `presenting=yes|no` 和 `presentGap=<decoded-presentFrames>`，并把 W8 专用摘要压缩上限放宽到 420，避免新增字段后尾部 `streamChange/deviceLost/errors` 被截断。`presenting=yes presentGap=0` 表示原生窗口 Present 跟上解码；`presenting=no presentGap>0` 表示已解码但窗口呈现没有跟上。
+修改文件：scripts/windows/test-windows-client-browser.mjs；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于缺少 `presenting/presentGap`，随后因 W8 摘要被 300 字符截断继续失败；实现后 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --onlyH264LatencyQueueGuard --timeoutMs 45000` 转绿。完整验证见提交前命令记录。
+遗留问题：还没有跑带密码的真实长跑；用户现场运行 `Run-WinClientRetest-And-Post.cmd` 后，看 Agent Link Board 的 `W8NativeVideo=` 即可确认原生呈现是否跟上。
+下一步建议：真实 Mac H.264 长跑仍是下一步；如果 `presenting=no presentGap>0`，优先查 `present/swapchain/errors`，再决定是否继续补 native renderer 或更高层 decoder session rebuild。
+是否改了协议：否。
+是否需要另一端配合：后续真实长跑需要 Mac host 在线；本轮不需要 Mac 改代码。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端长跑复测摘要
 开发端：Windows Codex
 本轮目标：继续只做视频侧，把真实 Mac H.264 长跑需要看的 W8 原生 Present / stream-change / device-lost 证据纳入脱敏上板链路。
