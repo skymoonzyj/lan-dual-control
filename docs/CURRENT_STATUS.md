@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W1 一键复测入口端口占用收口
+- Windows 恢复总览已把默认 Windows client/CDP 端口占用检测结果用于正式 `WinClientRetest=` 命令生成。以前 `WinClientPorts=occupied(...;stale-diagnostics)` 时，`Next=` / formal checklist 会切到备用端口，但 `WinClientRetest=` / `WinClientRetestPs=` 仍可能保留被旧诊断进程占用的 `--clientPort 5197 --debugPort 9337`；现在这两条真实复测命令也使用 `getPreferredWindowsClientDiagnosticsPorts` 选出的备用端口，例如 `5200/9340` 或自定义备用端口。Node 与 PowerShell 包装回归均覆盖默认占用和自定义占用场景；不请求密码、不认证、不发 input/inject。
+
 ## 2026-06-21 W2 视频 live 健康标签
 - Windows 控制端在现有 H.264/WebCodecs 队列治理基础上新增本地视频 live 健康标签，不改协议、不改 Mac host。页面 FPS 行、悬停 title 和复制/导出诊断会把多个现场指标折成一句：`视频实时正常`、`本机绘制偏慢`、`视频低 FPS`、`视频追实时`、`视频积压` 或 `视频等关键帧`。判断依据复用现有实收 FPS、协商/请求 Hz、远端媒体间隔、本机 H.264 队列、过期丢帧、live backlog 请求和关键帧状态；diagnosticsOnly 回归覆盖积压场景和健康场景。下一次真实最小化/切 app/切回复测时，先看这个标签，再看本机队列、远端媒体间隔和 reason，能更快区分“健康流动”“Windows 本地绘制/解码慢”和“关键帧恢复/队列积压”。
 

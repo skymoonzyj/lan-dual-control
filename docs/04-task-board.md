@@ -8,6 +8,7 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] W1 一键复测入口端口占用收口：`check-windows-resume-status` 发现默认 Windows client/CDP 端口被旧诊断进程占用时，`WinClientRetest=` / `WinClientRetestPs=` 现在也使用备用 client/debug 端口，不再只让 `Next=` 和 formal checklist 使用备用端口。Node 与 PowerShell 回归覆盖主复测命令必须使用备用端口，且不得继续包含占用端口。不认证、不请求密码、不发 input/inject。
 - [x] W2 视频 live 健康标签：Windows 控制端页面 FPS 行、悬停 title 和复制/导出诊断新增 `视频实时正常` / `本机绘制偏慢` / `视频低 FPS` / `视频追实时` / `视频积压` / `视频等关键帧` 标签，把实收 FPS、远端媒体间隔、本机 H.264 队列、过期丢帧、live backlog 和关键帧状态折成第一眼可读结论。页面回归先红于缺少 `视频积压` / `视频实时正常`，再绿于 diagnosticsOnly。不改协议、不认证、不请求密码、不发 input/inject。
 - [x] W7 音频恢复缓冲低延迟收敛：真实复测显示 Mac 远端音频 20/20ms 且 dropped/refill/stutter 已改善，但 Windows WebAudio 队列仍约 188ms；控制端恢复期 `queue-underrun-recovery-prebuffer` 当前为约 100ms，并补强页面音频缓冲守卫测试覆盖“已播放后恢复期再次 underrun”，避免被启动期低延迟分支误判。不改系统声音输出、不认证、不请求密码、不发 input/inject。
 - [x] W2 Windows H.264 live backlog 追实时：d923e7f 后证据显示 Mac 远端媒体 17/21ms 正常，Windows 控制端现在在 H.264 本机队列超过实时窗口但未到硬重同步阈值时先请求关键帧，关键帧到达后清旧队列追实时；诊断新增 `追实时请求`、`live-backlog-keyframe-request`、`live-backlog-keyframe-jump-live`。页面回归先红于缺 helper，再绿于 diagnosticsOnly。不改协议、不认证、不请求密码、不发 input/inject。

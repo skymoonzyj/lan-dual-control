@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W1 一键复测入口端口占用收口
+开发端：Windows Codex
+本轮目标：响应通讯板 W1“一键入口稳定”，修复恢复总览检测到默认 Windows client/CDP 端口占用时，主复测命令仍指向占用端口的问题。
+完成内容：`check-windows-resume-status` 的 `WinClientRetest=` / `WinClientRetestPs=` 改用 `getPreferredWindowsClientDiagnosticsPorts` 选出的 client/debug 端口。现在默认端口被旧诊断进程占用时，正式 Windows client 复测命令会和 `Next=`、formal checklist 一样切到备用端口；未占用时仍保持默认端口。
+修改文件：scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：`node --check scripts/windows/check-windows-resume-status.mjs`；`node --check scripts/windows/test-windows-resume-status.mjs`；`node --check scripts/windows/test-windows-resume-status-powershell.mjs`；`node scripts/windows/test-windows-resume-status.mjs`；`node scripts/windows/test-windows-resume-status-powershell.mjs` 均通过。回归覆盖 `WinClientRetest` / `WinClientRetestPs` 使用备用端口且不再包含占用端口。
+遗留问题：本轮只修复无密恢复总览命令生成；真实 `Run-WinClientRetest-And-Post.cmd` 仍需要用户在 Windows 本机隐藏输入 Mac 当前密码，密码不上通讯板。
+下一步建议：白天真实复测前先跑 `check-windows-resume-status --checkBoard --boardSummary`，若 `WinClientPortsNext=default-ok` 用默认入口；若提示备用端口，复制摘要里的 `WinClientRetest=` / `WinClientRetestPs=`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续需要用户真实复测。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W2 视频 live 健康标签
 开发端：Windows Codex
 本轮目标：按用户要求把本轮重点放回视频侧，在 W2 已 PASS 的基础上增强长时间/后台复测时的一眼诊断。
