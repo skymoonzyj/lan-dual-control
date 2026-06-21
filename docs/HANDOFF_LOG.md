@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 Windows arrival/backlog 间隔来源上板
+开发端：Windows Codex
+本轮目标：继续视频侧收口，让 `W8ArrivalBacklog=` 不只显示单个 `maxGapMs`，还能区分远端媒体节奏、本地到达间隔和 Windows 本机队列。
+完成内容：`post-w2w3-retest-board` 的 `W8ArrivalBacklog=` 现在会解析 `W2W3Retest=` 里的本地 `平均间隔/最大间隔` 与 `远端媒体平均间隔/远端媒体最大间隔`，输出 `localAvgMs/localMaxMs/remoteMediaAvgMs/remoteMediaMaxMs`，并给出 `arrivalSource=windows-arrival-gap|windows-queue-backlog|remote-media-gap|stable|unknown`。如果远端媒体最大间隔正常但本地最大间隔很高，下一步保持 `investigate-windows-arrival-backlog`；如果远端媒体最大间隔也异常，下一步切为 `inspect-remote-media-cadence`。
+修改文件：scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `W8ArrivalBacklog=` 缺少 `localAvgMs/localMaxMs/remoteMediaAvgMs/remoteMediaMaxMs/arrivalSource`；实现后 `node scripts/windows/test-post-w2w3-retest-board.mjs` 转绿。
+遗留问题：本轮仍未跑带密码真实桌面长跑，不宣称真实卡顿已彻底修复；新字段只让下一次真实长跑更容易定位是 Windows 到达/队列还是远端媒体 cadence。
+下一步建议：真实长跑后优先看 `W8NativeGate`、`W8NativeVideo` 的原生主面和旁路字段，再看 `W8ArrivalBacklog arrivalSource`；只有 `remote-media-gap` 才让 Mac 补远端媒体节奏证据，`windows-arrival-gap` 或 `windows-queue-backlog` 继续查 Windows 侧。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 Windows 原生主面旁路证据上板
 开发端：Windows Codex
 本轮目标：继续视频侧收口，让真实长跑上板摘要直接显示 WebCodecs/canvas 是否已经在原生主面后被旁路。

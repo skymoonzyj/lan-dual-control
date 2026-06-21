@@ -110,7 +110,7 @@ function run(extraArgs, args, options = {}) {
 }
 
 const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 h264Frames=300 h264Delta=297 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000 keyGapFramesLast=58 keyGapMsLast=966 keyTailFrames=12 keyTailMs=200 firstKeyParam=yes lastKeyParam=yes keyParamMiss=0";
-const retestLine = "W2W3Retest=video=实收 63.9 FPS · 协商 60 Hz · 平均间隔 16 ms · 最大间隔 9100 ms · 追实时请求 42 次 · 本机队列 190 ms · 本地过期丢帧 125 · 可见恢复 2 次 · 原因 live-backlog-keyframe-request surface=none h264=status=rendering decoded=3722 skippedDelta=0 needsKeyframe=no queue=4 queueMs=190 staleDrops=125 reason=live-backlog-keyframe-request recv=3722 key=87 sps=87 pps=87 idr=87 lastNal=7/8/5, audio=队列 100 ms";
+const retestLine = "W2W3Retest=video=实收 63.9 FPS · 协商 60 Hz · 平均间隔 16 ms · 最大间隔 9100 ms · 远端媒体平均间隔 17 ms · 远端媒体最大间隔 21 ms · 追实时请求 42 次 · 本机队列 190 ms · 本地过期丢帧 125 · 可见恢复 2 次 · 原因 live-backlog-keyframe-request surface=none h264=status=rendering decoded=3722 skippedDelta=0 needsKeyframe=no queue=4 queueMs=190 staleDrops=125 reason=live-backlog-keyframe-request recv=3722 key=87 sps=87 pps=87 idr=87 lastNal=7/8/5, audio=队列 100 ms";
 const w8NativeLine = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback webDecode=native-main-surface webBypass=24 webBypassReason=native-main-surface-presenting webBypassFrame=188 status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 queueDrops=3722 queueDropScope=predecode queueReason=waiting-keyframe output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 
 function makeState(messages) {
@@ -241,6 +241,11 @@ async function checkDryRunDoesNotPost(args) {
     assertIncludes(payload.w8ArrivalBacklogSummary, "staleDrops=125", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "liveBacklogRequests=42", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "maxGapMs=9100", "dry-run W8 arrival backlog");
+    assertIncludes(payload.w8ArrivalBacklogSummary, "localAvgMs=16", "dry-run W8 arrival backlog");
+    assertIncludes(payload.w8ArrivalBacklogSummary, "localMaxMs=9100", "dry-run W8 arrival backlog");
+    assertIncludes(payload.w8ArrivalBacklogSummary, "remoteMediaAvgMs=17", "dry-run W8 arrival backlog");
+    assertIncludes(payload.w8ArrivalBacklogSummary, "remoteMediaMaxMs=21", "dry-run W8 arrival backlog");
+    assertIncludes(payload.w8ArrivalBacklogSummary, "arrivalSource=windows-arrival-gap", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "visibilityRecovery=2", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "next=investigate-windows-arrival-backlog", "dry-run W8 arrival backlog");
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
@@ -317,6 +322,8 @@ async function checkSendRetestAndDiagnosis(args) {
     assertIncludes(board.messages[1].text, "next=investigate-arrival-backlog", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "W8ArrivalBacklog=status=blocked", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "liveBacklogRequests=42", "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "remoteMediaMaxMs=21", "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "arrivalSource=windows-arrival-gap", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "next=investigate-windows-arrival-backlog", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "Source=Run-WinClientRetest/native-video-summary", "posted W8 native video message");
     assertIncludes(board.messages[2].text, "W2H264BoardDiagnosis=status=ready", "posted diagnosis message");

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8 Windows arrival/backlog 间隔来源上板
+- Windows 视频侧继续收口 `W8ArrivalBacklog=`：当 `W8NativeGate=status=arrival-backlog-next` 时，上板摘要除了 `queueMs/staleDrops/liveBacklogRequests/maxGapMs/visibilityRecovery`，现在还会输出 `localAvgMs/localMaxMs` 和 `remoteMediaAvgMs/remoteMediaMaxMs`，并给出 `arrivalSource=windows-arrival-gap|windows-queue-backlog|remote-media-gap|stable|unknown`。下一次真实长跑如果远端媒体最大间隔正常但本地最大间隔很高，会直接标成 `windows-arrival-gap`；如果远端媒体最大间隔本身异常，则标成 `remote-media-gap` 并把 next 切到 `inspect-remote-media-cadence`。本轮只改 Windows 上板诊断和本地测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
+
 ## 2026-06-22 W8 Windows 原生主面旁路证据上板
 - Windows 视频侧继续收口真实长跑判读：`W8NativeVideo=` 现在会在 `ui/mainSurface/canvasRole` 后面追加 `webDecode=<status>`、`webBypass=<n>`、`webBypassReason=<reason>` 和 `webBypassFrame=<id>`。当 Windows 桌面端已经走 `mainSurface=native-hwnd` 且 WebCodecs/canvas 被旁路时，下次通讯板能直接看到 `webDecode=native-main-surface webBypass>0`，不用再从完整导出日志里猜主画面是否仍在 Web 解码。摘要压缩上限同步放宽，避免新增旁路字段挤掉 `streamChange/deviceLost/errors`。本轮只改 Windows 视频侧摘要和本地测试，不改 Mac、协议、认证/密码、音频、剪贴板或 input/inject。
 

@@ -237,6 +237,21 @@ function numericFromText(text, patterns) {
   return 0;
 }
 
+function classifyW8ArrivalSource({ blocked, localMaxMs, remoteMediaMaxMs, queueMs, staleDrops, liveBacklogRequests, reason }) {
+  if (!blocked) return "stable";
+  if (remoteMediaMaxMs >= 1000 && remoteMediaMaxMs >= Math.max(1000, Math.round(localMaxMs * 0.8))) {
+    return "remote-media-gap";
+  }
+  if (localMaxMs >= 1000 && (!remoteMediaMaxMs || remoteMediaMaxMs < 1000)) {
+    return "windows-arrival-gap";
+  }
+  if (queueMs >= 180 || staleDrops > 0 || liveBacklogRequests > 0 || /backlog|queue|wait|recovery/i.test(reason)) {
+    return "windows-queue-backlog";
+  }
+  if (localMaxMs >= 1000) return "windows-arrival-gap";
+  return "unknown";
+}
+
 function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
   if (w8NativeGateStatus(w8NativeGateSummary) !== "arrival-backlog-next") return "";
   const text = String(retestLine || "");
@@ -250,10 +265,27 @@ function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
     numericField(fields, "liveBacklogRequests") ||
     numericField(fields, "liveBacklogReq") ||
     numericFromText(text, [/追实时请求\s*(\d+)/u]);
+  const localAvgMs =
+    numericField(fields, "localAvgMs") ||
+    numericField(fields, "avgGapMs") ||
+    numericFromText(text, [/(?:^|[·,，]\s*)平均间隔\s*(\d+)\s*ms/u]);
+  const localMaxMs =
+    numericField(fields, "localMaxMs") ||
+    numericField(fields, "maxGapMs") ||
+    numericField(fields, "arrivalMs") ||
+    numericFromText(text, [/(?:^|[·,，]\s*)最大间隔\s*(\d+)\s*ms/u]);
+  const remoteMediaAvgMs =
+    numericField(fields, "remoteMediaAvgMs") ||
+    numericField(fields, "remoteAvgMs") ||
+    numericFromText(text, [/远端媒体平均间隔\s*(\d+)\s*ms/u]);
+  const remoteMediaMaxMs =
+    numericField(fields, "remoteMediaMaxMs") ||
+    numericField(fields, "remoteMaxMs") ||
+    numericFromText(text, [/远端媒体最大间隔\s*(\d+)\s*ms/u]);
   const maxGapMs =
     numericField(fields, "maxGapMs") ||
     numericField(fields, "arrivalMs") ||
-    numericFromText(text, [/最大间隔\s*(\d+)\s*ms/u]);
+    localMaxMs;
   const visibilityRecovery =
     numericField(fields, "visibilityRecovery") ||
     numericField(fields, "visibilityRecoveryCount") ||
@@ -269,13 +301,27 @@ function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
     maxGapMs >= 1000 ||
     /backlog|queue|wait|recovery/i.test(reason);
   const status = blocked ? "blocked" : "stable-candidate";
-  const next = blocked ? "investigate-windows-arrival-backlog" : "continue-long-run-observation";
+  const arrivalSource = classifyW8ArrivalSource({
+    blocked,
+    localMaxMs,
+    remoteMediaMaxMs,
+    queueMs,
+    staleDrops,
+    liveBacklogRequests,
+    reason,
+  });
+  const next = blocked && arrivalSource === "remote-media-gap" ? "inspect-remote-media-cadence" : blocked ? "investigate-windows-arrival-backlog" : "continue-long-run-observation";
   return [
     `W8ArrivalBacklog=status=${status}`,
     `queueMs=${queueMs}`,
     `staleDrops=${staleDrops}`,
     `liveBacklogRequests=${liveBacklogRequests}`,
     `maxGapMs=${maxGapMs}`,
+    `localAvgMs=${localAvgMs}`,
+    `localMaxMs=${localMaxMs}`,
+    `remoteMediaAvgMs=${remoteMediaAvgMs}`,
+    `remoteMediaMaxMs=${remoteMediaMaxMs}`,
+    `arrivalSource=${arrivalSource}`,
     `visibilityRecovery=${visibilityRecovery}`,
     `reason=${reason || "unknown"}`,
     `next=${next}`,
