@@ -658,6 +658,15 @@ const state = {
   w8NativeVideoNativeSurfaceCopyBytes: 0,
   w8NativeVideoNativeSurfacePresentedFrames: 0,
   w8NativeVideoNativeSurfaceLastFrameId: null,
+  w8NativeVideoNativePresentReady: false,
+  w8NativeVideoNativePresentMode: "",
+  w8NativeVideoNativePresentStatus: "",
+  w8NativeVideoNativePresentFormat: "",
+  w8NativeVideoNativePresentWidth: 0,
+  w8NativeVideoNativePresentHeight: 0,
+  w8NativeVideoNativePresentFrames: 0,
+  w8NativeVideoNativePresentLastFrameId: null,
+  w8NativeVideoNativePresentReason: "",
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
@@ -829,6 +838,15 @@ const state = {
     w8NativeVideoNativeSurfaceCopyBytes: 0,
     w8NativeVideoNativeSurfacePresentedFrames: 0,
     w8NativeVideoNativeSurfaceLastFrameId: null,
+    w8NativeVideoNativePresentReady: false,
+    w8NativeVideoNativePresentMode: "",
+    w8NativeVideoNativePresentStatus: "",
+    w8NativeVideoNativePresentFormat: "",
+    w8NativeVideoNativePresentWidth: 0,
+    w8NativeVideoNativePresentHeight: 0,
+    w8NativeVideoNativePresentFrames: 0,
+    w8NativeVideoNativePresentLastFrameId: null,
+    w8NativeVideoNativePresentReason: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1105,6 +1123,15 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoNativeSurfaceCopyBytes: 0,
     w8NativeVideoNativeSurfacePresentedFrames: 0,
     w8NativeVideoNativeSurfaceLastFrameId: null,
+    w8NativeVideoNativePresentReady: false,
+    w8NativeVideoNativePresentMode: "",
+    w8NativeVideoNativePresentStatus: "",
+    w8NativeVideoNativePresentFormat: "",
+    w8NativeVideoNativePresentWidth: 0,
+    w8NativeVideoNativePresentHeight: 0,
+    w8NativeVideoNativePresentFrames: 0,
+    w8NativeVideoNativePresentLastFrameId: null,
+    w8NativeVideoNativePresentReason: "",
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
@@ -1515,6 +1542,14 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeSurfacePresentedFrames = Number(
     diagnostics.w8NativeVideoNativeSurfacePresentedFrames,
   );
+  const nativePresentReady = Boolean(diagnostics.w8NativeVideoNativePresentReady);
+  const nativePresentMode = String(diagnostics.w8NativeVideoNativePresentMode || "").trim();
+  const nativePresentStatus = String(diagnostics.w8NativeVideoNativePresentStatus || "").trim();
+  const nativePresentFormat = String(diagnostics.w8NativeVideoNativePresentFormat || "").trim();
+  const nativePresentWidth = Number(diagnostics.w8NativeVideoNativePresentWidth);
+  const nativePresentHeight = Number(diagnostics.w8NativeVideoNativePresentHeight);
+  const nativePresentFrames = Number(diagnostics.w8NativeVideoNativePresentFrames);
+  const nativePresentReason = String(diagnostics.w8NativeVideoNativePresentReason || "").trim();
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
@@ -1655,6 +1690,26 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeSurfaceReason && !nativeSurfaceReady) {
     parts.push(`原生表面原因 ${nativeSurfaceReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativePresentMode || nativePresentReady) {
+    parts.push(`原生呈现目标 ${nativePresentReady ? "ready" : "blocked"}`);
+  }
+  if (nativePresentFormat) {
+    const presentSize =
+      Number.isFinite(nativePresentWidth) && nativePresentWidth > 0 &&
+      Number.isFinite(nativePresentHeight) && nativePresentHeight > 0
+        ? `${Math.round(nativePresentWidth)}x${Math.round(nativePresentHeight)} `
+        : "";
+    parts.push(`原生呈现目标 D3D11 ${presentSize}${nativePresentFormat}`.trim());
+  }
+  if (nativePresentStatus) {
+    parts.push(`原生呈现状态 ${nativePresentStatus}`);
+  }
+  if (Number.isFinite(nativePresentFrames) && nativePresentFrames > 0) {
+    parts.push(`原生呈现帧 ${Math.round(nativePresentFrames)}`);
+  }
+  if (nativePresentReason && !nativePresentReady) {
+    parts.push(`原生呈现原因 ${nativePresentReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -6069,6 +6124,45 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.w8NativeVideoNativeSurfacePresentedFrames ||
         state.hostDiagnostics?.w8NativeVideoNativeSurfacePresentedFrames,
     ) || 0;
+  const nativePresentReady = Boolean(
+    state.w8NativeVideoNativePresentReady ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentReady,
+  );
+  const nativePresentMode = String(
+    state.w8NativeVideoNativePresentMode ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentMode ||
+      "",
+  ).trim();
+  const nativePresentStatus = String(
+    state.w8NativeVideoNativePresentStatus ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentStatus ||
+      "",
+  ).trim();
+  const nativePresentFormat = String(
+    state.w8NativeVideoNativePresentFormat ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentFormat ||
+      "",
+  ).trim();
+  const nativePresentWidth =
+    Number(
+      state.w8NativeVideoNativePresentWidth ||
+        state.hostDiagnostics?.w8NativeVideoNativePresentWidth,
+    ) || 0;
+  const nativePresentHeight =
+    Number(
+      state.w8NativeVideoNativePresentHeight ||
+        state.hostDiagnostics?.w8NativeVideoNativePresentHeight,
+    ) || 0;
+  const nativePresentFrames =
+    Number(
+      state.w8NativeVideoNativePresentFrames ||
+        state.hostDiagnostics?.w8NativeVideoNativePresentFrames,
+    ) || 0;
+  const nativePresentReason = String(
+    state.w8NativeVideoNativePresentReason ||
+      state.hostDiagnostics?.w8NativeVideoNativePresentReason ||
+      "",
+  ).trim();
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
@@ -6182,6 +6276,23 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   if (nativeSurfaceReason && !nativeSurfaceReady) {
     parts.push(`原生表面原因 ${nativeSurfaceReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativePresentMode || nativePresentReady) {
+    parts.push(`原生呈现目标 ${nativePresentReady ? "ready" : "blocked"}`);
+  }
+  if (nativePresentFormat) {
+    const presentSize =
+      nativePresentWidth > 0 && nativePresentHeight > 0
+        ? `${Math.round(nativePresentWidth)}x${Math.round(nativePresentHeight)} `
+        : "";
+    parts.push(`原生呈现目标 D3D11 ${presentSize}${nativePresentFormat}`.trim());
+  }
+  if (nativePresentStatus) parts.push(`原生呈现状态 ${nativePresentStatus}`);
+  if (nativePresentFrames > 0) {
+    parts.push(`原生呈现帧 ${Math.round(nativePresentFrames)}`);
+  }
+  if (nativePresentReason && !nativePresentReady) {
+    parts.push(`原生呈现原因 ${nativePresentReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -7649,6 +7760,15 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoNativeSurfaceCopyBytes = 0;
   state.w8NativeVideoNativeSurfacePresentedFrames = 0;
   state.w8NativeVideoNativeSurfaceLastFrameId = null;
+  state.w8NativeVideoNativePresentReady = false;
+  state.w8NativeVideoNativePresentMode = "";
+  state.w8NativeVideoNativePresentStatus = "";
+  state.w8NativeVideoNativePresentFormat = "";
+  state.w8NativeVideoNativePresentWidth = 0;
+  state.w8NativeVideoNativePresentHeight = 0;
+  state.w8NativeVideoNativePresentFrames = 0;
+  state.w8NativeVideoNativePresentLastFrameId = null;
+  state.w8NativeVideoNativePresentReason = "";
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
@@ -7779,6 +7899,30 @@ function updateW8NativeVideoDiagnostics({
       decoderSession.nativeSurfaceLastFrameId === undefined
         ? null
         : Math.max(0, Math.trunc(Number(decoderSession.nativeSurfaceLastFrameId) || 0));
+    state.w8NativeVideoNativePresentReady = decoderSession.nativePresentReady === true;
+    state.w8NativeVideoNativePresentMode = String(decoderSession.nativePresentMode || "").trim();
+    state.w8NativeVideoNativePresentStatus = String(decoderSession.nativePresentStatus || "").trim();
+    state.w8NativeVideoNativePresentFormat = String(decoderSession.nativePresentFormat || "").trim();
+    state.w8NativeVideoNativePresentWidth = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.nativePresentWidth) || 0),
+    );
+    state.w8NativeVideoNativePresentHeight = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.nativePresentHeight) || 0),
+    );
+    state.w8NativeVideoNativePresentFrames = Math.max(
+      0,
+      Math.trunc(Number(decoderSession.nativePresentFrames) || 0),
+    );
+    state.w8NativeVideoNativePresentLastFrameId =
+      decoderSession.nativePresentLastFrameId === null ||
+      decoderSession.nativePresentLastFrameId === undefined
+        ? null
+        : Math.max(0, Math.trunc(Number(decoderSession.nativePresentLastFrameId) || 0));
+    state.w8NativeVideoNativePresentReason = String(decoderSession.nativePresentReason || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 160);
   }
 
   updateHostDiagnostics({
@@ -7828,6 +7972,15 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoNativeSurfaceCopyBytes: state.w8NativeVideoNativeSurfaceCopyBytes,
     w8NativeVideoNativeSurfacePresentedFrames: state.w8NativeVideoNativeSurfacePresentedFrames,
     w8NativeVideoNativeSurfaceLastFrameId: state.w8NativeVideoNativeSurfaceLastFrameId,
+    w8NativeVideoNativePresentReady: state.w8NativeVideoNativePresentReady,
+    w8NativeVideoNativePresentMode: state.w8NativeVideoNativePresentMode,
+    w8NativeVideoNativePresentStatus: state.w8NativeVideoNativePresentStatus,
+    w8NativeVideoNativePresentFormat: state.w8NativeVideoNativePresentFormat,
+    w8NativeVideoNativePresentWidth: state.w8NativeVideoNativePresentWidth,
+    w8NativeVideoNativePresentHeight: state.w8NativeVideoNativePresentHeight,
+    w8NativeVideoNativePresentFrames: state.w8NativeVideoNativePresentFrames,
+    w8NativeVideoNativePresentLastFrameId: state.w8NativeVideoNativePresentLastFrameId,
+    w8NativeVideoNativePresentReason: state.w8NativeVideoNativePresentReason,
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,

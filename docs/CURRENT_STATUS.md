@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-21 W8 Windows 桌面控制端 native present target 预接线
+- Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 在创建 D3D11 latest-frame texture target 时，现在会同步创建 `1920x1080` BGRA8 native present texture target：`decoderSession` 新增 `nativePresentReady/nativePresentMode/nativePresentStatus/nativePresentFormat/nativePresentWidth/nativePresentHeight/nativePresentFrames/nativePresentLastFrameId/nativePresentReason`；Windows 控制端诊断/复制导出新增 `原生呈现目标 ready|blocked`、`原生呈现目标 D3D11 1920x1080 BGRA8`、`原生呈现状态 ...` 和 `原生呈现帧 ...`。BGRA8 输出会从 latest-frame texture `CopyResource` 到 present texture 并标记 `latest-frame-present-staged`；当前常见 NV12 输出会明确标记 `waiting-nv12-renderer`，表示 latest frame 已写入但仍需 NV12 shader/native renderer 才能接真实窗口 surface/swapchain。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-21 W8 Windows 桌面控制端 decoded sample -> D3D11 texture copy
 - Windows 主线继续只做 W8 视频侧，不碰 W9 音频。`lan-dual-w8-mf-decoder` worker 现在会在 `ProcessOutput` 产出 decoded `IMFSample` 后，把 sample 合并为 contiguous buffer，并用 D3D11 `UpdateSubresource` 写入 `1920x1080` latest-frame texture target；NV12 使用 `width` row pitch，BGRA8 使用 `width*4` row pitch。`decoderSession` 新增 `nativeSurfaceCopyStatus/nativeSurfaceCopyBytes/nativeSurfacePresentedFrames/nativeSurfaceLastFrameId`；Windows 控制端诊断/复制导出新增 `原生表面写入 ... bytes` 和 `原生表面呈现 ...`。本轮仍未把该 texture 接到真实窗口 surface/swapchain，也未替换 WebCodecs/canvas；下一步是 native renderer/window surface 呈现、stream-change、surface resize 和 device-lost 恢复。本轮不改 Mac、不改 WebSocket 协议、不认证、不请求密码、不发 input/inject。
 

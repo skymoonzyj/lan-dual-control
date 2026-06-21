@@ -15,8 +15,8 @@ use windows::Win32::Graphics::Direct3D::{
 #[cfg(windows)]
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
-    D3D11_BIND_DECODER, D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11_BIND_DECODER, D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::Common::{
@@ -193,6 +193,15 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub native_surface_copy_bytes: u64,
     pub native_surface_presented_frames: u64,
     pub native_surface_last_frame_id: Option<u64>,
+    pub native_present_ready: bool,
+    pub native_present_mode: String,
+    pub native_present_status: String,
+    pub native_present_format: String,
+    pub native_present_width: u32,
+    pub native_present_height: u32,
+    pub native_present_frames: u64,
+    pub native_present_last_frame_id: Option<u64>,
+    pub native_present_reason: String,
     pub reason: String,
 }
 
@@ -719,6 +728,11 @@ impl W8NativeVideoDecoderSessionState {
                         current.native_surface_presented_frames = surface_copy.presented_frames;
                         current.native_surface_last_frame_id = surface_copy.last_frame_id;
                         current.native_surface_reason = surface_copy.reason.clone();
+                        current.native_present_status = surface_copy.native_present_status.clone();
+                        current.native_present_frames = surface_copy.native_present_frames;
+                        current.native_present_last_frame_id =
+                            surface_copy.native_present_last_frame_id;
+                        current.native_present_reason = surface_copy.native_present_reason.clone();
                         if surface_copy.status == "latest-frame-presented" {
                             current.last_status = surface_copy.status.clone();
                             current.frame_handoff_status = "latest-frame-ready".to_string();
@@ -773,6 +787,15 @@ impl W8NativeVideoDecoderSessionState {
             native_surface_copy_bytes: 0,
             native_surface_presented_frames: 0,
             native_surface_last_frame_id: None,
+            native_present_ready: false,
+            native_present_mode: "none".to_string(),
+            native_present_status: "starting".to_string(),
+            native_present_format: "pending".to_string(),
+            native_present_width: 0,
+            native_present_height: 0,
+            native_present_frames: 0,
+            native_present_last_frame_id: None,
+            native_present_reason: "starting native present target preflight".to_string(),
             reason: "starting persistent decoder session".to_string(),
         };
 
@@ -801,6 +824,16 @@ impl W8NativeVideoDecoderSessionState {
                     started.native_surface_copy_bytes = surface_target.copy_bytes;
                     started.native_surface_presented_frames = surface_target.presented_frames;
                     started.native_surface_last_frame_id = surface_target.last_frame_id;
+                    started.native_present_ready = surface_target.native_present_ready;
+                    started.native_present_mode = surface_target.native_present_mode;
+                    started.native_present_status = surface_target.native_present_status;
+                    started.native_present_format = surface_target.native_present_format;
+                    started.native_present_width = surface_target.native_present_width;
+                    started.native_present_height = surface_target.native_present_height;
+                    started.native_present_frames = surface_target.native_present_frames;
+                    started.native_present_last_frame_id =
+                        surface_target.native_present_last_frame_id;
+                    started.native_present_reason = surface_target.native_present_reason;
                     started.reason = "ready; dedicated native decoder worker active".to_string();
                     self.worker = Some(worker);
                 }
@@ -810,6 +843,8 @@ impl W8NativeVideoDecoderSessionState {
                     started.frame_handoff_status = "start-blocked".to_string();
                     started.native_surface_status = "start-blocked".to_string();
                     started.native_surface_reason = format!("blocked: {error}");
+                    started.native_present_status = "start-blocked".to_string();
+                    started.native_present_reason = format!("blocked: {error}");
                     started.reason = format!("blocked: {error}");
                     self.worker = None;
                 }
@@ -822,6 +857,9 @@ impl W8NativeVideoDecoderSessionState {
             started.native_surface_status = "unsupported".to_string();
             started.native_surface_reason =
                 "blocked: Windows-only D3D11 native surface target".to_string();
+            started.native_present_status = "unsupported".to_string();
+            started.native_present_reason =
+                "blocked: Windows-only D3D11 native present target".to_string();
             started.reason =
                 "blocked: Windows-only Media Foundation persistent decoder session".to_string();
         }
@@ -877,6 +915,10 @@ struct W8NativeSurfaceCopyResult {
     bytes_copied: u64,
     presented_frames: u64,
     last_frame_id: Option<u64>,
+    native_present_status: String,
+    native_present_frames: u64,
+    native_present_last_frame_id: Option<u64>,
+    native_present_reason: String,
     reason: String,
 }
 
@@ -1006,6 +1048,7 @@ struct W8NativeSurfaceTargetRuntime {
     _device: ID3D11Device,
     _context: ID3D11DeviceContext,
     _texture: ID3D11Texture2D,
+    _present_texture: ID3D11Texture2D,
     summary: W8NativeSurfaceTargetSummary,
 }
 
@@ -1023,6 +1066,15 @@ struct W8NativeSurfaceTargetSummary {
     copy_bytes: u64,
     presented_frames: u64,
     last_frame_id: Option<u64>,
+    native_present_ready: bool,
+    native_present_mode: String,
+    native_present_status: String,
+    native_present_format: String,
+    native_present_width: u32,
+    native_present_height: u32,
+    native_present_frames: u64,
+    native_present_last_frame_id: Option<u64>,
+    native_present_reason: String,
 }
 
 #[cfg(windows)]
@@ -1130,10 +1182,10 @@ pub fn get_w8_native_video_plan() -> W8NativeVideoPlan {
         video_queue_hard_max_ms: config.hard_max_queue_ms,
         max_frames: config.max_frames,
         next_native_steps: vec![
-            "promote preflight into a persistent Media Foundation H.264 decoder session"
+            "attach BGRA8 native present target to a real HWND swapchain or native renderer"
                 .to_string(),
-            "emit decoded frame count and output format diagnostics".to_string(),
-            "render decoded frames to a native surface with latest-frame policy".to_string(),
+            "add NV12 shader conversion path for native present".to_string(),
+            "handle stream-change, surface resize, and D3D11 device-lost rebuilds".to_string(),
         ],
     }
 }
@@ -1251,6 +1303,11 @@ unsafe fn create_d3d11_latest_frame_texture_target(
 ) -> Result<W8NativeSurfaceTargetRuntime, String> {
     let (device, context, selected) = create_d3d11_video_device()?;
     let (dxgi_format, surface_format) = dxgi_format_for_surface_output(output_subtype);
+    let latest_frame_bind_flags = if surface_format.eq_ignore_ascii_case("NV12") {
+        (D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE).0 as u32
+    } else {
+        (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE).0 as u32
+    };
     let desc = D3D11_TEXTURE2D_DESC {
         Width: DEFAULT_NATIVE_SURFACE_WIDTH,
         Height: DEFAULT_NATIVE_SURFACE_HEIGHT,
@@ -1262,7 +1319,7 @@ unsafe fn create_d3d11_latest_frame_texture_target(
             Quality: 0,
         },
         Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: (D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE).0 as u32,
+        BindFlags: latest_frame_bind_flags,
         CPUAccessFlags: 0,
         MiscFlags: 0,
     };
@@ -1272,11 +1329,33 @@ unsafe fn create_d3d11_latest_frame_texture_target(
         .map_err(|error| format!("CreateTexture2D latest-frame target failed: {error}"))?;
     let texture =
         texture.ok_or_else(|| "CreateTexture2D returned no latest-frame texture".to_string())?;
+    let present_desc = D3D11_TEXTURE2D_DESC {
+        Width: DEFAULT_NATIVE_SURFACE_WIDTH,
+        Height: DEFAULT_NATIVE_SURFACE_HEIGHT,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE).0 as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: 0,
+    };
+    let mut present_texture = None;
+    device
+        .CreateTexture2D(&present_desc, None, Some(&mut present_texture))
+        .map_err(|error| format!("CreateTexture2D BGRA8 present target failed: {error}"))?;
+    let present_texture = present_texture
+        .ok_or_else(|| "CreateTexture2D returned no BGRA8 present texture".to_string())?;
 
     Ok(W8NativeSurfaceTargetRuntime {
         _device: device,
         _context: context,
         _texture: texture,
+        _present_texture: present_texture,
         summary: W8NativeSurfaceTargetSummary {
             ready: true,
             mode: "d3d11-latest-frame-texture-target".to_string(),
@@ -1292,6 +1371,18 @@ unsafe fn create_d3d11_latest_frame_texture_target(
             copy_bytes: 0,
             presented_frames: 0,
             last_frame_id: None,
+            native_present_ready: true,
+            native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
+            native_present_status: "waiting-latest-frame".to_string(),
+            native_present_format: "BGRA8".to_string(),
+            native_present_width: DEFAULT_NATIVE_SURFACE_WIDTH,
+            native_present_height: DEFAULT_NATIVE_SURFACE_HEIGHT,
+            native_present_frames: 0,
+            native_present_last_frame_id: None,
+            native_present_reason: format!(
+                "ready; D3D11 {} BGRA8 present texture target created; waiting for renderer/swapchain",
+                format_d3d_feature_level(selected)
+            ),
         },
     })
 }
@@ -1342,6 +1433,10 @@ unsafe fn copy_decoded_sample_to_native_surface(
         expected_bytes,
     );
     target._context.Flush();
+    if let Err(error) = stage_latest_frame_for_native_present(target, frame_id) {
+        target.summary.native_present_status = "present-stage-blocked".to_string();
+        target.summary.native_present_reason = format!("blocked: {error}");
+    }
 
     let presented_frames = target.summary.presented_frames.saturating_add(1);
     target.summary.status = "latest-frame-presented".to_string();
@@ -1359,8 +1454,49 @@ unsafe fn copy_decoded_sample_to_native_surface(
         bytes_copied: target.summary.copy_bytes,
         presented_frames,
         last_frame_id: target.summary.last_frame_id,
+        native_present_status: target.summary.native_present_status.clone(),
+        native_present_frames: target.summary.native_present_frames,
+        native_present_last_frame_id: target.summary.native_present_last_frame_id,
+        native_present_reason: target.summary.native_present_reason.clone(),
         reason: target.summary.reason.clone(),
     })
+}
+
+#[cfg(windows)]
+unsafe fn stage_latest_frame_for_native_present(
+    target: &mut W8NativeSurfaceTargetRuntime,
+    frame_id: u64,
+) -> Result<(), String> {
+    if !target.summary.format.eq_ignore_ascii_case("BGRA8") {
+        target.summary.native_present_status = "waiting-nv12-renderer".to_string();
+        target.summary.native_present_reason = format!(
+            "ready; latest {} frame is staged; waiting for NV12 shader/native renderer",
+            target.summary.format
+        );
+        return Ok(());
+    }
+
+    let latest_resource: ID3D11Resource = target
+        ._texture
+        .cast()
+        .map_err(|error| format!("latest-frame texture cast to resource failed: {error}"))?;
+    let present_resource: ID3D11Resource = target
+        ._present_texture
+        .cast()
+        .map_err(|error| format!("present texture cast to resource failed: {error}"))?;
+    target
+        ._context
+        .CopyResource(&present_resource, &latest_resource);
+    target._context.Flush();
+
+    let present_frames = target.summary.native_present_frames.saturating_add(1);
+    target.summary.native_present_status = "latest-frame-present-staged".to_string();
+    target.summary.native_present_frames = present_frames;
+    target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_reason = format!(
+        "ready; copied BGRA8 latest-frame texture into BGRA8 present texture target; frames={present_frames}"
+    );
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -2180,14 +2316,22 @@ mod tests {
     }
 
     #[test]
-    fn plan_advertises_media_foundation_d3d11_probe() {
+    fn plan_advertises_native_present_renderer_next_steps() {
         let plan = get_w8_native_video_plan();
 
         assert_eq!(plan.decoder_probe_mode, "media-foundation-h264-d3d11-probe");
         assert!(plan
             .next_native_steps
             .iter()
-            .any(|step| step.contains("persistent Media Foundation H.264 decoder session")));
+            .any(|step| step.contains("real HWND swapchain")));
+        assert!(plan
+            .next_native_steps
+            .iter()
+            .any(|step| step.contains("NV12 shader conversion")));
+        assert!(plan
+            .next_native_steps
+            .iter()
+            .any(|step| step.contains("device-lost")));
     }
 
     #[test]
@@ -2345,6 +2489,16 @@ mod tests {
         );
         assert_eq!(second_session.native_surface_width, 1920);
         assert_eq!(second_session.native_surface_height, 1080);
+        assert!(second_session.native_present_ready);
+        assert_eq!(
+            second_session.native_present_mode,
+            "d3d11-bgra8-present-texture-target"
+        );
+        assert_eq!(second_session.native_present_format, "BGRA8");
+        assert_eq!(second_session.native_present_width, 1920);
+        assert_eq!(second_session.native_present_height, 1080);
+        assert!(!second_session.native_present_status.trim().is_empty());
+        assert!(!second_session.native_present_reason.trim().is_empty());
         assert!(second_session.accepted_input_frames <= second_session.submitted_frames);
         assert!(second_session.decoded_frames <= second_session.accepted_input_frames);
         assert!(!second_session.output_subtype.trim().is_empty());
@@ -2375,11 +2529,59 @@ mod tests {
                 assert_eq!(target.summary.copy_bytes, expected_bytes as u64);
                 assert_eq!(target.summary.presented_frames, 1);
                 assert_eq!(target.summary.last_frame_id, Some(7));
+                assert!(target.summary.native_present_ready);
+                assert_eq!(
+                    target.summary.native_present_mode,
+                    "d3d11-bgra8-present-texture-target"
+                );
+                assert_eq!(target.summary.native_present_format, "BGRA8");
+                assert_eq!(target.summary.native_present_width, 1920);
+                assert_eq!(target.summary.native_present_height, 1080);
+                assert_eq!(
+                    target.summary.native_present_status,
+                    "waiting-nv12-renderer"
+                );
+                assert_eq!(target.summary.native_present_frames, 0);
+                assert_eq!(target.summary.native_present_last_frame_id, None);
                 Ok(())
             })();
             let shutdown = MFShutdown();
             assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
             result.expect("native surface copy should succeed");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_present_target_stages_bgra_latest_frame_texture() {
+        unsafe {
+            MFStartup(MF_VERSION, MFSTARTUP_LITE).expect("MFStartup should succeed");
+            let result = (|| -> Result<(), String> {
+                let mut target = create_d3d11_latest_frame_texture_target("ARGB32")?;
+                let expected_bytes =
+                    target.summary.width as usize * target.summary.height as usize * 4;
+                let frame_bytes = vec![0x44; expected_bytes];
+                let sample = create_mf_sample_from_bytes(&frame_bytes, 0, 16_667)?;
+
+                let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 9)?;
+
+                assert_eq!(copy.status, "latest-frame-presented");
+                assert!(target.summary.native_present_ready);
+                assert_eq!(
+                    target.summary.native_present_status,
+                    "latest-frame-present-staged"
+                );
+                assert_eq!(target.summary.native_present_frames, 1);
+                assert_eq!(target.summary.native_present_last_frame_id, Some(9));
+                assert!(target
+                    .summary
+                    .native_present_reason
+                    .contains("present texture target"));
+                Ok(())
+            })();
+            let shutdown = MFShutdown();
+            assert!(shutdown.is_ok(), "MFShutdown failed: {shutdown:?}");
+            result.expect("native present target staging should succeed");
         }
     }
 

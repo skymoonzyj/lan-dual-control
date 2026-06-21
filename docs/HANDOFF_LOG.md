@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-21 Windows Codex
+日期：2026-06-21 W8 Windows 桌面控制端 native present target 预接线
+开发端：Windows Codex
+本轮目标：继续只做视频侧，在 decoded sample -> D3D11 latest-frame texture copy 后，建立可被真实窗口/native renderer 消费的 BGRA8 present texture target，并把状态透到 Windows 控制端诊断。
+完成内容：`lan-dual-w8-mf-decoder` worker 创建 D3D11 latest-frame texture target 时同步创建 `1920x1080` BGRA8 present texture target；BGRA8 latest-frame 可 `CopyResource` 到 present texture 并标记 `latest-frame-present-staged`，NV12 latest-frame 标记 `waiting-nv12-renderer`，避免误称已经接入窗口。`decoderSession` 新增 `nativePresentReady/nativePresentMode/nativePresentStatus/nativePresentFormat/nativePresentWidth/nativePresentHeight/nativePresentFrames/nativePresentLastFrameId/nativePresentReason`。Windows 控制端诊断/复制导出新增 `原生呈现目标 ready|blocked`、`原生呈现目标 D3D11 1920x1080 BGRA8`、`原生呈现状态 ...` 和 `原生呈现帧 ...`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；apps/windows-desktop/README.md；apps/windows-client/README.md；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 Rust 缺 `native_present_*` 字段，前端专项失败于缺 `原生呈现目标 ...`；绿灯后验证通过：W8 Rust 专项 15 项通过、桌面端 `cargo test` 全量 6+25+doc 通过、`cargo check` 通过、H.264 页面专项通过、完整 diagnosticsOnly 通过、`node --check` 两项通过、`cargo fmt --check` 通过、`git diff --check` 通过、冲突扫描无命中。
+遗留问题：本轮仍没有真实 HWND swapchain/native renderer；NV12 是当前主输出，仍需 NV12 shader/native renderer 转换后才能真正替换 WebCodecs/canvas。
+下一步建议：继续 W8：接真实 HWND swapchain 或 native renderer，补 NV12 shader 转换、stream-change 后重选输出类型、surface resize 和 device lost 重建。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Mac 改代码；后续真实窗口呈现验收需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-21 Windows Codex
 日期：2026-06-21 W8 Windows 桌面控制端 decoded sample -> D3D11 texture copy
 开发端：Windows Codex
 本轮目标：继续只做视频侧，在 D3D11 latest-frame texture target 后，把 MF decoded sample 真实写入该 texture，并把 copy/present 状态透到 Windows 控制端诊断。
