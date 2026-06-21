@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8 Windows gate 旁路证据判读
+开发端：Windows Codex
+本轮目标：按通讯板最新 W8 验收口径，把 WebCodecs/canvas 旁路证据纳入 `W8NativeGate=`，避免原生主面 Present 成立但 Web 备用队列仍混入时直接进入 arrival/backlog。
+完成内容：`post-w2w3-retest-board` 生成 `W8NativeGate=` 时现在会输出 `canvasRole/webDecode/webBypass`。只有 `mainSurface=native-hwnd`、`presenting=yes`、`presentFrames/decoded>0`、`presentGap` 可接受、`errors=0`，并且 `canvasRole=diagnostic-fallback` 且 `webDecode=native-main-surface` 或 `webBypass>0` 时，gate 才给出 `arrival-backlog-next`。如果原生主面已 Present 但缺少旁路证据，则输出 `status=web-bypass-next next=verify-webcodecs-bypass`，并且不生成 `W8ArrivalBacklog=`。
+修改文件：scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；scripts/windows/test-run-winclient-retest-and-post.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `W8NativeGate=` 缺 `canvasRole/webDecode/webBypass`；实现后 `node scripts/windows/test-post-w2w3-retest-board.mjs` 转绿，并新增缺旁路字段反例确认不会生成 `W8ArrivalBacklog=`。
+遗留问题：本轮未跑带密码真实桌面长跑，不宣称真实卡顿已修；后续仍需现场看 `W8NativeGate/W8NativeVideo/W8ArrivalBacklog` 和真实体感。
+下一步建议：真实长跑后如果 gate 是 `web-bypass-next`，先确认 Windows client 最新构建和原生 Present 后 WebCodecs/canvas 旁路；只有 gate 到 `arrival-backlog-next` 后再继续看 arrivalSource、本机队列和远端媒体间隔。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 Windows arrival/backlog 间隔来源上板
 开发端：Windows Codex
 本轮目标：继续视频侧收口，让 `W8ArrivalBacklog=` 不只显示单个 `maxGapMs`，还能区分远端媒体节奏、本地到达间隔和 Windows 本机队列。

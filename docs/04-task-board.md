@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8 Windows gate 旁路证据判读：`W8NativeGate=` 现在输出 `canvasRole/webDecode/webBypass`，并且原生主面 Present 证据成立后仍要求 `canvasRole=diagnostic-fallback` 且 `webDecode=native-main-surface` 或 `webBypass>0`，才进入 `arrival-backlog-next`；缺旁路证据时输出 `status=web-bypass-next next=verify-webcodecs-bypass`，不生成 `W8ArrivalBacklog=`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。
 - [x] W8 Windows arrival/backlog 间隔来源上板：`W8ArrivalBacklog=` 现在输出 `localAvgMs/localMaxMs/remoteMediaAvgMs/remoteMediaMaxMs/arrivalSource`，可区分 `windows-arrival-gap`、`windows-queue-backlog`、`remote-media-gap`、`stable` 和 `unknown`。远端媒体最大间隔正常但本地最大间隔高时，next 仍指向 `investigate-windows-arrival-backlog`；远端媒体最大间隔本身异常时，next 会转为 `inspect-remote-media-cadence`。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。
 - [x] W8 Windows 原生主面旁路证据上板：`W8NativeVideo=` 现在在 `ui=html-shell mainSurface=... canvasRole=diagnostic-fallback` 后追加 `webDecode=<status>`、`webBypass=<n>`、`webBypassReason=<reason>` 和 `webBypassFrame=<id>`，并把摘要压缩上限放宽到 560，避免新增旁路字段截断 `streamChange/deviceLost/errors`。`post-w2w3-retest-board` 回归样例同步保留这些字段；下次真实长跑可直接判断 WebCodecs 是否已旁路为诊断备用。不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。
 - [x] W8 Windows 原生主面后 WebCodecs 旁路：当 `nativePresentReady=true`、`nativePresentFrames>0` 且 `nativePresentStatus` 包含 `presented` 时，Windows 控制端仍收 H.264 证据并推送 Rust 原生队列，但不再让该帧继续进入 WebCodecs/canvas 解码、本机队列、stale drop 或 live-backlog 路径；诊断新增 `native-main-surface`、`WebCodecs 旁路 原生主画面 <n>`。这只改 Windows client 视频侧和本地浏览器测试，不改协议、不改 Mac、不请求密码、不认证、不发 input/inject。

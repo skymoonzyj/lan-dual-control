@@ -188,12 +188,19 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
   const fields = parseSummaryFields(w8NativeVideoLine);
   const mainSurface = String(fields.mainSurface || "unknown").trim() || "unknown";
   const presenting = String(fields.presenting || "unknown").trim() || "unknown";
+  const canvasRole = String(fields.canvasRole || "unknown").trim() || "unknown";
+  const webDecode = String(fields.webDecode || "unknown").trim() || "unknown";
+  const webBypass = numericField(fields, "webBypass");
   const presentFrames = numericField(fields, "presentFrames");
   const decoded = numericField(fields, "decoded");
   const explicitPresentGap = fields.presentGap !== undefined ? numericField(fields, "presentGap") : null;
   const presentGap = explicitPresentGap ?? Math.max(0, decoded - presentFrames);
   const presentGapLimit = Math.max(2, Math.ceil(Math.max(decoded, presentFrames) * 0.02));
   const errors = numericField(fields, "errors");
+  const nativeMainSurface = mainSurface === "native-hwnd" && presenting === "yes" && presentFrames > 0 && decoded > 0;
+  const hasWebBypassEvidence =
+    canvasRole === "diagnostic-fallback" &&
+    (webBypass > 0 || webDecode === "native-main-surface");
   let status = "arrival-backlog-next";
   let next = "investigate-arrival-backlog";
 
@@ -212,12 +219,18 @@ function makeW8NativeGateSummary(w8NativeVideoLine) {
   } else if (presentGap > presentGapLimit) {
     status = "native-present-lag-next";
     next = "investigate-native-present";
+  } else if (nativeMainSurface && !hasWebBypassEvidence) {
+    status = "web-bypass-next";
+    next = "verify-webcodecs-bypass";
   }
 
   return [
     `W8NativeGate=status=${status}`,
     `mainSurface=${mainSurface}`,
     `presenting=${presenting}`,
+    `canvasRole=${canvasRole}`,
+    `webDecode=${webDecode}`,
+    `webBypass=${webBypass}`,
     `presentGap=${presentGap}`,
     `presentGapLimit=${presentGapLimit}`,
     `presentFrames=${presentFrames}`,

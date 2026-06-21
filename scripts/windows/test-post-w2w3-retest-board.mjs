@@ -112,6 +112,7 @@ function run(extraArgs, args, options = {}) {
 const macNalEvidence = "MacHostMedia=media=ok h264Key=3 sps=3 pps=3 idr=3 keyParam=3 h264Frames=300 h264Delta=297 firstKeyNal=7/8/5 firstNal=7/8/5 lastNal=1 lastKeyNal=7/8/5 keyGapFramesMax=60 keyGapMsMax=1000 keyGapFramesLast=58 keyGapMsLast=966 keyTailFrames=12 keyTailMs=200 firstKeyParam=yes lastKeyParam=yes keyParamMiss=0";
 const retestLine = "W2W3Retest=video=实收 63.9 FPS · 协商 60 Hz · 平均间隔 16 ms · 最大间隔 9100 ms · 远端媒体平均间隔 17 ms · 远端媒体最大间隔 21 ms · 追实时请求 42 次 · 本机队列 190 ms · 本地过期丢帧 125 · 可见恢复 2 次 · 原因 live-backlog-keyframe-request surface=none h264=status=rendering decoded=3722 skippedDelta=0 needsKeyframe=no queue=4 queueMs=190 staleDrops=125 reason=live-backlog-keyframe-request recv=3722 key=87 sps=87 pps=87 idr=87 lastNal=7/8/5, audio=队列 100 ms";
 const w8NativeLine = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback webDecode=native-main-surface webBypass=24 webBypassReason=native-main-surface-presenting webBypassFrame=188 status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 queueDrops=3722 queueDropScope=predecode queueReason=waiting-keyframe output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
+const w8NativeLineMissingBypass = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 
 function makeState(messages) {
   return {
@@ -235,6 +236,9 @@ async function checkDryRunDoesNotPost(args) {
     assertIncludes(payload.w8NativeVideoLine, "webBypassReason=native-main-surface-presenting", "dry-run W8 native video line");
     assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=arrival-backlog-next", "dry-run W8 native gate");
     assertIncludes(payload.w8NativeGateSummary, "mainSurface=native-hwnd", "dry-run W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "canvasRole=diagnostic-fallback", "dry-run W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "webDecode=native-main-surface", "dry-run W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "webBypass=24", "dry-run W8 native gate");
     assertIncludes(payload.w8NativeGateSummary, "next=investigate-arrival-backlog", "dry-run W8 native gate");
     assertIncludes(payload.w8ArrivalBacklogSummary, "W8ArrivalBacklog=status=blocked", "dry-run W8 arrival backlog");
     assertIncludes(payload.w8ArrivalBacklogSummary, "queueMs=190", "dry-run W8 arrival backlog");
@@ -251,6 +255,24 @@ async function checkDryRunDoesNotPost(args) {
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "dry-run");
     console.log("[OK] W2/W3 retest board-post helper dry-run is no-post and secret-safe");
+  });
+}
+
+async function checkW8NativeGateRequiresWebBypassEvidence(args) {
+  await withFakeBoard(async (board) => {
+    const result = await run(["--server", board.url, "--text", `${retestLine}\n${w8NativeLineMissingBypass}\n`, "--json"], args);
+    assert(result.exitCode === 0, `missing-bypass dry-run JSON failed\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "missing-bypass dry-run JSON");
+    assert(payload.ok === true, "missing-bypass dry-run should be ok");
+    assertIncludes(payload.w8NativeGateSummary, "W8NativeGate=status=web-bypass-next", "missing-bypass W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "mainSurface=native-hwnd", "missing-bypass W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "canvasRole=diagnostic-fallback", "missing-bypass W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "webBypass=0", "missing-bypass W8 native gate");
+    assertIncludes(payload.w8NativeGateSummary, "next=verify-webcodecs-bypass", "missing-bypass W8 native gate");
+    assert(payload.w8ArrivalBacklogSummary === "", `missing-bypass should not emit arrival backlog, got ${payload.w8ArrivalBacklogSummary}`);
+    assert(board.messages.length === 0, `missing-bypass dry-run should not post messages, got ${board.messages.length}`);
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "missing-bypass dry-run");
+    console.log("[OK] W8 native gate requires WebCodecs bypass evidence before arrival/backlog");
   });
 }
 
@@ -319,6 +341,8 @@ async function checkSendRetestAndDiagnosis(args) {
     assertIncludes(board.messages[1].text, "webBypass=24", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "webBypassReason=native-main-surface-presenting", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "W8NativeGate=status=arrival-backlog-next", "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "webDecode=native-main-surface", "posted W8 native video message");
+    assertIncludes(board.messages[1].text, "webBypass=24", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "next=investigate-arrival-backlog", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "W8ArrivalBacklog=status=blocked", "posted W8 native video message");
     assertIncludes(board.messages[1].text, "liveBacklogRequests=42", "posted W8 native video message");
@@ -376,6 +400,7 @@ async function main() {
   const args = parseArgs(process.argv);
   await checkHelp(args);
   await checkDryRunDoesNotPost(args);
+  await checkW8NativeGateRequiresWebBypassEvidence(args);
   await checkStdinDryRunDoesNotPost(args);
   await checkAcceptsFullRetestLogWithSafeInputMentions(args);
   await checkSendRetestAndDiagnosis(args);
