@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-23 Windows Codex
+日期：2026-06-23 W14 用户可见冻结可见层修复
+开发端：Windows Codex
+本轮目标：按通讯板 `W14-16:45-USER-VISIBLE-FAIL`，只做视频侧修改，处理“内部 present 计数增长但用户肉眼仍看到首帧冻结”的 Web fallback 可见层边界；不改 Mac、不改协议/认证、不请求密码、不发 input/inject。
+完成内容：W14 native receiver snapshot 显示原生 present 后，Windows client 会主动隐藏旧 `remoteFrameImage` 和 `remoteVideoCanvas`、清掉旧图片 `src`，避免旧 Web 兜底层盖住原生接管状态。普通 W8 native-main-surface 旁路路径也复用同一清理逻辑。现场视频导出新增 `W14可见层` / `原生可见层`，并输出 `W14NativeVideo=... visibleLayer=html-fallback-cleared visibleLayerMode=w14-native-receiver visibleLayerFrame=<id>`。`post-w8-desktop-video-board` 的 W14 gate 现在缺 visibleLayer 时给 `visible-layer-next`，不再仅凭 `presenting=yes` 放行。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --boardSummary --clientPort 5301 --debugPort 9441 --timeoutMs 45000` 先失败，证据为 `imageVisible=true/canvasVisible=true` 且无 `visibleLayer`；实现后同命令通过并输出 `visibleLayer=html-fallback-cleared`。`node scripts/windows/test-post-w8-desktop-video-board.mjs --timeoutMs 45000` 通过，确认 W14 gate 消费 visibleLayer。
+遗留问题：这一步解决旧 HTML fallback 层遮挡/冻结风险，并让上板 gate 不再误判；若用户用新构建后仍肉眼冻结但 visibleLayer 已清理，下一步继续查专用 native child HWND、WebView 覆盖和 swapchain 是否真正绘制到用户看到的区域。
+下一步建议：重建 Windows 桌面端后让用户用 `Start-Windows-Desktop-Control-Mac.cmd` 复测，复制诊断并通过 `NativeVideoPost` 上板；优先看 `visibleLayer`、`presentAgeMs`、`freshness` 和用户肉眼是否一致。
+是否改了协议：否。
+是否需要另一端配合：Mac 端只需保持 host 在线供复测；不需要改协议。密码不上板，不发 input/inject。
+
+## 2026-06-23 Windows Codex
 日期：2026-06-23 W13 Windows arrival-gap QoS 运行时口径
 开发端：Windows Codex
 本轮目标：按通讯板最新 `W14-NEW-BUILD-TEST-RESULT`，视频侧不再追 first-frame freeze，而是补 W13 本地 backlog/arrival-age 的运行时判读和导出字段；不改 Mac、不改协议/认证、不请求密码、不发 input/inject。

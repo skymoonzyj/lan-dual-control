@@ -14,7 +14,7 @@ const defaults = {
 
 const w8NativeLine = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback webDecode=native-main-surface webBypass=24 webBypassReason=native-main-surface-presenting webBypassFrame=188 status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 mediaSession=native-main nativeAck=presented nativeClass=device-lost-recovered nativeNext=watch-arrival-qos queueDrops=3722 queueDropScope=predecode queueReason=waiting-keyframe submitted=190 decoderGap=2 accepted=190 pushed=192 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 const w8NativeLineMissingBypass = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
-const w14NativeLine = "W14NativeVideo=status=streaming transport=websocket-native mediaOwner=native-receiver videoFrames=5 h264Frames=5 pushed=5 accepted=4 dropped=1 queueMs=12 decoded=3 presentFrames=2 presenting=yes lastStatus=latest-frame-nv12-converted-presented lastReason=ready";
+const w14NativeLine = "W14NativeVideo=status=streaming transport=websocket-native mediaOwner=native-receiver videoFrames=5 h264Frames=5 pushed=5 accepted=4 dropped=1 queueMs=12 decoded=3 presentFrames=2 presenting=yes visibleLayer=html-fallback-cleared visibleLayerMode=w14-native-receiver visibleLayerFrame=1 lastStatus=latest-frame-nv12-converted-presented lastReason=ready";
 const retestLine = "W2W3Retest=video=实收 63.9 FPS · 协商 60 Hz · 平均间隔 16 ms · 最大间隔 9100 ms · 远端媒体平均间隔 17 ms · 远端媒体最大间隔 21 ms · 追实时请求 42 次 · 本机队列 190 ms · 本地过期丢帧 125 · 可见恢复 2 次 · 原因 live-backlog-keyframe-request surface=none h264=status=rendering decoded=3722 skippedDelta=0 needsKeyframe=no queue=4 queueMs=190 staleDrops=125 reason=live-backlog-keyframe-request recv=3722 key=87 sps=87 pps=87 idr=87 lastNal=7/8/5, audio=队列 100 ms";
 
 function helpRequested(argv) {
@@ -219,6 +219,7 @@ async function checkDryRunW14Only(args) {
     assertIncludes(payload.w14NativeGateSummary, "decoded=3", "W14 dry-run gate");
     assertIncludes(payload.w14NativeGateSummary, "presentFrames=2", "W14 dry-run gate");
     assertIncludes(payload.w14NativeGateSummary, "presenting=yes", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "visibleLayer=html-fallback-cleared", "W14 dry-run gate");
     assertIncludes(payload.w14NativeGateSummary, "next=continue-real-mac-long-run", "W14 dry-run gate");
     assertIncludes(payload.boardSummary, "DesktopVideoPost=dry-run", "W14 dry-run board summary");
     assertIncludes(payload.boardSummary, "w14NativeVideo=present", "W14 dry-run board summary");

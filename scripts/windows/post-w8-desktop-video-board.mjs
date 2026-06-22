@@ -309,6 +309,7 @@ function makeW14NativeGateSummary(w14NativeVideoLine) {
   const decoded = numericField(fields, "decoded");
   const presentFrames = numericField(fields, "presentFrames");
   const presenting = compactSummaryToken(fields.presenting || "unknown", 20) || "unknown";
+  const visibleLayer = compactSummaryToken(fields.visibleLayer || "", 80);
   const lastStatus = compactSummaryToken(fields.lastStatus || "unknown", 80) || "unknown";
   const lastError = compactSummaryToken(fields.lastError || "", 80);
   let status = "presenting-ok";
@@ -329,6 +330,9 @@ function makeW14NativeGateSummary(w14NativeVideoLine) {
   } else if (presenting !== "yes" || presentFrames <= 0) {
     status = "present-next";
     next = "inspect-w14-native-present";
+  } else if (!visibleLayer) {
+    status = "visible-layer-next";
+    next = "inspect-w14-visible-layer";
   }
 
   return [
@@ -345,6 +349,7 @@ function makeW14NativeGateSummary(w14NativeVideoLine) {
     `decoded=${decoded}`,
     `presentFrames=${presentFrames}`,
     `presenting=${presenting}`,
+    `visibleLayer=${visibleLayer || "missing"}`,
     `lastStatus=${lastStatus}`,
     ...(lastError ? [`lastError=${lastError}`] : []),
     `next=${next}`,

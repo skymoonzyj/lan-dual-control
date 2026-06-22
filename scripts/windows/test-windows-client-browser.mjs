@@ -823,11 +823,16 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   const presentingValue = value.w14NativeVideoPresenting ?? value.presenting;
   const presenting =
     typeof presentingValue === "boolean" ? (presentingValue ? "yes" : "no") : String(presentingValue ?? "").trim();
+  const visibleLayer = String(value.w14NativeVideoVisibleLayerStatus ?? value.visibleLayer ?? "").trim();
+  const visibleLayerMode = String(value.w14NativeVideoVisibleLayerMode ?? value.visibleLayerMode ?? "").trim();
+  const visibleLayerFrameId = nullableFrameId(
+    value.w14NativeVideoVisibleLayerLastFrameId ?? value.visibleLayerFrame,
+  );
   const lastStatus = String(value.w14NativeVideoLastStatus ?? value.lastStatus ?? "").trim();
   const lastReason = String(value.w14NativeVideoLastReason ?? value.lastReason ?? "").trim();
   const lastError = String(value.w14NativeVideoLastError ?? value.lastError ?? "").trim();
   const hasEvidence =
-    Boolean(receiverStatus || transport || mediaOwner || lastStatus || lastReason || lastError) ||
+    Boolean(receiverStatus || transport || mediaOwner || visibleLayer || lastStatus || lastReason || lastError) ||
     videoFrames > 0 ||
     h264Frames > 0 ||
     pushed > 0 ||
@@ -869,6 +874,9 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   if (presentFrameLag !== null) parts.push(`idLag=${presentFrameLag}`);
   if (presentAgeMs !== null && presentAgeMs > 0) parts.push(`presentAgeMs=${presentAgeMs}`);
   if (presenting) parts.push(`presenting=${compactBoardSummaryToken(presenting, 20)}`);
+  if (visibleLayer) parts.push(`visibleLayer=${compactBoardSummaryToken(visibleLayer, 80)}`);
+  if (visibleLayerMode) parts.push(`visibleLayerMode=${compactBoardSummaryToken(visibleLayerMode, 80)}`);
+  if (visibleLayerFrameId !== null) parts.push(`visibleLayerFrame=${visibleLayerFrameId}`);
   if (audioFrames > 0) parts.push(`audioFrames=${audioFrames}`);
   if (audioQueueMs > 0) parts.push(`audioQueueMs=${audioQueueMs}`);
   if (audioPlayed > 0) parts.push(`audioPlayed=${audioPlayed}`);
@@ -6121,6 +6129,9 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         w14NativeReceiverLastError: state.w14NativeReceiverLastError,
         connectionState: state.connectionState,
         connected: state.connected,
+        remoteFrameImageClassName: document.querySelector("#remoteFrameImage")?.className || "",
+        remoteFrameImageSrc: document.querySelector("#remoteFrameImage")?.getAttribute("src") || "",
+        remoteVideoCanvasClassName: document.querySelector("#remoteVideoCanvas")?.className || "",
       };
       const nativeCalls = [];
       const streamingSnapshot = {
@@ -6232,6 +6243,16 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         elements.bandwidthSelect.value = "50";
         elements.displaySelect.value = "main";
         elements.audioToggle.checked = true;
+        const image = document.querySelector("#remoteFrameImage");
+        const canvas = document.querySelector("#remoteVideoCanvas");
+        if (image) {
+          image.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+          image.dataset.frameId = "stale";
+          image.classList.add("is-visible");
+        }
+        if (canvas) {
+          canvas.classList.add("is-visible");
+        }
 
         await startW14NativeReceiverForConnection({
           host: "192.168.31.122",
@@ -6241,6 +6262,11 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         await refreshW14NativeReceiverSnapshot();
         const exportText = getVideoPerformanceExportStatus();
         const diagnosticsBeforeStop = { ...(state.hostDiagnostics || {}) };
+        const visibleLayerCheck = {
+          imageVisible: Boolean(image?.classList.contains("is-visible")),
+          imageSrc: image?.getAttribute("src") || "",
+          canvasVisible: Boolean(canvas?.classList.contains("is-visible")),
+        };
         await stopW14NativeReceiver();
 
         const startCalls = nativeCalls.filter((call) => call.command === "start_w14_native_receiver_session");
@@ -6281,6 +6307,9 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           diagnosticsBeforeStop.w14NativeVideoPresentFrameLag === 2 &&
           diagnosticsBeforeStop.w14NativeVideoPresentAgeMs === 4800 &&
           diagnosticsBeforeStop.w14NativeVideoLastStatus === "latest-frame-nv12-converted-presented" &&
+          diagnosticsBeforeStop.w14NativeVideoVisibleLayerStatus === "html-fallback-cleared" &&
+          diagnosticsBeforeStop.w14NativeVideoVisibleLayerMode === "w14-native-receiver" &&
+          diagnosticsBeforeStop.w14NativeVideoVisibleLayerLastFrameId === 1 &&
           diagnosticsBeforeStop.w14NativeAudioFrames === 8 &&
           diagnosticsBeforeStop.w14NativeAudioPlaybackRunning === true &&
           diagnosticsBeforeStop.w14NativeAudioPlaybackQueueMs === 20 &&
@@ -6306,6 +6335,12 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           diagnosticsBeforeStop.w8NativeVideoNativePresentLastFrameId === 1 &&
           diagnosticsBeforeStop.w8NativeVideoFreshnessStatus === "present-stale" &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentReady === true &&
+          diagnosticsBeforeStop.w8NativeVideoVisibleLayerStatus === "html-fallback-cleared" &&
+          diagnosticsBeforeStop.w8NativeVideoVisibleLayerMode === "w14-native-receiver" &&
+          diagnosticsBeforeStop.w8NativeVideoVisibleLayerLastFrameId === 1 &&
+          visibleLayerCheck.imageVisible === false &&
+          visibleLayerCheck.imageSrc === "" &&
+          visibleLayerCheck.canvasVisible === false &&
           exportText.includes("视频主画面 原生 MF/D3D11/HWND") &&
           exportText.includes("W14原生接收 streaming") &&
           exportText.includes("W14原生视频 pushed 5") &&
@@ -6319,6 +6354,9 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           exportText.includes("W14新鲜度 present-stale") &&
           exportText.includes("W14呈现滞后 2") &&
           exportText.includes("W14呈现年龄 4800 ms") &&
+          exportText.includes("W14可见层 html-fallback-cleared") &&
+          exportText.includes("原生可见层 html-fallback-cleared") &&
+          exportText.includes("visibleLayer=html-fallback-cleared") &&
           exportText.includes("W14原生音频 frames 8") &&
           exportText.includes("W14原生音频 queue 20 ms") &&
           exportText.includes("W14原生音频 played 480") &&
@@ -6349,6 +6387,7 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           stopCalls: stopCalls.length,
           request,
           diagnostics: diagnosticsBeforeStop,
+          visibleLayerCheck,
           exportText,
         };
       } finally {
@@ -6368,6 +6407,19 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         state.w14NativeReceiverLastError = original.w14NativeReceiverLastError;
         state.connectionState = original.connectionState;
         state.connected = original.connected;
+        const image = document.querySelector("#remoteFrameImage");
+        const canvas = document.querySelector("#remoteVideoCanvas");
+        if (image) {
+          image.className = original.remoteFrameImageClassName;
+          if (original.remoteFrameImageSrc) {
+            image.setAttribute("src", original.remoteFrameImageSrc);
+          } else {
+            image.removeAttribute("src");
+          }
+        }
+        if (canvas) {
+          canvas.className = original.remoteVideoCanvasClassName;
+        }
         if (original.tauriDescriptor) {
           Object.defineProperty(window, "__TAURI__", original.tauriDescriptor);
         } else {

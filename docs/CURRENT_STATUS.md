@@ -4,6 +4,10 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-23 W14 用户可见冻结：Web 旧层退场与 visibleLayer gate
+- 通讯板最新 `W14-16:45-USER-VISIBLE-FAIL` 说明内部 `source/latest/surface/present` 计数增长不能再当作用户可见 PASS；本轮 Windows 只改视频侧可见层边界。`apps/windows-client/app.js` 现在在 W14 native receiver snapshot 显示原生 present 后，会主动隐藏旧 `remoteFrameImage` 和 `remoteVideoCanvas`，清掉旧图片 `src`，避免用户继续看到首帧 Web 兜底层而误以为原生 present 卡死；普通 W8 native-main-surface 旁路路径也复用同一清理逻辑。现场视频导出新增 `W14可见层 html-fallback-cleared`、`原生可见层 html-fallback-cleared`，并输出机器可读 `W14NativeVideo=... visibleLayer=html-fallback-cleared visibleLayerMode=w14-native-receiver visibleLayerFrame=<id>`。
+- `post-w8-desktop-video-board` 的 `W14NativeGate` 现在会检查 `visibleLayer`；如果真实复制诊断只有 `presenting=yes/presentFrames>0` 但缺 `visibleLayer`，会给出 `status=visible-layer-next next=inspect-w14-visible-layer`，避免再次把后台 present 计数误判为用户可见通过。本轮不改 Mac、不改协议/认证、不请求或输出密码、不发 input/inject。
+
 ## 2026-06-23 W13 Windows arrival-gap QoS 运行时口径
 - Supervisor 最新新版日志显示 W14 视频帧链已从 first-frame-freeze 恢复为 `source/latest/surface/present` 全部新鲜、`freshness=present-fresh`、`present lag=0`，因此本轮 Windows 视频侧不再追认证、Mac H.264、首帧或 keyframe。剩余视频问题集中在 W13 本地 QoS/backlog/arrival-age：旧运行时只用 WebCodecs 队列年龄触发 W13，本地接收最大间隔约 9.2s 但远端媒体间隔正常、队列约 104ms 时会被判成 `stable-candidate`。现在 `getW13LocalVideoQosDecision` 同步消费本地接收 `localAvgMs/localMaxMs` 与远端媒体 `remoteMediaAvgMs/remoteMediaMaxMs`：当 `localMaxMs>=1000` 且远端媒体没有同等长 gap 时，`arrivalSource=windows-arrival-gap`，W13 进入 `local-backlog` 并请求 H.264/annexb 关键帧；如果队列未超过 180ms，不会误关 decoder，只保留当前解码队列。现场视频导出和页面解码诊断新增 `W13到达来源`、`W13本地平均/最大间隔`、`W13远端媒体平均/最大间隔`，用于下一次复测直接区分 Windows 本地调度/到达断点与远端媒体 cadence。
 - 同步补了通讯板提到的音频证据导出缺口：W14 native receiver 请求现在跟随用户音频开关发送 `wantAudio`，现场导出额外给出机器可读 `W14AudioOutput=outputCallbacks/callbackFrames/signalCallbacks/silentCallbacks/peakMilli/rmsMilli/device/sampleFormat/streamRunning`，方便下一次无声时区分源端静音、Windows 输出回调静音、设备或 stream 状态。该项只补诊断和请求开关，不改系统声音输出。

@@ -618,6 +618,9 @@ const state = {
   h264WebDecodeBypassedForNativeSurface: 0,
   h264WebDecodeBypassReason: "",
   h264WebDecodeBypassLastFrameId: "",
+  w14NativeVideoVisibleLayerStatus: "",
+  w14NativeVideoVisibleLayerMode: "",
+  w14NativeVideoVisibleLayerLastFrameId: null,
   w14NativeReceiverStarted: false,
   w14NativeReceiverPromise: null,
   w14NativeReceiverSnapshot: null,
@@ -693,6 +696,9 @@ const state = {
   w8NativeVideoNativePresentLastFrameId: null,
   w8NativeVideoNativePresentUpdatedAtMs: 0,
   w8NativeVideoNativePresentReason: "",
+  w8NativeVideoVisibleLayerStatus: "",
+  w8NativeVideoVisibleLayerMode: "",
+  w8NativeVideoVisibleLayerLastFrameId: null,
   w8NativeVideoFreshnessStatus: "",
   w8NativeVideoPresentFrameLag: 0,
   w8NativeVideoPresentAgeMs: 0,
@@ -847,6 +853,9 @@ const state = {
     h264WebDecodeBypassedForNativeSurface: 0,
     h264WebDecodeBypassReason: "",
     h264WebDecodeBypassLastFrameId: "",
+    w14NativeVideoVisibleLayerStatus: "",
+    w14NativeVideoVisibleLayerMode: "",
+    w14NativeVideoVisibleLayerLastFrameId: null,
     w14NativeReceiverRunning: false,
     w14NativeReceiverStatus: "",
     w14NativeReceiverTransport: "",
@@ -974,6 +983,9 @@ const state = {
     w8NativeVideoNativePresentLastFrameId: null,
     w8NativeVideoNativePresentUpdatedAtMs: 0,
     w8NativeVideoNativePresentReason: "",
+    w8NativeVideoVisibleLayerStatus: "",
+    w8NativeVideoVisibleLayerMode: "",
+    w8NativeVideoVisibleLayerLastFrameId: null,
     w8NativeVideoFreshnessStatus: "",
     w8NativeVideoPresentFrameLag: 0,
     w8NativeVideoPresentAgeMs: 0,
@@ -3448,6 +3460,58 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   }
 
   scheduleReconnect(reason);
+}
+
+function clearWebVideoFallbackForNativePresentation({
+  source = "w8-native-main-surface",
+  frameId = null,
+} = {}) {
+  const image = elements.remoteFrameImage;
+  const canvas = elements.remoteVideoCanvas;
+  const imageWasVisible = Boolean(image?.classList.contains("is-visible"));
+  const canvasWasVisible = Boolean(canvas?.classList.contains("is-visible"));
+
+  if (image) {
+    image.classList.remove("is-visible");
+    image.removeAttribute("src");
+    delete image.dataset.frameId;
+    delete image.dataset.frameCodec;
+  }
+  if (canvas) {
+    canvas.classList.remove("is-visible");
+  }
+  if (elements.remoteCanvas) {
+    elements.remoteCanvas.classList.add("has-video-frame");
+    elements.remoteCanvas.dataset.nativeVisibleLayerSource = source;
+  }
+
+  const previousStatus =
+    source === "w14-native-receiver"
+      ? state.w14NativeVideoVisibleLayerStatus || state.w8NativeVideoVisibleLayerStatus
+      : state.w8NativeVideoVisibleLayerStatus;
+  const status =
+    imageWasVisible || canvasWasVisible || previousStatus === "html-fallback-cleared"
+      ? "html-fallback-cleared"
+      : "html-fallback-clear";
+  const normalizedFrameId = normalizeFrameId(frameId);
+  const diagnostics = {
+    w8NativeVideoVisibleLayerStatus: status,
+    w8NativeVideoVisibleLayerMode: source,
+    w8NativeVideoVisibleLayerLastFrameId: normalizedFrameId,
+  };
+  if (source === "w14-native-receiver") {
+    diagnostics.w14NativeVideoVisibleLayerStatus = status;
+    diagnostics.w14NativeVideoVisibleLayerMode = source;
+    diagnostics.w14NativeVideoVisibleLayerLastFrameId = normalizedFrameId;
+  }
+  Object.assign(state, diagnostics);
+  return diagnostics;
+}
+
+function isW14NativeReceiverNativePresenting(diagnostics = {}) {
+  const presentFrames = Number(diagnostics.w14NativeVideoPresentFrames) || 0;
+  const presentStatus = String(diagnostics.w14NativeVideoLastStatus || "").toLowerCase();
+  return diagnostics.w14NativeVideoPresenting === true || (presentFrames > 0 && presentStatus.includes("presented"));
 }
 
 function scheduleReconnect(reason) {
@@ -6888,6 +6952,20 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       state.hostDiagnostics?.w8NativeVideoNativePresentReason ||
       "",
   ).trim();
+  const nativeVisibleLayerStatus = String(
+    state.w8NativeVideoVisibleLayerStatus ||
+      state.hostDiagnostics?.w8NativeVideoVisibleLayerStatus ||
+      "",
+  ).trim();
+  const nativeVisibleLayerMode = String(
+    state.w8NativeVideoVisibleLayerMode ||
+      state.hostDiagnostics?.w8NativeVideoVisibleLayerMode ||
+      "",
+  ).trim();
+  const nativeVisibleLayerLastFrameId = normalizeFrameId(
+    state.w8NativeVideoVisibleLayerLastFrameId ??
+      state.hostDiagnostics?.w8NativeVideoVisibleLayerLastFrameId,
+  );
   const nativeDecoderProgress =
     nativeDecoderSessionSubmittedFrames > 0 ||
     nativeDecoderSessionAcceptedInputFrames > 0 ||
@@ -7005,6 +7083,20 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const w14VideoLastError = String(
     state.hostDiagnostics?.w14NativeVideoLastError || state.hostDiagnostics?.w14NativeReceiverLastError || "",
   ).trim();
+  const w14VideoVisibleLayerStatus = String(
+    state.w14NativeVideoVisibleLayerStatus ||
+      state.hostDiagnostics?.w14NativeVideoVisibleLayerStatus ||
+      "",
+  ).trim();
+  const w14VideoVisibleLayerMode = String(
+    state.w14NativeVideoVisibleLayerMode ||
+      state.hostDiagnostics?.w14NativeVideoVisibleLayerMode ||
+      "",
+  ).trim();
+  const w14VideoVisibleLayerLastFrameId = normalizeFrameId(
+    state.w14NativeVideoVisibleLayerLastFrameId ??
+      state.hostDiagnostics?.w14NativeVideoVisibleLayerLastFrameId,
+  );
   const w14AudioFrames = Number(state.hostDiagnostics?.w14NativeAudioFrames) || 0;
   const w14AudioPlaybackRunning = Boolean(state.hostDiagnostics?.w14NativeAudioPlaybackRunning);
   const w14AudioQueueMs = Number(state.hostDiagnostics?.w14NativeAudioPlaybackQueueMs) || 0;
@@ -7098,6 +7190,35 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     if (w14VideoLastError) {
       parts.push(`W14原生错误 ${w14VideoLastError.replace(/\s+/g, " ").slice(0, 80)}`);
     }
+    if (w14VideoVisibleLayerStatus) {
+      parts.push(`W14可见层 ${w14VideoVisibleLayerStatus}`);
+      if (w14VideoVisibleLayerMode) parts.push(`W14可见层模式 ${w14VideoVisibleLayerMode}`);
+    }
+    const w14Token = (value, maxLength = 80) =>
+      String(value || "")
+        .replace(/\s+/g, "_")
+        .replace(/[;|,]+/g, "_")
+        .slice(0, maxLength);
+    const w14NativeVideoSummary = [
+      `status=${w14Token(w14ReceiverStatus || "unknown", 60)}`,
+      w14ReceiverTransport ? `transport=${w14Token(w14ReceiverTransport, 60)}` : "",
+      w14ReceiverMediaOwner ? `mediaOwner=${w14Token(w14ReceiverMediaOwner, 60)}` : "",
+      `videoFrames=${Math.round(Number(state.hostDiagnostics?.w14NativeVideoFrames) || 0)}`,
+      `h264Frames=${Math.round(Number(state.hostDiagnostics?.w14NativeVideoH264Frames) || 0)}`,
+      `pushed=${Math.round(w14VideoPushedFrames)}`,
+      `accepted=${Math.round(w14VideoAcceptedFrames)}`,
+      `dropped=${Math.round(w14VideoDroppedFrames)}`,
+      `queueMs=${Math.round(w14VideoQueueMs)}`,
+      `decoded=${Math.round(w14VideoDecodedFrames)}`,
+      `presentFrames=${Math.round(w14VideoPresentFrames)}`,
+      `presenting=${w14VideoPresenting ? "yes" : "no"}`,
+      w14VideoVisibleLayerStatus ? `visibleLayer=${w14Token(w14VideoVisibleLayerStatus, 80)}` : "",
+      w14VideoVisibleLayerMode ? `visibleLayerMode=${w14Token(w14VideoVisibleLayerMode, 80)}` : "",
+      w14VideoVisibleLayerLastFrameId !== null ? `visibleLayerFrame=${w14VideoVisibleLayerLastFrameId}` : "",
+      w14VideoLastStatus ? `lastStatus=${w14Token(w14VideoLastStatus, 80)}` : "",
+      w14VideoLastError ? `lastError=${w14Token(w14VideoLastError, 80)}` : "",
+    ].filter(Boolean);
+    parts.push(`W14NativeVideo=${w14NativeVideoSummary.join(" ")}`);
   }
   if (w14AudioFrames > 0 || w14AudioPlaybackRunning || w14AudioOutputCallbacks > 0) {
     parts.push(`W14原生音频 frames ${Math.round(w14AudioFrames)}`);
@@ -7266,6 +7387,13 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativePresentStatus) parts.push(`原生呈现状态 ${nativePresentStatus}`);
   if (nativePresentFrames > 0) {
     parts.push(`原生呈现帧 ${Math.round(nativePresentFrames)}`);
+  }
+  if (nativeVisibleLayerStatus) {
+    parts.push(`原生可见层 ${nativeVisibleLayerStatus}`);
+    if (nativeVisibleLayerMode) parts.push(`原生可见层模式 ${nativeVisibleLayerMode}`);
+    if (nativeVisibleLayerLastFrameId !== null) {
+      parts.push(`原生可见层帧 ${nativeVisibleLayerLastFrameId}`);
+    }
   }
   if (nativePresentReason && !nativePresentReady) {
     parts.push(`原生呈现原因 ${nativePresentReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -8836,6 +8964,9 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoPresentFrameLag = 0;
   state.w8NativeVideoPresentAgeMs = 0;
   state.w8NativeVideoNativePresentReason = "";
+  state.w8NativeVideoVisibleLayerStatus = "";
+  state.w8NativeVideoVisibleLayerMode = "";
+  state.w8NativeVideoVisibleLayerLastFrameId = null;
   state.w8NativeVideoWindowSwapchainProbePromise = null;
   state.w8NativeVideoWindowSwapchainReady = false;
   state.w8NativeVideoWindowSwapchainMode = "";
@@ -8872,6 +9003,9 @@ function resetW14NativeReceiverState() {
   state.w14NativeReceiverSnapshot = null;
   state.w14NativeReceiverSnapshotTimer = null;
   state.w14NativeReceiverLastError = "";
+  state.w14NativeVideoVisibleLayerStatus = "";
+  state.w14NativeVideoVisibleLayerMode = "";
+  state.w14NativeVideoVisibleLayerLastFrameId = null;
 }
 
 function getW8NativeVideoPort() {
@@ -9024,14 +9158,27 @@ function updateW14NativeReceiverDiagnostics({ snapshot = null, error = "" } = {}
     state.w14NativeReceiverLastError = "";
   }
   const diagnostics = normalizeW14NativeReceiverDiagnostics();
+  const visibleLayerDiagnostics = isW14NativeReceiverNativePresenting(diagnostics)
+    ? clearWebVideoFallbackForNativePresentation({
+        source: "w14-native-receiver",
+        frameId:
+          diagnostics.w14NativeVideoPresentFrameId ??
+          diagnostics.w14NativeVideoLatestFrameId ??
+          diagnostics.w14NativeVideoLastFrameId,
+      })
+    : {};
+  const mergedDiagnostics = {
+    ...diagnostics,
+    ...visibleLayerDiagnostics,
+  };
   if (snapshot) {
     state.w14NativeReceiverStarted =
-      diagnostics.w14NativeReceiverRunning &&
-      diagnostics.w14NativeReceiverStatus !== "stopped" &&
-      diagnostics.w14NativeReceiverStatus !== "error";
+      mergedDiagnostics.w14NativeReceiverRunning &&
+      mergedDiagnostics.w14NativeReceiverStatus !== "stopped" &&
+      mergedDiagnostics.w14NativeReceiverStatus !== "error";
   }
-  updateHostDiagnostics(diagnostics);
-  return diagnostics;
+  updateHostDiagnostics(mergedDiagnostics);
+  return mergedDiagnostics;
 }
 
 function scheduleW14NativeReceiverSnapshotPolling() {
@@ -13167,7 +13314,12 @@ function bypassWebH264DecodeForNativeMainSurface(frame = {}) {
     (Number(state.h264WebDecodeBypassedForNativeSurface) || 0) + 1;
   state.h264WebDecodeBypassReason = "native-main-surface-presenting";
   state.h264WebDecodeBypassLastFrameId = String(frame.frameId ?? state.videoFrames ?? "");
+  const visibleLayerDiagnostics = clearWebVideoFallbackForNativePresentation({
+    source: "w8-native-main-surface",
+    frameId: frame.frameId ?? state.videoFrames,
+  });
   updateH264DecoderDiagnostics();
+  updateHostDiagnostics(visibleLayerDiagnostics);
   elements.remoteStatusText.textContent =
     `原生主画面接管中，WebCodecs 已旁路 #${frame.frameId ?? state.videoFrames}`;
 }

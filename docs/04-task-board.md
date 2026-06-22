@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W14 用户可见冻结可见层修复：按通讯板 `W14-16:45-USER-VISIBLE-FAIL`，Windows 视频侧不再把内部 present 计数当 PASS。W14 native receiver snapshot 一旦显示原生 present，Windows client 会隐藏旧 `remoteFrameImage` 和 `remoteVideoCanvas`，并在现场导出和 `W14NativeVideo=` 输出 `visibleLayer=html-fallback-cleared`。`post-w8-desktop-video-board` 的 W14 gate 现在缺 `visibleLayer` 时输出 `visible-layer-next`。只改 Windows 视频显示/诊断/上板 gate，不改 Mac/协议/认证，不请求密码，不发 input/inject。
 - [x] W13 Windows arrival-gap QoS 运行时口径：新版 W14 视频日志已证明原生帧链 `present-fresh`，剩余问题转向 W13 本地 arrival/backlog。Windows client 的 W13 决策现在同时看本地接收间隔和远端媒体间隔：本地 `localMaxMs>=1000` 且远端媒体未同步长 gap 时，判为 `arrivalSource=windows-arrival-gap`，进入 `local-backlog` 并请求关键帧；队列低于 180ms 时不关闭 decoder。现场导出和页面解码诊断新增 W13 到达来源、本地平均/最大间隔、远端媒体平均/最大间隔。只改 Windows 视频侧，不改 Mac/协议/认证，不请求密码，不发 input/inject。
 - [x] W14 音频输出证据导出补口：通讯板指出新版日志仍没看到 output callback/RMS/device/streamRunning 字段；Windows client 现在在 W14 现场导出里输出 `W14AudioOutput=...`，并让 W14 native receiver 请求跟随用户音频开关。用于下一轮无声定位，不改系统声音输出，不改协议/认证，不请求密码，不发 input/inject。
 - [x] W14 first-frame freeze 视频 freshness 证据链：用户现场确认是首帧后冻结，Windows 侧补齐 W14->W8->MF/D3D11/HWND 每层帧 id 和更新时间。W8 decoder session 新增 latest/surface/present 的 frame id 与 updatedAt；W14 snapshot 转述 source/latest/surface/present、freshness、present lag 和 age；Windows client 现场导出和 `W8NativeVideo=` / `W14NativeVideo=` 输出 `ids/w8Ids/freshness/idLag/presentAgeMs`。该项只做视频侧定位证据，不改 Mac、不改协议/认证、不请求密码、不发 input/inject，也不宣称真实画面已经修好。
