@@ -882,6 +882,27 @@ const state = {
     w14NativeVideoLastStatus: "",
     w14NativeVideoLastReason: "",
     w14NativeVideoLastError: "",
+    w14NativeAudioFrames: 0,
+    w14NativeAudioLastCodec: "",
+    w14NativeAudioLastEncoding: "",
+    w14NativeAudioSampleRate: 0,
+    w14NativeAudioChannels: 0,
+    w14NativeAudioPlaybackRunning: false,
+    w14NativeAudioPlaybackQueueMs: 0,
+    w14NativeAudioPlaybackPushedFrames: 0,
+    w14NativeAudioPlaybackPlayedFrames: 0,
+    w14NativeAudioPlaybackTrimmedFrames: 0,
+    w14NativeAudioPlaybackUnderruns: 0,
+    w14NativeAudioPlaybackDroppedFrames: 0,
+    w14NativeAudioOutputCallbacks: 0,
+    w14NativeAudioOutputCallbackFrames: 0,
+    w14NativeAudioOutputSignalCallbacks: 0,
+    w14NativeAudioOutputSilentCallbacks: 0,
+    w14NativeAudioOutputPeakMilli: 0,
+    w14NativeAudioOutputRmsMilli: 0,
+    w14NativeAudioOutputDeviceName: "",
+    w14NativeAudioOutputSampleFormat: "",
+    w14NativeAudioOutputStreamRunning: false,
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -1242,6 +1263,27 @@ function getEmptyHostDiagnostics() {
     w14NativeVideoLastStatus: "",
     w14NativeVideoLastReason: "",
     w14NativeVideoLastError: "",
+    w14NativeAudioFrames: 0,
+    w14NativeAudioLastCodec: "",
+    w14NativeAudioLastEncoding: "",
+    w14NativeAudioSampleRate: 0,
+    w14NativeAudioChannels: 0,
+    w14NativeAudioPlaybackRunning: false,
+    w14NativeAudioPlaybackQueueMs: 0,
+    w14NativeAudioPlaybackPushedFrames: 0,
+    w14NativeAudioPlaybackPlayedFrames: 0,
+    w14NativeAudioPlaybackTrimmedFrames: 0,
+    w14NativeAudioPlaybackUnderruns: 0,
+    w14NativeAudioPlaybackDroppedFrames: 0,
+    w14NativeAudioOutputCallbacks: 0,
+    w14NativeAudioOutputCallbackFrames: 0,
+    w14NativeAudioOutputSignalCallbacks: 0,
+    w14NativeAudioOutputSilentCallbacks: 0,
+    w14NativeAudioOutputPeakMilli: 0,
+    w14NativeAudioOutputRmsMilli: 0,
+    w14NativeAudioOutputDeviceName: "",
+    w14NativeAudioOutputSampleFormat: "",
+    w14NativeAudioOutputStreamRunning: false,
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -6941,6 +6983,22 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const w14VideoLastError = String(
     state.hostDiagnostics?.w14NativeVideoLastError || state.hostDiagnostics?.w14NativeReceiverLastError || "",
   ).trim();
+  const w14AudioFrames = Number(state.hostDiagnostics?.w14NativeAudioFrames) || 0;
+  const w14AudioPlaybackRunning = Boolean(state.hostDiagnostics?.w14NativeAudioPlaybackRunning);
+  const w14AudioQueueMs = Number(state.hostDiagnostics?.w14NativeAudioPlaybackQueueMs) || 0;
+  const w14AudioPushedFrames = Number(state.hostDiagnostics?.w14NativeAudioPlaybackPushedFrames) || 0;
+  const w14AudioPlayedFrames = Number(state.hostDiagnostics?.w14NativeAudioPlaybackPlayedFrames) || 0;
+  const w14AudioTrimmedFrames = Number(state.hostDiagnostics?.w14NativeAudioPlaybackTrimmedFrames) || 0;
+  const w14AudioUnderruns = Number(state.hostDiagnostics?.w14NativeAudioPlaybackUnderruns) || 0;
+  const w14AudioDroppedFrames = Number(state.hostDiagnostics?.w14NativeAudioPlaybackDroppedFrames) || 0;
+  const w14AudioOutputCallbacks = Number(state.hostDiagnostics?.w14NativeAudioOutputCallbacks) || 0;
+  const w14AudioOutputSignalCallbacks = Number(state.hostDiagnostics?.w14NativeAudioOutputSignalCallbacks) || 0;
+  const w14AudioOutputSilentCallbacks = Number(state.hostDiagnostics?.w14NativeAudioOutputSilentCallbacks) || 0;
+  const w14AudioOutputPeakMilli = Number(state.hostDiagnostics?.w14NativeAudioOutputPeakMilli) || 0;
+  const w14AudioOutputRmsMilli = Number(state.hostDiagnostics?.w14NativeAudioOutputRmsMilli) || 0;
+  const w14AudioOutputDeviceName = String(state.hostDiagnostics?.w14NativeAudioOutputDeviceName || "").trim();
+  const w14AudioOutputSampleFormat = String(state.hostDiagnostics?.w14NativeAudioOutputSampleFormat || "").trim();
+  const w14AudioOutputStreamRunning = Boolean(state.hostDiagnostics?.w14NativeAudioOutputStreamRunning);
   const nativeClassifier = classifyW8NativeVideoSession(state);
   const w13LocalQosParts = formatW13LocalVideoQosDiagnostics(state.hostDiagnostics);
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
@@ -7015,6 +7073,30 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     if (w14VideoLastError) {
       parts.push(`W14原生错误 ${w14VideoLastError.replace(/\s+/g, " ").slice(0, 80)}`);
     }
+  }
+  if (w14AudioFrames > 0 || w14AudioPlaybackRunning || w14AudioOutputCallbacks > 0) {
+    parts.push(`W14原生音频 frames ${Math.round(w14AudioFrames)}`);
+    parts.push(`W14原生音频 ${w14AudioPlaybackRunning ? "running" : "stopped"}`);
+    if (w14AudioQueueMs > 0) parts.push(`W14原生音频 queue ${Math.round(w14AudioQueueMs)} ms`);
+    if (w14AudioPushedFrames > 0) parts.push(`W14原生音频 pushed ${Math.round(w14AudioPushedFrames)}`);
+    if (w14AudioPlayedFrames > 0) parts.push(`W14原生音频 played ${Math.round(w14AudioPlayedFrames)}`);
+    if (w14AudioTrimmedFrames > 0) parts.push(`W14原生音频 trimmed ${Math.round(w14AudioTrimmedFrames)}`);
+    if (w14AudioUnderruns > 0) parts.push(`W14原生音频 underruns ${Math.round(w14AudioUnderruns)}`);
+    if (w14AudioDroppedFrames > 0) parts.push(`W14原生音频 dropped ${Math.round(w14AudioDroppedFrames)}`);
+    if (w14AudioOutputCallbacks > 0) parts.push(`W14音频回调 ${Math.round(w14AudioOutputCallbacks)}`);
+    if (w14AudioOutputSignalCallbacks > 0) {
+      parts.push(`W14音频有声回调 ${Math.round(w14AudioOutputSignalCallbacks)}`);
+    }
+    if (w14AudioOutputSilentCallbacks > 0) {
+      parts.push(`W14音频静音回调 ${Math.round(w14AudioOutputSilentCallbacks)}`);
+    }
+    parts.push(`W14音频 peak ${Math.round(w14AudioOutputPeakMilli)}`);
+    parts.push(`W14音频 rms ${Math.round(w14AudioOutputRmsMilli)}`);
+    if (w14AudioOutputDeviceName) {
+      parts.push(`W14音频设备 ${w14AudioOutputDeviceName.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+    if (w14AudioOutputSampleFormat) parts.push(`W14音频格式 ${w14AudioOutputSampleFormat}`);
+    parts.push(`W14音频流 ${w14AudioOutputStreamRunning ? "running" : "stopped"}`);
   }
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
     parts.push("界面 HTML 壳");
@@ -8829,6 +8911,32 @@ function normalizeW14NativeReceiverDiagnostics(snapshot = state.w14NativeReceive
     w14NativeVideoLastStatus: nativeVideoLastStatus,
     w14NativeVideoLastReason: nativeVideoLastReason,
     w14NativeVideoLastError: stringValue("nativeVideoLastError"),
+    w14NativeAudioFrames: numberValue("audioFrames"),
+    w14NativeAudioLastCodec: stringValue("lastAudioCodec"),
+    w14NativeAudioLastEncoding: stringValue("lastAudioEncoding"),
+    w14NativeAudioSampleRate: numberValue("audioSampleRate"),
+    w14NativeAudioChannels: numberValue("audioChannels"),
+    w14NativeAudioPlaybackRunning: source.audioPlaybackRunning === true,
+    w14NativeAudioPlaybackQueueMs: numberValue("audioPlaybackQueueMs"),
+    w14NativeAudioPlaybackPushedFrames: numberValue("audioPlaybackPushedFrames"),
+    w14NativeAudioPlaybackPlayedFrames: numberValue("audioPlaybackPlayedFrames"),
+    w14NativeAudioPlaybackTrimmedFrames: numberValue("audioPlaybackTrimmedFrames"),
+    w14NativeAudioPlaybackUnderruns: numberValue("audioPlaybackUnderruns"),
+    w14NativeAudioPlaybackDroppedFrames: numberValue("audioPlaybackDroppedFrames"),
+    w14NativeAudioPlaybackSourceFrameMs: numberValue("audioPlaybackSourceFrameMs"),
+    w14NativeAudioPlaybackSourceFrameMaxMs: numberValue("audioPlaybackSourceFrameMaxMs"),
+    w14NativeAudioPlaybackSourceFrameCadenceMs: numberValue("audioPlaybackSourceFrameCadenceMs"),
+    w14NativeAudioPlaybackSourceCadenceFrames: numberValue("audioPlaybackSourceCadenceFrames"),
+    w14NativeAudioOutputCallbacks: numberValue("audioOutputCallbacks"),
+    w14NativeAudioOutputCallbackFrames: numberValue("audioOutputCallbackFrames"),
+    w14NativeAudioOutputSignalCallbacks: numberValue("audioOutputSignalCallbacks"),
+    w14NativeAudioOutputSilentCallbacks: numberValue("audioOutputSilentCallbacks"),
+    w14NativeAudioOutputPeakMilli: numberValue("audioOutputPeakMilli"),
+    w14NativeAudioOutputRmsMilli: numberValue("audioOutputRmsMilli"),
+    w14NativeAudioOutputDeviceName: stringValue("audioOutputDeviceName"),
+    w14NativeAudioOutputSampleFormat: stringValue("audioOutputSampleFormat"),
+    w14NativeAudioOutputStreamRunning: source.audioOutputStreamRunning === true,
+    w14NativeAudioPlaybackLastReason: stringValue("audioPlaybackLastReason"),
     w8NativeVideoFramesPushed: numberValue("nativeVideoPushedFrames"),
     w8NativeVideoQueueMs: numberValue("nativeVideoQueueMs"),
     w8NativeVideoDroppedFrames: numberValue("nativeVideoDroppedFrames"),

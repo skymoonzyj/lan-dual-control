@@ -44,6 +44,15 @@ pub struct NativeAudioPlaybackStats {
     pub source_frame_max_ms: u64,
     pub source_frame_cadence_ms: u64,
     pub source_cadence_frames: u64,
+    pub output_callbacks: u64,
+    pub output_callback_frames: u64,
+    pub output_signal_callbacks: u64,
+    pub output_silent_callbacks: u64,
+    pub output_peak_milli: u64,
+    pub output_rms_milli: u64,
+    pub output_device_name: String,
+    pub output_sample_format: String,
+    pub output_stream_running: bool,
     pub last_reason: &'static str,
 }
 
@@ -65,6 +74,9 @@ pub struct NativeAudioPlaybackBuffer {
 pub struct NativeAudioOutput {
     command_tx: Sender<NativeAudioWorkerCommand>,
     config: NativeAudioPlaybackConfig,
+    device_name: String,
+    sample_format: String,
+    stream_running: bool,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -82,13 +94,16 @@ impl NativeAudioOutput {
         let (command_tx, command_rx) = mpsc::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
         let worker = thread::spawn(move || run_audio_worker(config, command_rx, ready_tx));
-        let playback_config = ready_rx
+        let output_info = ready_rx
             .recv_timeout(Duration::from_secs(5))
             .map_err(|_| "W9 原生音频播放失败：输出线程启动超时".to_string())??;
 
         Ok(Self {
             command_tx,
-            config: playback_config,
+            config: output_info.config,
+            device_name: output_info.device_name,
+            sample_format: output_info.sample_format,
+            stream_running: true,
             worker: Some(worker),
         })
     }
@@ -111,9 +126,13 @@ impl NativeAudioOutput {
         self.command_tx
             .send(NativeAudioWorkerCommand::Stats(reply_tx))
             .map_err(|_| "W9 原生音频播放线程已停止".to_string())?;
-        reply_rx
+        let mut stats = reply_rx
             .recv_timeout(Duration::from_secs(2))
-            .map_err(|_| "W9 原生音频播放状态读取超时".to_string())?
+            .map_err(|_| "W9 原生音频播放状态读取超时".to_string())??;
+        stats.output_device_name = self.device_name.clone();
+        stats.output_sample_format = self.sample_format.clone();
+        stats.output_stream_running = self.stream_running;
+        Ok(stats)
     }
 
     pub fn config(&self) -> NativeAudioPlaybackConfig {
@@ -130,14 +149,20 @@ impl Drop for NativeAudioOutput {
     }
 }
 
+struct NativeAudioOutputInfo {
+    config: NativeAudioPlaybackConfig,
+    device_name: String,
+    sample_format: String,
+}
+
 fn run_audio_worker(
     config: NativeAudioPlaybackConfig,
     command_rx: Receiver<NativeAudioWorkerCommand>,
-    ready_tx: Sender<Result<NativeAudioPlaybackConfig, String>>,
+    ready_tx: Sender<Result<NativeAudioOutputInfo, String>>,
 ) {
     let result = create_audio_worker(config);
     let Ok((stream, buffer, playback_config)) = result else {
-        let _ = ready_tx.send(result.map(|(_, _, config)| config));
+        let _ = ready_tx.send(result.map(|(_, _, info)| info));
         return;
     };
     if let Err(error) = stream.play() {
@@ -172,7 +197,7 @@ fn create_audio_worker(
     (
         Stream,
         Arc<Mutex<NativeAudioPlaybackBuffer>>,
-        NativeAudioPlaybackConfig,
+        NativeAudioOutputInfo,
     ),
     String,
 > {
@@ -183,6 +208,10 @@ fn create_audio_worker(
     let supported_config = device
         .default_output_config()
         .map_err(|error| format!("W9 原生音频播放失败：读取默认输出格式失败：{error}"))?;
+    let device_name = device
+        .name()
+        .unwrap_or_else(|_| "unknown output device".to_string());
+    let sample_format = format!("{:?}", supported_config.sample_format());
     let stream_config = StreamConfig {
         channels: supported_config.channels(),
         sample_rate: supported_config.sample_rate(),
@@ -200,7 +229,15 @@ fn create_audio_worker(
         &stream_config,
         buffer.clone(),
     )?;
-    Ok((stream, buffer, playback_config))
+    Ok((
+        stream,
+        buffer,
+        NativeAudioOutputInfo {
+            config: playback_config,
+            device_name,
+            sample_format,
+        },
+    ))
 }
 
 fn build_output_stream(
@@ -302,6 +339,16 @@ impl NativeAudioPlaybackBuffer {
                 underflowed = true;
             }
         }
+        let (peak_milli, rms_milli) = output_signal_levels_milli(output);
+        self.stats.output_callbacks += 1;
+        self.stats.output_callback_frames += output_frames;
+        self.stats.output_peak_milli = peak_milli;
+        self.stats.output_rms_milli = rms_milli;
+        if peak_milli > 0 {
+            self.stats.output_signal_callbacks += 1;
+        } else {
+            self.stats.output_silent_callbacks += 1;
+        }
         self.stats.played_frames += output_frames;
         if underflowed {
             self.stats.underruns += 1;
@@ -369,6 +416,22 @@ fn frames_to_ms(frames: u64, sample_rate: u32) -> u64 {
 
 fn ms_to_frames(ms: u64, sample_rate: u32) -> u64 {
     (ms * u64::from(sample_rate)) / 1000
+}
+
+fn output_signal_levels_milli(output: &[f32]) -> (u64, u64) {
+    if output.is_empty() {
+        return (0, 0);
+    }
+
+    let mut peak = 0.0_f64;
+    let mut sum_squares = 0.0_f64;
+    for sample in output {
+        let value = f64::from(sample.abs().min(1.0));
+        peak = peak.max(value);
+        sum_squares += value * value;
+    }
+    let rms = (sum_squares / output.len() as f64).sqrt();
+    ((peak * 1000.0).round() as u64, (rms * 1000.0).round() as u64)
 }
 
 #[cfg(test)]
@@ -440,5 +503,39 @@ mod tests {
         assert_eq!(buffer.stats().played_frames, 960);
         assert_eq!(buffer.queue_ms(), 0);
         assert!(output[(240 * 2)..].iter().all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn output_callback_reports_non_silent_signal_level() {
+        let mut buffer = NativeAudioPlaybackBuffer::new(NativeAudioPlaybackConfig::default());
+        buffer.push_interleaved_f32(&stereo_frame(0.25, 960));
+
+        let mut output = vec![0.0_f32; 480 * 2];
+        buffer.fill_output(&mut output);
+        let stats = buffer.stats();
+
+        assert_eq!(stats.output_callbacks, 1);
+        assert_eq!(stats.output_callback_frames, 480);
+        assert_eq!(stats.output_signal_callbacks, 1);
+        assert_eq!(stats.output_silent_callbacks, 0);
+        assert!(stats.output_peak_milli >= 249);
+        assert!(stats.output_rms_milli > 0);
+    }
+
+    #[test]
+    fn output_callback_reports_silent_underflow_boundary() {
+        let mut buffer = NativeAudioPlaybackBuffer::new(NativeAudioPlaybackConfig::default());
+
+        let mut output = vec![1.0_f32; 480 * 2];
+        buffer.fill_output(&mut output);
+        let stats = buffer.stats();
+
+        assert_eq!(stats.underruns, 1);
+        assert_eq!(stats.output_callbacks, 1);
+        assert_eq!(stats.output_callback_frames, 480);
+        assert_eq!(stats.output_signal_callbacks, 0);
+        assert_eq!(stats.output_silent_callbacks, 1);
+        assert_eq!(stats.output_peak_milli, 0);
+        assert_eq!(stats.output_rms_milli, 0);
     }
 }

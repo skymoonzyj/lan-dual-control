@@ -796,6 +796,25 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   const presentAgeMs = nullableFrameId(
     value.w14NativeVideoPresentAgeMs ?? value.nativeVideoPresentAgeMs,
   );
+  const audioFrames = positiveInteger(value.w14NativeAudioFrames ?? value.audioFrames);
+  const audioQueueMs = positiveInteger(value.w14NativeAudioPlaybackQueueMs ?? value.audioPlaybackQueueMs);
+  const audioPlayed = positiveInteger(value.w14NativeAudioPlaybackPlayedFrames ?? value.audioPlaybackPlayedFrames);
+  const audioDropped = positiveInteger(value.w14NativeAudioPlaybackDroppedFrames ?? value.audioPlaybackDroppedFrames);
+  const audioCallbacks = positiveInteger(value.w14NativeAudioOutputCallbacks ?? value.audioOutputCallbacks);
+  const audioSignalCallbacks = positiveInteger(
+    value.w14NativeAudioOutputSignalCallbacks ?? value.audioOutputSignalCallbacks,
+  );
+  const audioSilentCallbacks = positiveInteger(
+    value.w14NativeAudioOutputSilentCallbacks ?? value.audioOutputSilentCallbacks,
+  );
+  const audioPeak = positiveInteger(value.w14NativeAudioOutputPeakMilli ?? value.audioOutputPeakMilli);
+  const audioRms = positiveInteger(value.w14NativeAudioOutputRmsMilli ?? value.audioOutputRmsMilli);
+  const audioDevice = String(value.w14NativeAudioOutputDeviceName ?? value.audioOutputDeviceName ?? "").trim();
+  const audioStreamRunningValue = value.w14NativeAudioOutputStreamRunning ?? value.audioOutputStreamRunning;
+  const audioStream =
+    typeof audioStreamRunningValue === "boolean"
+      ? (audioStreamRunningValue ? "running" : "stopped")
+      : String(audioStreamRunningValue ?? "").trim();
   const presentingValue = value.w14NativeVideoPresenting ?? value.presenting;
   const presenting =
     typeof presentingValue === "boolean" ? (presentingValue ? "yes" : "no") : String(presentingValue ?? "").trim();
@@ -814,7 +833,10 @@ function makeW14NativeVideoRetestSummary(value = {}) {
     sourceFrameId !== null ||
     latestFrameId !== null ||
     surfaceFrameId !== null ||
-    presentFrameId !== null;
+    presentFrameId !== null ||
+    audioFrames > 0 ||
+    audioCallbacks > 0 ||
+    Boolean(audioDevice || audioStream);
 
   if (!hasEvidence) return "";
 
@@ -841,6 +863,17 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   if (presentFrameLag !== null) parts.push(`idLag=${presentFrameLag}`);
   if (presentAgeMs !== null && presentAgeMs > 0) parts.push(`presentAgeMs=${presentAgeMs}`);
   if (presenting) parts.push(`presenting=${compactBoardSummaryToken(presenting, 20)}`);
+  if (audioFrames > 0) parts.push(`audioFrames=${audioFrames}`);
+  if (audioQueueMs > 0) parts.push(`audioQueueMs=${audioQueueMs}`);
+  if (audioPlayed > 0) parts.push(`audioPlayed=${audioPlayed}`);
+  if (audioDropped > 0) parts.push(`audioDropped=${audioDropped}`);
+  if (audioCallbacks > 0) parts.push(`audioCallbacks=${audioCallbacks}`);
+  if (audioSignalCallbacks > 0) parts.push(`audioSignalCallbacks=${audioSignalCallbacks}`);
+  if (audioSilentCallbacks > 0) parts.push(`audioSilentCallbacks=${audioSilentCallbacks}`);
+  if (audioPeak > 0) parts.push(`audioPeak=${audioPeak}`);
+  if (audioRms > 0) parts.push(`audioRms=${audioRms}`);
+  if (audioDevice) parts.push(`audioDevice=${compactBoardSummaryToken(audioDevice, 80)}`);
+  if (audioStream) parts.push(`audioStream=${compactBoardSummaryToken(audioStream, 40)}`);
   if (lastStatus) parts.push(`lastStatus=${compactBoardSummaryToken(lastStatus, 80)}`);
   if (lastReason) parts.push(`lastReason=${compactBoardSummaryToken(lastReason.replace(/[;,|]+/g, ""), 100)}`);
   if (lastError) parts.push(`lastError=${compactBoardSummaryToken(lastError, 100)}`);
@@ -1202,6 +1235,17 @@ function verifyW14NativeVideoRetestSummary() {
     w14NativeVideoLastStatus: "latest-frame-nv12-converted-presented",
     w14NativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
     w14NativeVideoLastError: "",
+    w14NativeAudioFrames: 8,
+    w14NativeAudioPlaybackQueueMs: 20,
+    w14NativeAudioPlaybackPlayedFrames: 480,
+    w14NativeAudioPlaybackDroppedFrames: 0,
+    w14NativeAudioOutputCallbacks: 2,
+    w14NativeAudioOutputSignalCallbacks: 1,
+    w14NativeAudioOutputSilentCallbacks: 1,
+    w14NativeAudioOutputPeakMilli: 250,
+    w14NativeAudioOutputRmsMilli: 125,
+    w14NativeAudioOutputDeviceName: "Default Output",
+    w14NativeAudioOutputStreamRunning: true,
   });
   const text = makeBoardSummary({
     status: "passed",
@@ -1225,6 +1269,16 @@ function verifyW14NativeVideoRetestSummary() {
     text.includes("queueMs=12") &&
     text.includes("decoded=3") &&
     text.includes("presentFrames=2") &&
+    text.includes("audioFrames=8") &&
+    text.includes("audioQueueMs=20") &&
+    text.includes("audioPlayed=480") &&
+    text.includes("audioCallbacks=2") &&
+    text.includes("audioSignalCallbacks=1") &&
+    text.includes("audioSilentCallbacks=1") &&
+    text.includes("audioPeak=250") &&
+    text.includes("audioRms=125") &&
+    text.includes("audioDevice=Default_Output") &&
+    text.includes("audioStream=running") &&
     text.includes("sourceId=5") &&
     text.includes("w8Ids=latest:3/surface:3/present:1") &&
     text.includes("freshness=present-stale") &&
@@ -6054,7 +6108,7 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         sessionActive: true,
         videoFrames: 5,
         h264Frames: 5,
-        audioFrames: 0,
+        audioFrames: 8,
         lastVideoFrameId: 5,
         lastVideoReceivedAtMs: 123000,
         lastVideoCodec: "h264",
@@ -6081,6 +6135,31 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         nativeVideoLastStatus: "latest-frame-nv12-converted-presented",
         nativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
         nativeVideoLastError: "",
+        lastAudioCodec: "pcm-f32le",
+        lastAudioEncoding: "pcm-f32le-base64",
+        audioSampleRate: 48000,
+        audioChannels: 2,
+        audioPlaybackRunning: true,
+        audioPlaybackQueueMs: 20,
+        audioPlaybackPushedFrames: 960,
+        audioPlaybackPlayedFrames: 480,
+        audioPlaybackTrimmedFrames: 0,
+        audioPlaybackUnderruns: 1,
+        audioPlaybackDroppedFrames: 0,
+        audioPlaybackSourceFrameMs: 20,
+        audioPlaybackSourceFrameMaxMs: 20,
+        audioPlaybackSourceFrameCadenceMs: 20,
+        audioPlaybackSourceCadenceFrames: 1,
+        audioOutputCallbacks: 2,
+        audioOutputCallbackFrames: 960,
+        audioOutputSignalCallbacks: 1,
+        audioOutputSilentCallbacks: 1,
+        audioOutputPeakMilli: 250,
+        audioOutputRmsMilli: 125,
+        audioOutputDeviceName: "Default Output",
+        audioOutputSampleFormat: "F32",
+        audioOutputStreamRunning: true,
+        audioPlaybackLastReason: "native-playback-drain",
         lastMessageType: "video_frame",
         lastError: "",
         startedAtMs: 1000,
@@ -6171,6 +6250,19 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           diagnosticsBeforeStop.w14NativeVideoPresentFrameLag === 2 &&
           diagnosticsBeforeStop.w14NativeVideoPresentAgeMs === 4800 &&
           diagnosticsBeforeStop.w14NativeVideoLastStatus === "latest-frame-nv12-converted-presented" &&
+          diagnosticsBeforeStop.w14NativeAudioFrames === 8 &&
+          diagnosticsBeforeStop.w14NativeAudioPlaybackRunning === true &&
+          diagnosticsBeforeStop.w14NativeAudioPlaybackQueueMs === 20 &&
+          diagnosticsBeforeStop.w14NativeAudioPlaybackPlayedFrames === 480 &&
+          diagnosticsBeforeStop.w14NativeAudioPlaybackDroppedFrames === 0 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputCallbacks === 2 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputSignalCallbacks === 1 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputSilentCallbacks === 1 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputPeakMilli === 250 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputRmsMilli === 125 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputDeviceName === "Default Output" &&
+          diagnosticsBeforeStop.w14NativeAudioOutputSampleFormat === "F32" &&
+          diagnosticsBeforeStop.w14NativeAudioOutputStreamRunning === true &&
           diagnosticsBeforeStop.w8NativeVideoDecoderSessionDecodedFrames === 3 &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentFrames === 2 &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentStatus ===
@@ -6193,6 +6285,16 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           exportText.includes("W14新鲜度 present-stale") &&
           exportText.includes("W14呈现滞后 2") &&
           exportText.includes("W14呈现年龄 4800 ms") &&
+          exportText.includes("W14原生音频 frames 8") &&
+          exportText.includes("W14原生音频 queue 20 ms") &&
+          exportText.includes("W14原生音频 played 480") &&
+          exportText.includes("W14音频回调 2") &&
+          exportText.includes("W14音频有声回调 1") &&
+          exportText.includes("W14音频静音回调 1") &&
+          exportText.includes("W14音频 peak 250") &&
+          exportText.includes("W14音频 rms 125") &&
+          exportText.includes("W14音频设备 Default Output") &&
+          exportText.includes("W14音频流 running") &&
           exportText.includes("原生帧链 latest:3/surface:3/present:1") &&
           exportText.includes("原生新鲜度 present-stale") &&
           exportText.includes("W14原生状态 latest-frame-nv12-converted-presented");

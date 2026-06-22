@@ -49,6 +49,15 @@ pub struct W9NativeAudioSnapshot {
     pub source_frame_max_ms: u64,
     pub source_frame_cadence_ms: u64,
     pub source_cadence_frames: u64,
+    pub output_callbacks: u64,
+    pub output_callback_frames: u64,
+    pub output_signal_callbacks: u64,
+    pub output_silent_callbacks: u64,
+    pub output_peak_milli: u64,
+    pub output_rms_milli: u64,
+    pub output_device_name: String,
+    pub output_sample_format: String,
+    pub output_stream_running: bool,
     pub last_reason: String,
 }
 
@@ -175,6 +184,15 @@ fn snapshot_from_stats(
         source_frame_max_ms: stats.source_frame_max_ms,
         source_frame_cadence_ms: stats.source_frame_cadence_ms,
         source_cadence_frames: stats.source_cadence_frames,
+        output_callbacks: stats.output_callbacks,
+        output_callback_frames: stats.output_callback_frames,
+        output_signal_callbacks: stats.output_signal_callbacks,
+        output_silent_callbacks: stats.output_silent_callbacks,
+        output_peak_milli: stats.output_peak_milli,
+        output_rms_milli: stats.output_rms_milli,
+        output_device_name: stats.output_device_name,
+        output_sample_format: stats.output_sample_format,
+        output_stream_running: stats.output_stream_running,
         last_reason: stats.last_reason.to_string(),
     }
 }
@@ -219,6 +237,15 @@ mod tests {
                 source_frame_max_ms: 40,
                 source_frame_cadence_ms: 20,
                 source_cadence_frames: 2,
+                output_callbacks: 3,
+                output_callback_frames: 960,
+                output_signal_callbacks: 2,
+                output_silent_callbacks: 1,
+                output_peak_milli: 250,
+                output_rms_milli: 125,
+                output_device_name: "Default Output".to_string(),
+                output_sample_format: "F32".to_string(),
+                output_stream_running: true,
                 last_reason: "native-playback-drain",
             },
         );
@@ -234,6 +261,15 @@ mod tests {
         assert_eq!(snapshot.source_frame_max_ms, 40);
         assert_eq!(snapshot.source_frame_cadence_ms, 20);
         assert_eq!(snapshot.source_cadence_frames, 2);
+        assert_eq!(snapshot.output_callbacks, 3);
+        assert_eq!(snapshot.output_callback_frames, 960);
+        assert_eq!(snapshot.output_signal_callbacks, 2);
+        assert_eq!(snapshot.output_silent_callbacks, 1);
+        assert_eq!(snapshot.output_peak_milli, 250);
+        assert_eq!(snapshot.output_rms_milli, 125);
+        assert_eq!(snapshot.output_device_name, "Default Output");
+        assert_eq!(snapshot.output_sample_format, "F32");
+        assert!(snapshot.output_stream_running);
         assert_eq!(snapshot.last_reason, "native-playback-drain");
     }
 }

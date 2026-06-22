@@ -108,6 +108,15 @@ pub struct W14NativeReceiverSnapshot {
     pub audio_playback_source_frame_max_ms: u64,
     pub audio_playback_source_frame_cadence_ms: u64,
     pub audio_playback_source_cadence_frames: u64,
+    pub audio_output_callbacks: u64,
+    pub audio_output_callback_frames: u64,
+    pub audio_output_signal_callbacks: u64,
+    pub audio_output_silent_callbacks: u64,
+    pub audio_output_peak_milli: u64,
+    pub audio_output_rms_milli: u64,
+    pub audio_output_device_name: String,
+    pub audio_output_sample_format: String,
+    pub audio_output_stream_running: bool,
     pub audio_playback_last_reason: String,
     pub last_message_type: String,
     pub last_error: String,
@@ -171,6 +180,15 @@ impl Default for W14NativeReceiverSnapshot {
             audio_playback_source_frame_max_ms: 0,
             audio_playback_source_frame_cadence_ms: 0,
             audio_playback_source_cadence_frames: 0,
+            audio_output_callbacks: 0,
+            audio_output_callback_frames: 0,
+            audio_output_signal_callbacks: 0,
+            audio_output_silent_callbacks: 0,
+            audio_output_peak_milli: 0,
+            audio_output_rms_milli: 0,
+            audio_output_device_name: String::new(),
+            audio_output_sample_format: String::new(),
+            audio_output_stream_running: false,
             audio_playback_last_reason: String::new(),
             last_message_type: String::new(),
             last_error: String::new(),
@@ -1005,6 +1023,15 @@ fn apply_audio_playback_stats(
     snapshot.audio_playback_source_frame_max_ms = stats.source_frame_max_ms;
     snapshot.audio_playback_source_frame_cadence_ms = stats.source_frame_cadence_ms;
     snapshot.audio_playback_source_cadence_frames = stats.source_cadence_frames;
+    snapshot.audio_output_callbacks = stats.output_callbacks;
+    snapshot.audio_output_callback_frames = stats.output_callback_frames;
+    snapshot.audio_output_signal_callbacks = stats.output_signal_callbacks;
+    snapshot.audio_output_silent_callbacks = stats.output_silent_callbacks;
+    snapshot.audio_output_peak_milli = stats.output_peak_milli;
+    snapshot.audio_output_rms_milli = stats.output_rms_milli;
+    snapshot.audio_output_device_name = stats.output_device_name;
+    snapshot.audio_output_sample_format = stats.output_sample_format;
+    snapshot.audio_output_stream_running = stats.output_stream_running;
     snapshot.audio_playback_last_reason = stats.last_reason.to_string();
 }
 
@@ -1235,6 +1262,15 @@ mod tests {
                 source_frame_max_ms: 20,
                 source_frame_cadence_ms: 20,
                 source_cadence_frames: 1,
+                output_callbacks: 2,
+                output_callback_frames: 960,
+                output_signal_callbacks: 2,
+                output_silent_callbacks: 0,
+                output_peak_milli: 250,
+                output_rms_milli: 125,
+                output_device_name: "Default Output".to_string(),
+                output_sample_format: "F32".to_string(),
+                output_stream_running: true,
                 last_reason: "native-playback-queued",
             },
         );
@@ -1249,6 +1285,15 @@ mod tests {
         assert_eq!(snapshot.audio_playback_pushed_frames, 960);
         assert_eq!(snapshot.audio_playback_played_frames, 480);
         assert_eq!(snapshot.audio_playback_dropped_frames, 0);
+        assert_eq!(snapshot.audio_output_callbacks, 2);
+        assert_eq!(snapshot.audio_output_callback_frames, 960);
+        assert_eq!(snapshot.audio_output_signal_callbacks, 2);
+        assert_eq!(snapshot.audio_output_silent_callbacks, 0);
+        assert_eq!(snapshot.audio_output_peak_milli, 250);
+        assert_eq!(snapshot.audio_output_rms_milli, 125);
+        assert_eq!(snapshot.audio_output_device_name, "Default Output");
+        assert_eq!(snapshot.audio_output_sample_format, "F32");
+        assert!(snapshot.audio_output_stream_running);
         assert_eq!(
             snapshot.audio_playback_last_reason,
             "native-playback-queued"
