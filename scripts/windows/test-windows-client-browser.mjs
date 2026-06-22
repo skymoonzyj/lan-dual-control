@@ -5719,6 +5719,16 @@ async function verifyH264KeyFrameDetection(session) {
         0, 0, 0, 4, 0x68, 0xce, 0x06, 0xe2,
         0, 0, 0, 3, 0x65, 0x88, 0x84,
       ]);
+      const avcTwoByteKeyWithConfig = new Uint8Array([
+        0, 4, 0x67, 0x42, 0xe0, 0x1f,
+        0, 4, 0x68, 0xce, 0x06, 0xe2,
+        0, 3, 0x65, 0x88, 0x84,
+      ]);
+      const avcOneByteKeyWithConfig = new Uint8Array([
+        4, 0x67, 0x42, 0xe0, 0x1f,
+        4, 0x68, 0xce, 0x06, 0xe2,
+        3, 0x65, 0x88, 0x84,
+      ]);
       const makeBase64 = (bytes) => {
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -6448,12 +6458,54 @@ async function verifyH264KeyFrameDetection(session) {
           nativePushCallsAfterAvc.at(-1)?.payload?.request?.dataBase64 === makeBase64(annexbKey) &&
           nativePushCallsAfterAvc.at(-1)?.payload?.request?.dataBase64 !== makeBase64(avcKeyWithConfig);
 
+        await renderH264VideoFrame({
+          payload: makeBase64(avcTwoByteKeyWithConfig),
+          encoding: "avc",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 45,
+          keyFrame: false,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const nativePushCallsAfterAvcTwoByte = nativeCalls.filter(
+          (call) => call.command === "push_w8_native_h264_annexb_frame",
+        );
+        const avcTwoByteNativeAnnexBBridge =
+          isH264KeyFramePayload(avcTwoByteKeyWithConfig, "avc") &&
+          nativePushCallsAfterAvcTwoByte.at(-1)?.payload?.request?.id === 45 &&
+          nativePushCallsAfterAvcTwoByte.at(-1)?.payload?.request?.dataBase64 === makeBase64(annexbKey) &&
+          nativePushCallsAfterAvcTwoByte.at(-1)?.payload?.request?.dataBase64 !== makeBase64(avcTwoByteKeyWithConfig);
+
+        await renderH264VideoFrame({
+          payload: makeBase64(avcOneByteKeyWithConfig),
+          encoding: "avc",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 46,
+          keyFrame: false,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const nativePushCallsAfterAvcOneByte = nativeCalls.filter(
+          (call) => call.command === "push_w8_native_h264_annexb_frame",
+        );
+        const avcOneByteNativeAnnexBBridge =
+          isH264KeyFramePayload(avcOneByteKeyWithConfig, "avc") &&
+          nativePushCallsAfterAvcOneByte.at(-1)?.payload?.request?.id === 46 &&
+          nativePushCallsAfterAvcOneByte.at(-1)?.payload?.request?.dataBase64 === makeBase64(annexbKey) &&
+          nativePushCallsAfterAvcOneByte.at(-1)?.payload?.request?.dataBase64 !== makeBase64(avcOneByteKeyWithConfig);
+
         return {
           ok:
             isH264KeyFramePayload(annexbKey, "annexb-base64") &&
             !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
             isH264KeyFramePayload(avcKey, "avc") &&
             avcNativeAnnexBBridge &&
+            avcTwoByteNativeAnnexBBridge &&
+            avcOneByteNativeAnnexBBridge &&
             h264EvidenceRecorded &&
             nativeQueueRecorded &&
             nativeBypassRecorded &&
@@ -6463,8 +6515,14 @@ async function verifyH264KeyFrameDetection(session) {
           avcKey: isH264KeyFramePayload(avcKey, "avc"),
           avcNativeAnnexBBridge,
           avcNativeLastRequest: nativePushCallsAfterAvc.at(-1)?.payload?.request,
+          avcTwoByteNativeAnnexBBridge,
+          avcTwoByteNativeLastRequest: nativePushCallsAfterAvcTwoByte.at(-1)?.payload?.request,
+          avcOneByteNativeAnnexBBridge,
+          avcOneByteNativeLastRequest: nativePushCallsAfterAvcOneByte.at(-1)?.payload?.request,
           expectedAnnexBBase64: makeBase64(annexbKey),
           originalAvcBase64: makeBase64(avcKeyWithConfig),
+          originalAvcTwoByteBase64: makeBase64(avcTwoByteKeyWithConfig),
+          originalAvcOneByteBase64: makeBase64(avcOneByteKeyWithConfig),
           h264EvidenceRecorded,
           nativeQueueRecorded,
           nativeBypassRecorded,
@@ -9985,7 +10043,7 @@ async function run() {
       summary.checks.push("h264-keyframe");
       print(
         "OK",
-        `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
+        `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}, avcLen4=${keyFrameCheck.avcNativeAnnexBBridge}, avcLen2=${keyFrameCheck.avcTwoByteNativeAnnexBBridge}, avcLen1=${keyFrameCheck.avcOneByteNativeAnnexBBridge}`,
       );
       const latencyQueueCheck = await verifyH264LatencyQueueGuard(session);
       summary.h264 = makeH264RetestSummary({
@@ -10089,7 +10147,7 @@ async function run() {
     summary.checks.push("h264-keyframe");
     print(
       "OK",
-      `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
+      `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}, avcLen4=${keyFrameCheck.avcNativeAnnexBBridge}, avcLen2=${keyFrameCheck.avcTwoByteNativeAnnexBBridge}, avcLen1=${keyFrameCheck.avcOneByteNativeAnnexBBridge}`,
     );
     const latencyQueueCheck = await verifyH264LatencyQueueGuard(session);
     summary.h264 = makeH264RetestSummary({

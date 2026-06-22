@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12/W13 AVC lengthSize 归一化补强
+开发端：Windows Codex
+本轮目标：按用户要求继续主要完成视频侧修改，补强 W8 native keyframe gate 的 H.264 payload 归一化防回归。
+完成内容：`apps/windows-client/app.js` 的 length-prefixed/AVC H.264 解析从固定 4 字节长度头扩展为自动尝试 4/2/1 字节 lengthSize，并只接受看起来像 H.264 NAL 的分段；送 `push_w8_native_h264_annexb_frame` 前统一转 Annex B。这样未来 2 字节或 1 字节 AVC access unit 不会再原样进入 native Annex B parser。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `avcTwoByteNativeAnnexBBridge=false` / `avcOneByteNativeAnnexBBridge=false`；实现后同命令通过并输出 `avcLen4=true avcLen2=true avcLen1=true`。
+遗留问题：仍需要用户用新版 Windows 桌面端做真实 2-5 分钟长测，确认 `W8NativeVideo=` 不再长期 `queueReason=waiting-keyframe`，并看 `submitted/decoded/presentFrames/progress` 增长。
+下一步建议：如果新版仍卡在 waiting-keyframe，优先查 native summary 的 SPS/PPS/IDR、decoder/present 错误或 Rust 原生解析器，不再先怀疑 AVC lengthSize 转换缺口。
+是否改了协议：否。只改 Windows client 本地视频 payload 归一化。
+是否需要另一端配合：不需要 Mac 改协议；需要后续用户真实长测证据。不请求或上板密码，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12/W13 native keyframe gate 修复
 开发端：Windows Codex
 本轮目标：处理 Supervisor 上板的 W12/W13 桌面长测不通过：Windows Web 已识别 H.264 keyframe/SPS/PPS/IDR，但 W8 native queue 仍 `waiting-keyframe` 并全丢。

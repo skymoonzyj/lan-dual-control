@@ -11970,7 +11970,7 @@ function uint8ArrayToBase64(bytes) {
   return window.btoa(binary);
 }
 
-function getLengthPrefixedNalUnits(bytes, lengthSize = 4) {
+function parseLengthPrefixedNalUnits(bytes, lengthSize) {
   const units = [];
   let index = 0;
   while (index + lengthSize <= bytes.length) {
@@ -11988,11 +11988,32 @@ function getLengthPrefixedNalUnits(bytes, lengthSize = 4) {
   return units;
 }
 
-function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
+function hasLikelyH264NalUnits(units) {
+  return units.length > 0 && units.every((unit) => {
+    const nalType = unit?.length ? unit[0] & 0x1f : 0;
+    return nalType > 0 && nalType <= 23;
+  });
+}
+
+function getLengthPrefixedNalUnits(bytes, lengthSize = 0) {
+  const requestedSize = Number(lengthSize);
+  const candidateSizes = [1, 2, 4].includes(requestedSize)
+    ? [requestedSize]
+    : [4, 2, 1];
+  for (const candidateSize of candidateSizes) {
+    const units = parseLengthPrefixedNalUnits(bytes, candidateSize);
+    if (hasLikelyH264NalUnits(units)) {
+      return units;
+    }
+  }
+  return [];
+}
+
+function getLengthPrefixedNalTypes(bytes, lengthSize = 0) {
   return getLengthPrefixedNalUnits(bytes, lengthSize).map((nal) => nal[0] & 0x1f);
 }
 
-function toAnnexBBytesFromLengthPrefixed(bytes, lengthSize = 4) {
+function toAnnexBBytesFromLengthPrefixed(bytes, lengthSize = 0) {
   const units = getLengthPrefixedNalUnits(bytes, lengthSize);
   if (!units.length) return bytes;
   const totalLength = units.reduce((total, unit) => total + 4 + unit.length, 0);

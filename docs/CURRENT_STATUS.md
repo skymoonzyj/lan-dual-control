@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12/W13 AVC lengthSize 归一化补强
+- Windows 视频侧继续收紧 W8 native Annex B 入站防回归：上一轮已修复 length-prefixed/AVC H.264 未转 Annex B 就送 `push_w8_native_h264_annexb_frame` 的主因，本轮把 `apps/windows-client/app.js` 的 AVC 解析从固定 4 字节长度头扩展为自动识别 4/2/1 字节 lengthSize，并只接受看起来像 H.264 NAL 的分段。这样即使后续 Mac 或其他 H.264 源输出 2 字节或 1 字节 length-prefixed access unit，Windows Web 侧识别到的 SPS/PPS/IDR 也会以 Annex B base64 进入 W8 native queue，避免 native 侧再次长期 `waiting-keyframe`。`test-windows-client-browser --onlyH264LatencyQueueGuard` 红灯先失败于 `avcLen2=false avcLen1=false`，实现后输出 `avcLen4=true avcLen2=true avcLen1=true`。只改 Windows 视频 payload 归一化和回归测试；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W12/W13 native keyframe gate 修复
 - Supervisor 上板的真实 Windows 桌面端长测 `2026-06-22T11:14:02` 判定不通过：连接、H.264 和音频链路有效，H.264 实收约 76.2 FPS / 协商 60 Hz、帧 9490、关键帧 200、SPS/PPS/IDR=200/200/200，但 W8 原生侧仍显示 `原生队列 9490`、`原生丢旧帧 9490`、`原生原因 waiting-keyframe`，说明 Web/browser 已识别关键帧而 W8 native queue 的 Annex B 入站没有同口径识别。根因定位到 Windows client 无条件把当前 H.264 payload 交给 `push_w8_native_h264_annexb_frame`，而 Web 侧 NAL 统计支持 length-prefixed/AVC 与 Annex B 两种输入；非 Annex B payload 会让原生 Annex B 解析器看不到 SPS/PPS/IDR 并持续 `waiting-keyframe`。本轮在 `apps/windows-client/app.js` 送 W8 原生命令前统一把 length-prefixed H.264 access unit 重打包成 Annex B，Annex B 原样保留；`test-windows-client-browser --onlyH264LatencyQueueGuard` 新增红绿回归，验证 Web 识别的 AVC keyframe 会以 Annex B base64 进入 native。只改 Windows 视频侧，不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 
