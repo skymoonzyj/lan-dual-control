@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W13 本地视频 QoS 建议上板
+- Windows 视频侧从 W12 分类器继续推进到 W13 第一小步：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 现在会在 `W8NativeGate=status=arrival-backlog-next` 且同段输入能生成 `W8ArrivalBacklog=` 时，额外输出 `W13LocalQos=`。该行消费 `nativeClass/nativeNext`、`presentGap`、`decoderGap`、`queueMs`、`staleDrops`、`liveBacklogRequests`、`localMaxMs`、`remoteMediaMaxMs` 和 `arrivalSource`，把现场视频状态压成 `status=local-backlog|remote-cadence|native-present|native-error|stable-candidate|observe`、`dropPolicy`、`keyframeRequest` 和 `next`。当前仅作为本地 QoS 建议和上板诊断，不直接改协议、不调 Mac 编码参数、不触发真实 input/inject；`local-backlog` 会建议 `drop-old-keep-keyframe` 与 `local-qos-trim-request-keyframe`，`remote-media-gap` 会建议先让 Mac 补只读 media cadence。
+
 ## 2026-06-22 W12 native 视频故障分类器
 - Windows 视频侧继续推进 W12，不再只停留在阶段摘要。`apps/windows-client/app.js` 新增 `classifyW8NativeVideoSession`，把 W8 原生链路的 present、surface、decoder、stream-change、device-lost、errors 合并成 `nativeClass` 和 `nativeNext`。复制/导出现场视频会显示 `原生分类 <class>` 和 `原生下一步 <next>`；`W8NativeVideo=` 同步输出 `nativeClass=<class> nativeNext=<next>`。当前覆盖的分类包括 `present-ok`、`present-gap`、`surface-ready`、`decoder-submitted`、`device-lost-recovered`、`device-lost-blocked`、`stream-change-pending`、`decoder-error` 等；视频专项已验证 device-lost 已恢复且 HWND Present 成立时输出 `nativeClass=device-lost-recovered nativeNext=watch-arrival-qos`。本轮只改 Windows 视频侧诊断/分类和测试，不改 Mac、协议、认证/密码、音频实现或 input/inject。
 

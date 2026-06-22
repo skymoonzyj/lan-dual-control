@@ -20,7 +20,7 @@ Options:
   --stdin           Read text from standard input. Use only with an explicit pipe.
   --server <url>    Agent Link Board URL. Default: ${defaults.server}
   --from <name>     Agent Link sender name. Default: ${defaults.from}
-  --send            Post W8NativeVideo= and W8NativeGate= to the board.
+  --send            Post W8NativeVideo=, W8NativeGate=, and W13LocalQos= to the board.
   --json            Print machine-readable JSON.
   --boardSummary    Print one secret-safe summary line.
   --help, -h        Show this help.
@@ -28,8 +28,9 @@ Options:
 Description:
   Safely posts Windows desktop-control W8 native video evidence after the user
   copies desktop diagnostics. It accepts a redacted W8NativeVideo= line,
-  generates W8NativeGate= next-step evidence, and can derive W8ArrivalBacklog=
-  from an optional W2W3Retest= line in the same pasted diagnostics. It rejects
+  generates W8NativeGate= next-step evidence, can derive W8ArrivalBacklog=
+  from an optional W2W3Retest= line in the same pasted diagnostics, and adds a
+  W13LocalQos= recommendation when local video backlog evidence is present. It rejects
   password/token/control event markers before posting and never authenticates a
   host or asks for a password.
 `);
@@ -143,7 +144,8 @@ function extractOptionalRetestLine(input) {
 
 function parseSummaryFields(line) {
   const text = String(line || "");
-  const body = text.startsWith("W8NativeVideo=") ? text.slice("W8NativeVideo=".length) : text;
+  const knownPrefix = ["W8NativeVideo=", "W8ArrivalBacklog=", "W13LocalQos="].find((prefix) => text.startsWith(prefix));
+  const body = knownPrefix ? text.slice(knownPrefix.length) : text;
   const fields = {};
   for (const token of body.split(/\s+/)) {
     const separator = token.indexOf("=");
@@ -342,6 +344,75 @@ function makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary) {
   ].join(" ");
 }
 
+function makeW13LocalQosSummary(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary) {
+  if (!w8ArrivalBacklogSummary) return "";
+  const nativeFields = parseSummaryFields(w8NativeVideoLine);
+  const backlogFields = parseSummaryFields(w8ArrivalBacklogSummary);
+  const gateStatus = w8NativeGateStatus(w8NativeGateSummary) || "unknown";
+  const backlogStatus = summaryStatus("W8ArrivalBacklog", w8ArrivalBacklogSummary) || String(backlogFields.status || "unknown");
+  const nativeClass = String(nativeFields.nativeClass || "unknown").trim() || "unknown";
+  const nativeNext = String(nativeFields.nativeNext || "unknown").trim() || "unknown";
+  const arrivalSource = String(backlogFields.arrivalSource || "unknown").trim() || "unknown";
+  const presentGap = numericField(nativeFields, "presentGap");
+  const decoderGap = numericField(nativeFields, "decoderGap");
+  const queueMs = numericField(backlogFields, "queueMs");
+  const staleDrops = numericField(backlogFields, "staleDrops");
+  const liveBacklogRequests = numericField(backlogFields, "liveBacklogRequests");
+  const localMaxMs = numericField(backlogFields, "localMaxMs");
+  const remoteMediaMaxMs = numericField(backlogFields, "remoteMediaMaxMs");
+  let status = "observe";
+  let next = "continue-long-run-observation";
+  let dropPolicy = "observe";
+  let keyframeRequest = "no";
+
+  if (backlogStatus === "stable-candidate" || arrivalSource === "stable") {
+    status = "stable-candidate";
+    next = "continue-long-run-observation";
+  } else if (arrivalSource === "remote-media-gap") {
+    status = "remote-cadence";
+    next = "ask-mac-readonly-media-cadence";
+    dropPolicy = "hold-local";
+  } else if (["decoder-error", "device-lost-blocked", "stream-change-pending"].includes(nativeClass) || gateStatus === "native-error-next") {
+    status = "native-error";
+    next = "inspect-native-video-error";
+    dropPolicy = "hold-qos";
+  } else if (
+    ["present-gap", "surface-ready", "decoder-submitted"].includes(nativeClass) ||
+    gateStatus === "native-present-next" ||
+    gateStatus === "native-present-lag-next"
+  ) {
+    status = "native-present";
+    next = "inspect-native-present";
+    dropPolicy = "hold-qos";
+  } else if (arrivalSource === "windows-arrival-gap" || arrivalSource === "windows-queue-backlog" || backlogStatus === "blocked") {
+    status = "local-backlog";
+    next = "local-qos-trim-request-keyframe";
+    dropPolicy = "drop-old-keep-keyframe";
+    keyframeRequest = "yes";
+  }
+
+  return [
+    `W13LocalQos=status=${status}`,
+    `nativeClass=${nativeClass}`,
+    `nativeNext=${nativeNext}`,
+    `arrivalSource=${arrivalSource}`,
+    `queueMs=${queueMs}`,
+    `staleDrops=${staleDrops}`,
+    `liveBacklogRequests=${liveBacklogRequests}`,
+    `localMaxMs=${localMaxMs}`,
+    `remoteMediaMaxMs=${remoteMediaMaxMs}`,
+    `presentGap=${presentGap}`,
+    `decoderGap=${decoderGap}`,
+    "targetQueueMs=120",
+    "maxQueueMs=180",
+    `dropPolicy=${dropPolicy}`,
+    `keyframeRequest=${keyframeRequest}`,
+    "fpsAction=hold",
+    "bandwidthAction=hold",
+    `next=${next}`,
+  ].join(" ");
+}
+
 async function postMessage(args, text) {
   const url = new URL("/api/message", args.server);
   const response = await fetch(url, {
@@ -364,11 +435,12 @@ async function postMessage(args, text) {
   return true;
 }
 
-function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary = "") {
+function makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary = "", w13LocalQosSummary = "") {
   return [
     w8NativeVideoLine,
     w8NativeGateSummary,
     w8ArrivalBacklogSummary,
+    w13LocalQosSummary,
     "Source=DesktopControl/copied-diagnostics.",
     "Safety=no-password-on-board,no-input-inject.",
   ].filter(Boolean).join("\n");
@@ -381,6 +453,7 @@ function makeBoardSummary(payload) {
     payload.w8NativeGateSummary ? `w8NativeGate=${w8NativeGateStatus(payload.w8NativeGateSummary) || "present"}` : "w8NativeGate=missing",
     payload.w8NativeGateSummary ? `w8Decoder=${w8DecoderSubmissionStatus(payload.w8NativeGateSummary) || "missing"}` : "w8Decoder=missing",
     payload.w8ArrivalBacklogSummary ? `w8ArrivalBacklog=${summaryStatus("W8ArrivalBacklog", payload.w8ArrivalBacklogSummary) || "present"}` : "w8ArrivalBacklog=missing",
+    payload.w13LocalQosSummary ? `w13LocalQos=${summaryStatus("W13LocalQos", payload.w13LocalQosSummary) || "present"}` : "w13LocalQos=missing",
     "Safety=no-password-on-board,no-input-inject.",
   ].join(" ");
 }
@@ -397,6 +470,7 @@ async function main() {
   const retestLine = extractOptionalRetestLine(input);
   const w8NativeGateSummary = makeW8NativeGateSummary(w8NativeVideoLine);
   const w8ArrivalBacklogSummary = makeW8ArrivalBacklogSummary(retestLine, w8NativeGateSummary);
+  const w13LocalQosSummary = makeW13LocalQosSummary(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary);
   const payload = {
     ok: true,
     send: Boolean(args.send),
@@ -405,11 +479,12 @@ async function main() {
     w8NativeVideoLine,
     w8NativeGateSummary,
     w8ArrivalBacklogSummary,
+    w13LocalQosSummary,
     boardSummary: "",
   };
 
   if (args.send) {
-    await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary));
+    await postMessage(args, makeW8NativeVideoMessage(w8NativeVideoLine, w8NativeGateSummary, w8ArrivalBacklogSummary, w13LocalQosSummary));
     payload.sentW8NativeVideo = true;
   }
 

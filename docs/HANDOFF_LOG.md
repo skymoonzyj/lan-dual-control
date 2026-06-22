@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 本地视频 QoS 建议上板
+开发端：Windows Codex
+本轮目标：按用户要求主要做视频侧，把 W12 `nativeClass/nativeNext` 和 W8 arrival/backlog 信号收敛成下一次真实长跑可直接读的 W13 本地 QoS 建议。
+完成内容：`post-w8-desktop-video-board` 与 `post-w2w3-retest-board` 现在会在 `W8ArrivalBacklog=` 可用时追加 `W13LocalQos=`。该摘要消费 `nativeClass/nativeNext`、`presentGap`、`decoderGap`、`queueMs`、`staleDrops`、`liveBacklogRequests`、`localMaxMs`、`remoteMediaMaxMs`、`arrivalSource`，输出 `status`、`dropPolicy`、`keyframeRequest`、`targetQueueMs`、`maxQueueMs` 和 `next`。`local-backlog` 会建议 `drop-old-keep-keyframe` 与 `local-qos-trim-request-keyframe`；`remote-cadence` / `native-present` / `native-error` 会先阻止误调本地 QoS。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/post-w2w3-retest-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；scripts/windows/test-post-w2w3-retest-board.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于两个 helper 的 JSON 缺 `W13LocalQos=status=local-backlog`；实现后 `node scripts/windows/test-post-w8-desktop-video-board.mjs --timeoutMs 45000` 与 `node scripts/windows/test-post-w2w3-retest-board.mjs --timeoutMs 45000` 转绿。
+遗留问题：本轮是 W13 诊断/建议线，不是实时调参控制器；`fpsAction=hold bandwidthAction=hold`，尚未自动调 Mac 编码参数，也未跑 C5 15 分钟真实体验。
+下一步建议：把 `W13LocalQos dropPolicy/keyframeRequest/targetQueueMs/maxQueueMs` 接入 Windows client 的本地实时 QoS 控制；先做本地 drop-old/keyframe request，再考虑协议级 fps/bitrate 回传。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测需要 Mac host 在线并由用户在 Windows 本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12 native 视频故障分类器
 开发端：Windows Codex
 本轮目标：继续按通讯板 W12 方向推进视频侧，把上一轮 `mediaSession/nativeAck` 阶段摘要升级为可直接判读下一步的 native failure classifier。
