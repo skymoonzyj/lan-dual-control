@@ -36,12 +36,13 @@ struct EncodedScreenFrame {
     let height: Int
     let payload: String
     let keyFrame: Bool
+    let repeatPreviousFrame: Bool
     let timestampUs: Int64
     let durationUs: Int
     let codecString: String
 
     func jsonObject(frameId: Int, timestamp: String) -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "type": "video_frame",
             "frameId": frameId,
             "timestamp": timestamp,
@@ -57,6 +58,10 @@ struct EncodedScreenFrame {
             "timestampUs": timestampUs,
             "durationUs": durationUs,
         ]
+        if repeatPreviousFrame {
+            object["repeatPreviousFrame"] = true
+        }
+        return object
     }
 }
 
@@ -360,7 +365,7 @@ final class ScreenCaptureCoordinator {
             fps: fps,
             onFrame: onFrame
         )
-        let output = ScreenStreamOutput(encoder: encoder)
+        let output = ScreenStreamOutput(encoder: encoder, fps: fps)
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let configuration = SCStreamConfiguration()
         configuration.width = targetSize.width
@@ -373,6 +378,7 @@ final class ScreenCaptureCoordinator {
         let stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
         try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: videoStreamQueue)
         try await stream.startCapture()
+        output.startRepeatPacing(on: videoStreamQueue)
         logger.info("H.264 流式采集已启动：\(targetSize.width)x\(targetSize.height) / \(fps) Hz / \(bitrateKbps / 1000) Mbps")
         return ScreenVideoStream(stream: stream, output: output, encoder: encoder, logger: logger)
         #else
@@ -643,6 +649,7 @@ final class ScreenVideoStream {
             return
         }
         stopped = true
+        output.stopRepeatPacing()
         encoder.invalidate()
         Task { [stream, logger] in
             do {
@@ -714,9 +721,31 @@ private final class SystemAudioStreamOutput: NSObject, SCStreamOutput {
 
 private final class ScreenStreamOutput: NSObject, SCStreamOutput {
     private let encoder: H264VideoEncoder
+    private let frameIntervalNanoseconds: Int
+    private var repeatTimer: DispatchSourceTimer?
 
-    init(encoder: H264VideoEncoder) {
+    init(encoder: H264VideoEncoder, fps: Int) {
         self.encoder = encoder
+        self.frameIntervalNanoseconds = max(1, Int((1_000_000_000.0 / Double(max(1, fps))).rounded()))
+    }
+
+    func startRepeatPacing(on queue: DispatchQueue) {
+        guard repeatTimer == nil else {
+            return
+        }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        let interval = DispatchTimeInterval.nanoseconds(frameIntervalNanoseconds)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            self?.encoder.encodeRepeatFrameIfNeeded()
+        }
+        repeatTimer = timer
+        timer.resume()
+    }
+
+    func stopRepeatPacing() {
+        repeatTimer?.cancel()
+        repeatTimer = nil
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
@@ -726,7 +755,7 @@ private final class ScreenStreamOutput: NSObject, SCStreamOutput {
             return
         }
 
-        encoder.encode(
+        encoder.encodeFreshFrame(
             pixelBuffer,
             presentationTimeStamp: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
             duration: CMSampleBufferGetDuration(sampleBuffer)
@@ -734,20 +763,36 @@ private final class ScreenStreamOutput: NSObject, SCStreamOutput {
     }
 }
 
+private final class H264FrameMetadata {
+    let repeatPreviousFrame: Bool
+
+    init(repeatPreviousFrame: Bool) {
+        self.repeatPreviousFrame = repeatPreviousFrame
+    }
+}
+
 private final class H264VideoEncoder {
     private let width: Int
     private let height: Int
     private let fps: Int
+    private let frameDuration: CMTime
+    private let frameIntervalNanoseconds: UInt64
     private let onFrame: (EncodedScreenFrame) -> Void
     private var session: VTCompressionSession?
     private var frameId = 0
     private var parameterSetData = Data()
     private var cachedCodecString = "avc1.42E01F"
+    private var lastPixelBuffer: CVPixelBuffer?
+    private var lastSubmittedPresentationTimeStamp = CMTime.invalid
+    private var lastFreshFrameNanoseconds: UInt64 = 0
+    private var lastEncodedFrameNanoseconds: UInt64 = 0
 
     init(width: Int, height: Int, bitrateKbps: Int, fps: Int, onFrame: @escaping (EncodedScreenFrame) -> Void) throws {
         self.width = max(1, width)
         self.height = max(1, height)
         self.fps = max(1, fps)
+        self.frameDuration = CMTime(value: 1, timescale: CMTimeScale(max(1, fps)))
+        self.frameIntervalNanoseconds = UInt64(max(1, Int((1_000_000_000.0 / Double(max(1, fps))).rounded())))
         self.onFrame = onFrame
 
         var createdSession: VTCompressionSession?
@@ -773,20 +818,47 @@ private final class H264VideoEncoder {
         VTCompressionSessionPrepareToEncodeFrames(createdSession)
     }
 
-    func encode(_ pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime) {
+    func encodeFreshFrame(_ pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime) {
+        lastPixelBuffer = pixelBuffer
+        lastFreshFrameNanoseconds = DispatchTime.now().uptimeNanoseconds
+        encode(pixelBuffer, presentationTimeStamp: presentationTimeStamp, duration: duration, repeatPreviousFrame: false)
+    }
+
+    func encodeRepeatFrameIfNeeded() {
+        guard let pixelBuffer = lastPixelBuffer else {
+            return
+        }
+        let now = DispatchTime.now().uptimeNanoseconds
+        if lastFreshFrameNanoseconds > 0 && now - lastFreshFrameNanoseconds < frameIntervalNanoseconds {
+            return
+        }
+        if lastEncodedFrameNanoseconds > 0 && now - lastEncodedFrameNanoseconds < frameIntervalNanoseconds {
+            return
+        }
+        encode(pixelBuffer, presentationTimeStamp: nextPresentationTimeStamp(), duration: frameDuration, repeatPreviousFrame: true)
+    }
+
+    private func encode(_ pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime, repeatPreviousFrame: Bool) {
         guard let session else {
             return
         }
 
-        VTCompressionSessionEncodeFrame(
+        let metadata = H264FrameMetadata(repeatPreviousFrame: repeatPreviousFrame)
+        let retainedMetadata = Unmanaged.passRetained(metadata)
+        let sourceFrameRefcon = retainedMetadata.toOpaque()
+        let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: pixelBuffer,
-            presentationTimeStamp: presentationTimeStamp,
-            duration: duration,
+            presentationTimeStamp: normalizedPresentationTimeStamp(presentationTimeStamp),
+            duration: normalizedDuration(duration),
             frameProperties: nil,
-            sourceFrameRefcon: nil,
+            sourceFrameRefcon: sourceFrameRefcon,
             infoFlagsOut: nil
         )
+        lastEncodedFrameNanoseconds = DispatchTime.now().uptimeNanoseconds
+        if status != noErr {
+            retainedMetadata.release()
+        }
     }
 
     func invalidate() {
@@ -796,9 +868,10 @@ private final class H264VideoEncoder {
         VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
         VTCompressionSessionInvalidate(session)
         self.session = nil
+        self.lastPixelBuffer = nil
     }
 
-    fileprivate func handleEncodedSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+    fileprivate func handleEncodedSampleBuffer(_ sampleBuffer: CMSampleBuffer, repeatPreviousFrame: Bool) {
         guard CMSampleBufferDataIsReady(sampleBuffer),
               let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
             return
@@ -824,6 +897,7 @@ private final class H264VideoEncoder {
                 height: height,
                 payload: frameData.base64EncodedString(),
                 keyFrame: keyFrame,
+                repeatPreviousFrame: repeatPreviousFrame,
                 timestampUs: timestampUs,
                 durationUs: durationUs,
                 codecString: cachedCodecString
@@ -842,6 +916,37 @@ private final class H264VideoEncoder {
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: bitrate)
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: keyFrameInterval)
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: expectedFrameRate)
+    }
+
+    private func nextPresentationTimeStamp() -> CMTime {
+        guard lastSubmittedPresentationTimeStamp.isValid,
+              lastSubmittedPresentationTimeStamp.isNumeric else {
+            return CMTime.zero
+        }
+        return CMTimeAdd(lastSubmittedPresentationTimeStamp, frameDuration)
+    }
+
+    private func normalizedPresentationTimeStamp(_ presentationTimeStamp: CMTime) -> CMTime {
+        var candidate = presentationTimeStamp
+        if !candidate.isValid || !candidate.isNumeric || CMTimeCompare(candidate, CMTime.zero) < 0 {
+            candidate = nextPresentationTimeStamp()
+        }
+        if lastSubmittedPresentationTimeStamp.isValid,
+           lastSubmittedPresentationTimeStamp.isNumeric,
+           CMTimeCompare(candidate, lastSubmittedPresentationTimeStamp) <= 0 {
+            candidate = CMTimeAdd(lastSubmittedPresentationTimeStamp, frameDuration)
+        }
+        lastSubmittedPresentationTimeStamp = candidate
+        return candidate
+    }
+
+    private func normalizedDuration(_ duration: CMTime) -> CMTime {
+        if duration.isValid,
+           duration.isNumeric,
+           CMTimeCompare(duration, CMTime.zero) > 0 {
+            return duration
+        }
+        return frameDuration
     }
 
     private func isKeyFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
@@ -951,7 +1056,10 @@ private final class H264VideoEncoder {
     }
 }
 
-private let h264CompressionOutputCallback: VTCompressionOutputCallback = { refcon, _, status, _, sampleBuffer in
+private let h264CompressionOutputCallback: VTCompressionOutputCallback = { refcon, sourceFrameRefcon, status, _, sampleBuffer in
+    let metadata = sourceFrameRefcon.map {
+        Unmanaged<H264FrameMetadata>.fromOpaque($0).takeRetainedValue()
+    }
     guard status == noErr,
           let refcon,
           let sampleBuffer else {
@@ -959,6 +1067,6 @@ private let h264CompressionOutputCallback: VTCompressionOutputCallback = { refco
     }
 
     let encoder = Unmanaged<H264VideoEncoder>.fromOpaque(refcon).takeUnretainedValue()
-    encoder.handleEncodedSampleBuffer(sampleBuffer)
+    encoder.handleEncodedSampleBuffer(sampleBuffer, repeatPreviousFrame: metadata?.repeatPreviousFrame ?? false)
 }
 #endif

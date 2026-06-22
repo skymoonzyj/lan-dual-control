@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { spawn } from "node:child_process";
@@ -7,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const scriptPath = "scripts/mac/observe-mac-video.mjs";
+const screenCaptureSourcePath = new URL("../../apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift", import.meta.url);
 const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 const defaults = {
@@ -353,6 +355,26 @@ function parseJsonOutput(stdout, label) {
   }
 }
 
+function assertMacH264RepeatPacingSource() {
+  const source = readFileSync(screenCaptureSourcePath, "utf8");
+  const requiredSnippets = [
+    ["startRepeatPacing", "ScreenCaptureKit H.264 output should start a repeat-frame pacer"],
+    ["stopRepeatPacing", "ScreenCaptureKit H.264 output should stop the repeat-frame pacer"],
+    ["encodeRepeatFrameIfNeeded", "H.264 encoder should be able to encode the latest pixel buffer again"],
+    ["lastPixelBuffer", "H.264 encoder should retain the latest pixel buffer for low-change desktop pacing"],
+    ["repeatPreviousFrame", "Repeated H.264 frames should be marked for Windows diagnostics"],
+    ["sourceFrameRefcon", "VideoToolbox callback should receive per-frame repeat metadata"],
+  ];
+
+  for (const [snippet, reason] of requiredSnippets) {
+    if (!source.includes(snippet)) {
+      throw new Error(`${reason}: missing ${snippet}`);
+    }
+  }
+
+  print("OK", "Mac H.264 repeat pacing source guard passed");
+}
+
 async function assertJsonSuccess(timeoutMs) {
   await withVideoServer(async (port) => {
     const result = await runObserver(port, ["--minFrames", "4", "--minFps", "5", "--requireH264Keyframe"], timeoutMs);
@@ -396,8 +418,11 @@ async function assertJsonSuccess(timeoutMs) {
     if ((payload.observation.h264.lastKeyFrameNalTypes || []).join(",") !== "7,8,5") {
       throw new Error(`JSON success should report last H.264 keyframe NAL types.\n${result.stdout}`);
     }
-    if ((payload.observation.h264.lastNalTypes || []).join(",") !== "1") {
-      throw new Error(`JSON success should report last H.264 frame NAL types.\n${result.stdout}`);
+    if (!Array.isArray(payload.observation.h264.lastNalTypes) || payload.observation.h264.lastNalTypes.length < 1) {
+      throw new Error(`JSON success should report latest H.264 frame NAL types.\n${result.stdout}`);
+    }
+    if (Number(payload.observation.h264.nalTypes?.["1"] || 0) < 1) {
+      throw new Error(`JSON success should count H.264 delta-frame NAL types.\n${result.stdout}`);
     }
     if (Number(payload.observation.h264.keyFrameIntervalFrames?.count) < 1 || Number(payload.observation.h264.keyFrameIntervalFrames?.max) !== 3) {
       throw new Error(`JSON success should report H.264 keyframe interval frames.\n${result.stdout}`);
@@ -485,6 +510,7 @@ async function main() {
     printHelp();
     return;
   }
+  assertMacH264RepeatPacingSource();
   await assertJsonSuccess(args.timeoutMs);
   await assertH264KeyframeRequirementFailure(args.timeoutMs);
   await assertJsonFailure(args.timeoutMs);

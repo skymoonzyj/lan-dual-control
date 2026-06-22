@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 Mac H.264 低变化桌面补帧
+开发端：Windows Codex
+本轮目标：按通讯板 W13 长测失败证据，主要完成视频侧修改，定位并修复 300 秒 H.264 观察只有约 3.90 FPS 的源端低变化桌面产帧问题。
+完成内容：确认 formal-e2e Plan 1 直接运行 `probe-mac-host` 观察 WebSocket `video_frame`，不经过 Windows client/browser/native QoS，因此排除本地 QoS 误伤为本次 Plan 1 失败路径。`ScreenCaptureCoordinator.swift` 新增 H.264 repeat-frame pacing：ScreenCaptureKit 有新 sample 时正常编码；低变化桌面无新 sample 时缓存最近 `CVPixelBuffer` 并按协商 FPS 重新编码上一帧；重复帧通过 VideoToolbox `sourceFrameRefcon` 带回 metadata，并在 `video_frame` 中标记 `repeatPreviousFrame=true`。
+修改文件：apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift；scripts/mac/test-mac-video-json-output.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于缺 `startRepeatPacing`；实现后 `node scripts/mac/test-mac-video-json-output.mjs --timeoutMs 12000` 通过，覆盖 Mac H.264 pacing 源码 guard 和现有 observe-mac-video JSON/H.264 输出。
+遗留问题：Windows 本机不能实际编译/运行 ScreenCaptureKit；Mac 端拉取后需要跑 `swift build`、重启 host，并用同一 formal 长测确认 300 秒 frames/fps 是否过门槛。
+下一步建议：Mac 端先补只读 `observe-mac-video` 证据并编译验证；用户在场后重新跑 W13 formal 长测。如果视频段通过，再继续音频、剪贴板和 input-log；如果仍低 FPS，看 `repeatPreviousFrame` 比例、timestamp/duration 和 VideoToolbox 编码掉帧。
+是否改了协议：否。只在现有 `video_frame` 里增加可选诊断字段 `repeatPreviousFrame=true`。
+是否需要另一端配合：需要 Mac 端拉取、编译和真实复验；不需要密码上板，不改音频，不发 input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 本地视频 QoS 进入页面诊断/复制导出
 开发端：Windows Codex
 本轮目标：继续按通讯板视频侧主线，把 W13 本地 QoS 触发状态做成现场可读诊断字段。
