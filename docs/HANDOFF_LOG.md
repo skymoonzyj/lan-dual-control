@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W8/W13 native 视频连续进展诊断
+开发端：Windows Codex
+本轮目标：按用户要求主要完成视频侧修改，让桌面长跑诊断不只看单点累计快照，而能判断最近几秒 native present/decoded/Web bypass 是否仍在前进。
+完成内容：Windows client 新增 W8 原生视频 5 秒滚动进展窗口，统计 `presentFrames`、`decodedFrames`、WebCodecs bypass、原生入站和 decoder submitted 的增量与估算 FPS。页面解码诊断、现场视频导出和 `test-windows-client-browser` 的 `W8NativeVideo=` 摘要都会输出 `progress/windowMs/presentDelta/presentFps/decodedDelta/decodedFps/webBypassDelta/webBypassFps/pushedDelta/submittedDelta/progressNext`。这样下一次真实桌面长跑可以区分 native present 在前进、只 decoded 不 present、只入站/提交，或最近窗口 stalled。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 `W8NativeVideo=` 缺少 `progress/windowMs/presentDelta/presentFps/...`；实现后 `node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 通过，输出 `progress=present-progress windowMs=5000 presentDelta=120 presentFps=24.0 decodedDelta=121 decodedFps=24.2 webBypassDelta=120 webBypassFps=24.0 pushedDelta=122 submittedDelta=121 progressNext=continue-long-run-observation`。
+遗留问题：真实体感仍需要用户在 Windows 桌面控制端输入 Mac 当前临时密码并跑 2-5 分钟长测后复制诊断；本轮没有认证、没有读取或发送密码。
+下一步建议：用户长跑后把复制诊断交给 `post-w8-desktop-video-board --stdin --send --boardSummary`；先看 `progress`、`presentDelta/presentFps`、`decodedDelta/decodedFps` 和 `W13LocalQos`，再决定查 native present、arrival/backlog 还是 Mac cadence。
+是否改了协议：否。只改 Windows 视频诊断和测试。
+是否需要另一端配合：需要真实长跑证据；不需要 Mac 改协议，不发密码到通讯板，不发 input/inject，不改系统声音。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 formal 探针 repeat-frame 观察证据
 开发端：Windows Codex
 本轮目标：继续完成视频侧修改，让正式 Plan 1 长测日志直接显示 Mac H.264 repeat-frame 补帧是否参与。

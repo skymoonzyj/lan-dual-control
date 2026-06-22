@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W8/W13 native 视频连续进展诊断
+- Windows 视频侧新增 W8 原生链路 5 秒滚动进展窗口：`apps/windows-client/app.js` 会记录 `presentFrames`、`decodedFrames`、WebCodecs bypass、推入原生队列和提交 MF/D3D11 decoder 的增量与估算 FPS。现场视频导出和页面解码诊断会显示 `原生进展 <status>`、`原生窗口 <ms>`、`原生呈现增长/FPS`、`原生解码增长/FPS`、`Web旁路增长/FPS`、`原生入站增长` 和 `原生提交增长`；`test-windows-client-browser` 的 `W8NativeVideo=` 摘要同步输出 `progress/windowMs/presentDelta/presentFps/decodedDelta/decodedFps/webBypassDelta/webBypassFps/pushedDelta/submittedDelta/progressNext`。这样下一次桌面长跑不只看累计快照，还能判断最近几秒 native present、decoder 或 Web bypass 是否仍在前进。只改 Windows 视频诊断和测试，不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W13 H.264 repeat-frame 观察证据
 - W13 正式长测入口 `scripts/windows/probe-mac-host.mjs` 现在会统计 `video_frame.repeatPreviousFrame=true`，长时间视频观察进度行显示 `repeat <n>`，最终 `Video observed:` 行显示 `repeat <n> (<pct>%)`。这样 `check-mac-formal-e2e` 的 Plan 1 复跑不必额外切到 Mac 侧 observe，也能直接看 Mac H.264 repeat-frame pacing 是否参与补帧。`apps/mock-mac-host/server.mjs` 只新增测试用 `repeatPreviousFrameEvery` 模拟开关；真实协议仍只消费可选字段，不改认证/密码/音频/input/inject。
 - 为了让 Mac 端复验刚合入的 H.264 repeat-frame pacing，`scripts/mac/observe-mac-video.mjs` 已统计 `repeatPreviousFrame=true`，JSON 的 `observation.h264` 现在带 `repeatPreviousFrames` 和 `repeatPreviousFramePercent`；`scripts/mac/observe-mac-media.mjs --boardSummary` 的 H.264 摘要现在带 `h264Repeat=<n>(<pct>%)`。下一次 Mac 拉取后跑媒体基线或 W13 长测时，可以直接从板面判断补帧是否发生。该轮只消费现有视频帧可选字段，不改协议握手、不改认证/密码/音频/input/inject。

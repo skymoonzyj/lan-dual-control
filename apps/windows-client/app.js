@@ -196,6 +196,7 @@ const h264FallbackRecoveryStableJpegFrames = 3;
 const h264FallbackRecoveryLoopWindowMs = 15000;
 const h264FallbackRecoveryLoopThreshold = 2;
 const h264FallbackRecoveryPauseMs = 10000;
+const w8NativeVideoProgressWindowMs = 5000;
 const videoStutterGapThresholdMs = 120;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
@@ -686,6 +687,18 @@ const state = {
   w8NativeVideoErrors: 0,
   w8NativeVideoLastError: "",
   w8NativeVideoLastSnapshot: null,
+  w8NativeVideoProgressSamples: [],
+  w8NativeVideoProgressStatus: "",
+  w8NativeVideoProgressNext: "",
+  w8NativeVideoProgressWindowMs: 0,
+  w8NativeVideoPresentFrameDelta: 0,
+  w8NativeVideoPresentFps: 0,
+  w8NativeVideoDecodedFrameDelta: 0,
+  w8NativeVideoDecodedFps: 0,
+  w8NativeVideoWebBypassDelta: 0,
+  w8NativeVideoWebBypassFps: 0,
+  w8NativeVideoFramesPushedDelta: 0,
+  w8NativeVideoSubmittedFrameDelta: 0,
   h264FallbackActive: false,
   h264FallbackReason: "",
   h264FallbackRecoveryDueAt: 0,
@@ -878,6 +891,17 @@ const state = {
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
+    w8NativeVideoProgressStatus: "",
+    w8NativeVideoProgressNext: "",
+    w8NativeVideoProgressWindowMs: 0,
+    w8NativeVideoPresentFrameDelta: 0,
+    w8NativeVideoPresentFps: 0,
+    w8NativeVideoDecodedFrameDelta: 0,
+    w8NativeVideoDecodedFps: 0,
+    w8NativeVideoWebBypassDelta: 0,
+    w8NativeVideoWebBypassFps: 0,
+    w8NativeVideoFramesPushedDelta: 0,
+    w8NativeVideoSubmittedFrameDelta: 0,
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -1175,6 +1199,17 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoLastReason: "",
     w8NativeVideoErrors: 0,
     w8NativeVideoLastError: "",
+    w8NativeVideoProgressStatus: "",
+    w8NativeVideoProgressNext: "",
+    w8NativeVideoProgressWindowMs: 0,
+    w8NativeVideoPresentFrameDelta: 0,
+    w8NativeVideoPresentFps: 0,
+    w8NativeVideoDecodedFrameDelta: 0,
+    w8NativeVideoDecodedFps: 0,
+    w8NativeVideoWebBypassDelta: 0,
+    w8NativeVideoWebBypassFps: 0,
+    w8NativeVideoFramesPushedDelta: 0,
+    w8NativeVideoSubmittedFrameDelta: 0,
     videoDecoderQueueMs: 0,
     videoDroppedStaleFrames: 0,
     videoLastDropReason: "",
@@ -1740,6 +1775,17 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
+  const nativeProgressStatus = String(diagnostics.w8NativeVideoProgressStatus || "").trim();
+  const nativeProgressNext = String(diagnostics.w8NativeVideoProgressNext || "").trim();
+  const nativeProgressWindowMs = Number(diagnostics.w8NativeVideoProgressWindowMs);
+  const nativePresentFrameDelta = Number(diagnostics.w8NativeVideoPresentFrameDelta);
+  const nativePresentFps = Number(diagnostics.w8NativeVideoPresentFps);
+  const nativeDecodedFrameDelta = Number(diagnostics.w8NativeVideoDecodedFrameDelta);
+  const nativeDecodedFps = Number(diagnostics.w8NativeVideoDecodedFps);
+  const nativeWebBypassDelta = Number(diagnostics.w8NativeVideoWebBypassDelta);
+  const nativeWebBypassFps = Number(diagnostics.w8NativeVideoWebBypassFps);
+  const nativeFramesPushedDelta = Number(diagnostics.w8NativeVideoFramesPushedDelta);
+  const nativeSubmittedFrameDelta = Number(diagnostics.w8NativeVideoSubmittedFrameDelta);
   const nativeClassifier = classifyW8NativeVideoSession(diagnostics);
   const nativeDecoderProgress =
     nativeDecoderSessionSubmittedFrames > 0 ||
@@ -1934,6 +1980,37 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
     parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
     parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
+  }
+  if (nativeProgressStatus) {
+    parts.push(`原生进展 ${nativeProgressStatus}`);
+    if (Number.isFinite(nativeProgressWindowMs) && nativeProgressWindowMs > 0) {
+      parts.push(`原生窗口 ${Math.round(nativeProgressWindowMs)}ms`);
+    }
+    if (Number.isFinite(nativePresentFrameDelta) && nativePresentFrameDelta > 0) {
+      const fpsText = Number.isFinite(nativePresentFps) && nativePresentFps > 0
+        ? ` / ${nativePresentFps.toFixed(1)} FPS`
+        : "";
+      parts.push(`原生呈现增长 ${Math.round(nativePresentFrameDelta)}${fpsText}`);
+    }
+    if (Number.isFinite(nativeDecodedFrameDelta) && nativeDecodedFrameDelta > 0) {
+      const fpsText = Number.isFinite(nativeDecodedFps) && nativeDecodedFps > 0
+        ? ` / ${nativeDecodedFps.toFixed(1)} FPS`
+        : "";
+      parts.push(`原生解码增长 ${Math.round(nativeDecodedFrameDelta)}${fpsText}`);
+    }
+    if (Number.isFinite(nativeWebBypassDelta) && nativeWebBypassDelta > 0) {
+      const fpsText = Number.isFinite(nativeWebBypassFps) && nativeWebBypassFps > 0
+        ? ` / ${nativeWebBypassFps.toFixed(1)} FPS`
+        : "";
+      parts.push(`Web旁路增长 ${Math.round(nativeWebBypassDelta)}${fpsText}`);
+    }
+    if (Number.isFinite(nativeFramesPushedDelta) && nativeFramesPushedDelta > 0) {
+      parts.push(`原生入站增长 ${Math.round(nativeFramesPushedDelta)}`);
+    }
+    if (Number.isFinite(nativeSubmittedFrameDelta) && nativeSubmittedFrameDelta > 0) {
+      parts.push(`原生提交增长 ${Math.round(nativeSubmittedFrameDelta)}`);
+    }
+    if (nativeProgressNext) parts.push(`原生进展下一步 ${nativeProgressNext}`);
   }
   parts.push(...formatW13LocalVideoQosDiagnostics(diagnostics));
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
@@ -6456,6 +6533,42 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
+  const nativeProgressStatus = String(
+    state.w8NativeVideoProgressStatus || state.hostDiagnostics?.w8NativeVideoProgressStatus || "",
+  ).trim();
+  const nativeProgressNext = String(
+    state.w8NativeVideoProgressNext || state.hostDiagnostics?.w8NativeVideoProgressNext || "",
+  ).trim();
+  const nativeProgressWindowMs =
+    Number(
+      state.w8NativeVideoProgressWindowMs || state.hostDiagnostics?.w8NativeVideoProgressWindowMs,
+    ) || 0;
+  const nativePresentFrameDelta =
+    Number(
+      state.w8NativeVideoPresentFrameDelta || state.hostDiagnostics?.w8NativeVideoPresentFrameDelta,
+    ) || 0;
+  const nativePresentFps =
+    Number(state.w8NativeVideoPresentFps || state.hostDiagnostics?.w8NativeVideoPresentFps) || 0;
+  const nativeDecodedFrameDelta =
+    Number(
+      state.w8NativeVideoDecodedFrameDelta || state.hostDiagnostics?.w8NativeVideoDecodedFrameDelta,
+    ) || 0;
+  const nativeDecodedFps =
+    Number(state.w8NativeVideoDecodedFps || state.hostDiagnostics?.w8NativeVideoDecodedFps) || 0;
+  const nativeWebBypassDelta =
+    Number(
+      state.w8NativeVideoWebBypassDelta || state.hostDiagnostics?.w8NativeVideoWebBypassDelta,
+    ) || 0;
+  const nativeWebBypassFps =
+    Number(state.w8NativeVideoWebBypassFps || state.hostDiagnostics?.w8NativeVideoWebBypassFps) || 0;
+  const nativeFramesPushedDelta =
+    Number(
+      state.w8NativeVideoFramesPushedDelta || state.hostDiagnostics?.w8NativeVideoFramesPushedDelta,
+    ) || 0;
+  const nativeSubmittedFrameDelta =
+    Number(
+      state.w8NativeVideoSubmittedFrameDelta || state.hostDiagnostics?.w8NativeVideoSubmittedFrameDelta,
+    ) || 0;
   const nativeClassifier = classifyW8NativeVideoSession(state);
   const w13LocalQosParts = formatW13LocalVideoQosDiagnostics(state.hostDiagnostics);
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
@@ -6619,6 +6732,25 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
     parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
     parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
+  }
+  if (nativeProgressStatus) {
+    parts.push(`原生进展 ${nativeProgressStatus}`);
+    if (nativeProgressWindowMs > 0) parts.push(`原生窗口 ${Math.round(nativeProgressWindowMs)} ms`);
+    if (nativePresentFrameDelta > 0) {
+      parts.push(`原生呈现增长 ${Math.round(nativePresentFrameDelta)}`);
+      if (nativePresentFps > 0) parts.push(`原生呈现 ${nativePresentFps.toFixed(1)} FPS`);
+    }
+    if (nativeDecodedFrameDelta > 0) {
+      parts.push(`原生解码增长 ${Math.round(nativeDecodedFrameDelta)}`);
+      if (nativeDecodedFps > 0) parts.push(`原生解码 ${nativeDecodedFps.toFixed(1)} FPS`);
+    }
+    if (nativeWebBypassDelta > 0) {
+      parts.push(`Web旁路增长 ${Math.round(nativeWebBypassDelta)}`);
+      if (nativeWebBypassFps > 0) parts.push(`Web旁路 ${nativeWebBypassFps.toFixed(1)} FPS`);
+    }
+    if (nativeFramesPushedDelta > 0) parts.push(`原生入站增长 ${Math.round(nativeFramesPushedDelta)}`);
+    if (nativeSubmittedFrameDelta > 0) parts.push(`原生提交增长 ${Math.round(nativeSubmittedFrameDelta)}`);
+    if (nativeProgressNext) parts.push(`原生进展下一步 ${nativeProgressNext}`);
   }
   parts.push(...w13LocalQosParts);
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
@@ -8129,6 +8261,18 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoErrors = 0;
   state.w8NativeVideoLastError = "";
   state.w8NativeVideoLastSnapshot = null;
+  state.w8NativeVideoProgressSamples = [];
+  state.w8NativeVideoProgressStatus = "";
+  state.w8NativeVideoProgressNext = "";
+  state.w8NativeVideoProgressWindowMs = 0;
+  state.w8NativeVideoPresentFrameDelta = 0;
+  state.w8NativeVideoPresentFps = 0;
+  state.w8NativeVideoDecodedFrameDelta = 0;
+  state.w8NativeVideoDecodedFps = 0;
+  state.w8NativeVideoWebBypassDelta = 0;
+  state.w8NativeVideoWebBypassFps = 0;
+  state.w8NativeVideoFramesPushedDelta = 0;
+  state.w8NativeVideoSubmittedFrameDelta = 0;
 }
 
 function getW8NativeVideoPort() {
@@ -8139,6 +8283,146 @@ function getW8NativeVideoPort() {
 function getW8NativeVideoFps() {
   const fps = Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value);
   return Number.isFinite(fps) && fps > 0 ? Math.max(1, Math.min(240, Math.trunc(fps))) : 60;
+}
+
+function roundW8NativeProgressFps(value) {
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 10) / 10 : 0;
+}
+
+function getW8NativeVideoProgressSnapshot(now = performance.now()) {
+  return {
+    at: Math.max(0, Number(now) || 0),
+    framesPushed: Math.max(0, Math.trunc(Number(state.w8NativeVideoFramesPushed) || 0)),
+    submittedFrames: Math.max(
+      0,
+      Math.trunc(Number(state.w8NativeVideoDecoderSessionSubmittedFrames) || 0),
+    ),
+    decodedFrames: Math.max(
+      0,
+      Math.trunc(Number(state.w8NativeVideoDecoderSessionDecodedFrames) || 0),
+    ),
+    presentFrames: Math.max(0, Math.trunc(Number(state.w8NativeVideoNativePresentFrames) || 0)),
+    webBypass: Math.max(0, Math.trunc(Number(state.h264WebDecodeBypassedForNativeSurface) || 0)),
+  };
+}
+
+function resetW8NativeVideoProgressDiagnostics() {
+  state.w8NativeVideoProgressSamples = [];
+  state.w8NativeVideoProgressStatus = "";
+  state.w8NativeVideoProgressNext = "";
+  state.w8NativeVideoProgressWindowMs = 0;
+  state.w8NativeVideoPresentFrameDelta = 0;
+  state.w8NativeVideoPresentFps = 0;
+  state.w8NativeVideoDecodedFrameDelta = 0;
+  state.w8NativeVideoDecodedFps = 0;
+  state.w8NativeVideoWebBypassDelta = 0;
+  state.w8NativeVideoWebBypassFps = 0;
+  state.w8NativeVideoFramesPushedDelta = 0;
+  state.w8NativeVideoSubmittedFrameDelta = 0;
+  const diagnostics = {
+    w8NativeVideoProgressStatus: "",
+    w8NativeVideoProgressNext: "",
+    w8NativeVideoProgressWindowMs: 0,
+    w8NativeVideoPresentFrameDelta: 0,
+    w8NativeVideoPresentFps: 0,
+    w8NativeVideoDecodedFrameDelta: 0,
+    w8NativeVideoDecodedFps: 0,
+    w8NativeVideoWebBypassDelta: 0,
+    w8NativeVideoWebBypassFps: 0,
+    w8NativeVideoFramesPushedDelta: 0,
+    w8NativeVideoSubmittedFrameDelta: 0,
+  };
+  state.hostDiagnostics = { ...(state.hostDiagnostics || {}), ...diagnostics };
+  return diagnostics;
+}
+
+function updateW8NativeVideoProgressDiagnostics(now = performance.now()) {
+  const sample = getW8NativeVideoProgressSnapshot(now);
+  const hasEvidence =
+    sample.framesPushed > 0 ||
+    sample.submittedFrames > 0 ||
+    sample.decodedFrames > 0 ||
+    sample.presentFrames > 0 ||
+    sample.webBypass > 0;
+  if (!hasEvidence) {
+    return resetW8NativeVideoProgressDiagnostics();
+  }
+
+  let samples = Array.isArray(state.w8NativeVideoProgressSamples)
+    ? state.w8NativeVideoProgressSamples.filter((item) => item && Number.isFinite(Number(item.at)))
+    : [];
+  const last = samples.at(-1);
+  if (
+    last &&
+    (sample.framesPushed < Number(last.framesPushed || 0) ||
+      sample.submittedFrames < Number(last.submittedFrames || 0) ||
+      sample.decodedFrames < Number(last.decodedFrames || 0) ||
+      sample.presentFrames < Number(last.presentFrames || 0) ||
+      sample.webBypass < Number(last.webBypass || 0))
+  ) {
+    samples = [];
+  }
+
+  samples.push(sample);
+  const cutoff = sample.at - w8NativeVideoProgressWindowMs;
+  samples = samples.filter((item) => Number(item.at) >= cutoff);
+  state.w8NativeVideoProgressSamples = samples;
+  const baseline = samples[0] || sample;
+  const elapsedMs = Math.max(0, Math.round(sample.at - Number(baseline.at || sample.at)));
+  const seconds = elapsedMs > 0 ? elapsedMs / 1000 : 0;
+  const delta = (key) => Math.max(0, Math.round(Number(sample[key] || 0) - Number(baseline[key] || 0)));
+  const framesPushedDelta = delta("framesPushed");
+  const submittedDelta = delta("submittedFrames");
+  const decodedDelta = delta("decodedFrames");
+  const presentDelta = delta("presentFrames");
+  const webBypassDelta = delta("webBypass");
+  let progressStatus = elapsedMs < 500 ? "warming-up" : "stalled";
+  let progressNext = elapsedMs < 500 ? "continue-observing-progress" : "inspect-native-video-stall";
+
+  if (presentDelta > 0) {
+    progressStatus = "present-progress";
+    progressNext = "continue-long-run-observation";
+  } else if (decodedDelta > 0) {
+    progressStatus = "decode-progress";
+    progressNext = "inspect-native-present";
+  } else if (webBypassDelta > 0) {
+    progressStatus = "native-bypass-progress";
+    progressNext = "watch-native-present";
+  } else if (submittedDelta > 0) {
+    progressStatus = "decoder-submit-progress";
+    progressNext = "wait-decoded-or-classify-decoder";
+  } else if (framesPushedDelta > 0) {
+    progressStatus = "receive-progress";
+    progressNext = "wait-decoder-submit";
+  }
+
+  state.w8NativeVideoProgressStatus = progressStatus;
+  state.w8NativeVideoProgressNext = progressNext;
+  state.w8NativeVideoProgressWindowMs = elapsedMs;
+  state.w8NativeVideoPresentFrameDelta = presentDelta;
+  state.w8NativeVideoPresentFps = roundW8NativeProgressFps(seconds > 0 ? presentDelta / seconds : 0);
+  state.w8NativeVideoDecodedFrameDelta = decodedDelta;
+  state.w8NativeVideoDecodedFps = roundW8NativeProgressFps(seconds > 0 ? decodedDelta / seconds : 0);
+  state.w8NativeVideoWebBypassDelta = webBypassDelta;
+  state.w8NativeVideoWebBypassFps = roundW8NativeProgressFps(seconds > 0 ? webBypassDelta / seconds : 0);
+  state.w8NativeVideoFramesPushedDelta = framesPushedDelta;
+  state.w8NativeVideoSubmittedFrameDelta = submittedDelta;
+
+  const diagnostics = {
+    w8NativeVideoProgressStatus: state.w8NativeVideoProgressStatus,
+    w8NativeVideoProgressNext: state.w8NativeVideoProgressNext,
+    w8NativeVideoProgressWindowMs: state.w8NativeVideoProgressWindowMs,
+    w8NativeVideoPresentFrameDelta: state.w8NativeVideoPresentFrameDelta,
+    w8NativeVideoPresentFps: state.w8NativeVideoPresentFps,
+    w8NativeVideoDecodedFrameDelta: state.w8NativeVideoDecodedFrameDelta,
+    w8NativeVideoDecodedFps: state.w8NativeVideoDecodedFps,
+    w8NativeVideoWebBypassDelta: state.w8NativeVideoWebBypassDelta,
+    w8NativeVideoWebBypassFps: state.w8NativeVideoWebBypassFps,
+    w8NativeVideoFramesPushedDelta: state.w8NativeVideoFramesPushedDelta,
+    w8NativeVideoSubmittedFrameDelta: state.w8NativeVideoSubmittedFrameDelta,
+  };
+  state.hostDiagnostics = { ...(state.hostDiagnostics || {}), ...diagnostics };
+  return diagnostics;
 }
 
 function updateW8NativeVideoDiagnostics({
@@ -8282,6 +8566,7 @@ function updateW8NativeVideoDiagnostics({
       .slice(0, 160);
   }
 
+  const progressDiagnostics = updateW8NativeVideoProgressDiagnostics();
   updateHostDiagnostics({
     w8NativeVideoFramesPushed: state.w8NativeVideoFramesPushed,
     w8NativeVideoQueueMs: Math.max(0, Math.round(queueMs)),
@@ -8341,6 +8626,7 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoLastReason: reason,
     w8NativeVideoErrors: state.w8NativeVideoErrors,
     w8NativeVideoLastError: state.w8NativeVideoLastError,
+    ...progressDiagnostics,
   });
 }
 
@@ -10872,6 +11158,7 @@ function renderVideoFrame(frame) {
 
 function updateH264DecoderDiagnostics(extra = {}) {
   const decoderQueueMetrics = getH264DecoderQueueMetrics();
+  const progressDiagnostics = updateW8NativeVideoProgressDiagnostics();
   updateHostDiagnostics({
     videoDecoderStatus: state.h264DecoderStatus,
     videoDecoderCodec: state.h264DecoderCodec,
@@ -10904,6 +11191,7 @@ function updateH264DecoderDiagnostics(extra = {}) {
     h264FallbackLastReason: state.h264FallbackLastReason,
     h264FallbackRecoveryPausedMs: getH264FallbackRecoveryPausedMs(),
     h264FallbackRecoveryPauseCount: state.h264FallbackRecoveryPauseCount,
+    ...progressDiagnostics,
     ...extra,
   });
 }

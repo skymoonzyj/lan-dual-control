@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W8/W13 native 视频连续进展诊断：Windows client 现在维护 W8 原生链路 5 秒滚动窗口，统计 native present/decoded/WebCodecs bypass/原生入站/decoder submitted 的增量和估算 FPS；现场视频导出、页面解码诊断与 `W8NativeVideo=` 同步输出 `progress/windowMs/presentDelta/presentFps/decodedDelta/decodedFps/webBypassDelta/webBypassFps/pushedDelta/submittedDelta/progressNext`。下一次桌面长跑可直接判断最近几秒是 native present 仍在前进、只 decoded 不 present，还是入站/提交卡住。只改 Windows 视频诊断和测试，不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 - [x] W13 formal 探针 repeat-frame 观察证据：`probe-mac-host` 现在统计 `video_frame.repeatPreviousFrame=true`，视频观察进度显示 `repeat <n>`，最终 `Video observed:` 输出 `repeat <n> (<pct>%)`。下一次 `check-mac-formal-e2e` Plan 1 复跑可直接从正式长测日志判断 Mac H.264 补帧 pacing 是否参与，而不是只看总 FPS。只消费现有可选字段，不改协议握手、认证/密码、音频或 input/inject。
 - [x] W13 H.264 repeat-frame 观察证据：`observe-mac-video` 现在统计 `repeatPreviousFrame=true` 的 H.264 帧，JSON 输出 `h264.repeatPreviousFrames` / `repeatPreviousFramePercent`；`observe-mac-media --boardSummary` 输出 `h264Repeat=<n>(<pct>%)`。这让 Mac 端拉取补帧代码后可直接上板确认低变化桌面补帧是否生效。只消费现有 `video_frame` 可选字段，不改认证/密码/音频/input/inject。
 - [x] W13 Mac H.264 低变化桌面补帧：正式长测 Plan 1 失败点在 `probe-mac-host` 直接观察 WebSocket `video_frame`，不经过 Windows client/native QoS；源码定位为 Mac H.264 只在 ScreenCaptureKit 产出新 sample 时编码，低变化桌面会源端低 FPS。本轮在 `ScreenCaptureCoordinator.swift` 给 H.264 流增加 repeat-frame pacing，缓存最近 `CVPixelBuffer`，按协商 FPS 补发重复编码帧，并用 `repeatPreviousFrame=true` 标记诊断；`test-mac-video-json-output` 新增源码防回归。只改视频侧，不改认证/密码/音频/input/inject。

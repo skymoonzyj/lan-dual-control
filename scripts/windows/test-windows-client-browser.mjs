@@ -553,6 +553,17 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const queueDrops = positiveInteger(value.w8NativeVideoDroppedFrames);
   const errors = positiveInteger(value.w8NativeVideoErrors);
   const webBypass = positiveInteger(value.h264WebDecodeBypassedForNativeSurface);
+  const progressStatus = String(value.w8NativeVideoProgressStatus || "").trim();
+  const progressNext = String(value.w8NativeVideoProgressNext || "").trim();
+  const progressWindowMs = positiveInteger(value.w8NativeVideoProgressWindowMs);
+  const presentDelta = positiveInteger(value.w8NativeVideoPresentFrameDelta);
+  const presentFps = finiteNumber(value.w8NativeVideoPresentFps, 0);
+  const decodedDelta = positiveInteger(value.w8NativeVideoDecodedFrameDelta);
+  const decodedFps = finiteNumber(value.w8NativeVideoDecodedFps, 0);
+  const webBypassDelta = positiveInteger(value.w8NativeVideoWebBypassDelta);
+  const webBypassFps = finiteNumber(value.w8NativeVideoWebBypassFps, 0);
+  const pushedDelta = positiveInteger(value.w8NativeVideoFramesPushedDelta);
+  const submittedDelta = positiveInteger(value.w8NativeVideoSubmittedFrameDelta);
   const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
   const webDecode = String(value.h264DecoderStatus || value.videoDecoderStatus || "").trim();
   const webBypassReason = String(value.h264WebDecodeBypassReason || "").trim();
@@ -615,6 +626,23 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     if (webBypassReason) parts.push(`webBypassReason=${compactBoardSummaryToken(webBypassReason, 80)}`);
     if (webBypassFrame) parts.push(`webBypassFrame=${compactBoardSummaryToken(webBypassFrame, 40)}`);
   }
+  if (progressStatus) parts.push(`progress=${compactBoardSummaryToken(progressStatus, 60)}`);
+  if (progressWindowMs > 0) parts.push(`windowMs=${progressWindowMs}`);
+  if (presentDelta > 0) {
+    parts.push(`presentDelta=${presentDelta}`);
+    if (presentFps > 0) parts.push(`presentFps=${presentFps.toFixed(1)}`);
+  }
+  if (decodedDelta > 0) {
+    parts.push(`decodedDelta=${decodedDelta}`);
+    if (decodedFps > 0) parts.push(`decodedFps=${decodedFps.toFixed(1)}`);
+  }
+  if (webBypassDelta > 0) {
+    parts.push(`webBypassDelta=${webBypassDelta}`);
+    if (webBypassFps > 0) parts.push(`webBypassFps=${webBypassFps.toFixed(1)}`);
+  }
+  if (pushedDelta > 0) parts.push(`pushedDelta=${pushedDelta}`);
+  if (submittedDelta > 0) parts.push(`submittedDelta=${submittedDelta}`);
+  if (progressNext) parts.push(`progressNext=${compactBoardSummaryToken(progressNext, 80)}`);
   if (status) parts.push(`status=${status}`);
   if (present) parts.push(`present=${present}`);
   if (presentFrames > 0) parts.push(`presentFrames=${presentFrames}`);
@@ -673,7 +701,7 @@ function makeBoardSummary(summary) {
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
-    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 680)}`);
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 920)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -790,6 +818,17 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoDecoderSessionSubmittedFrames: 190,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 190,
     w8NativeVideoFramesPushed: 192,
+    w8NativeVideoProgressStatus: "present-progress",
+    w8NativeVideoProgressWindowMs: 5000,
+    w8NativeVideoPresentFrameDelta: 120,
+    w8NativeVideoPresentFps: 24,
+    w8NativeVideoDecodedFrameDelta: 121,
+    w8NativeVideoDecodedFps: 24.2,
+    w8NativeVideoWebBypassDelta: 120,
+    w8NativeVideoWebBypassFps: 24,
+    w8NativeVideoFramesPushedDelta: 122,
+    w8NativeVideoSubmittedFrameDelta: 121,
+    w8NativeVideoProgressNext: "continue-long-run-observation",
     w8NativeVideoDecoderSessionOutputSubtype: "NV12",
     w8NativeVideoCodecString: "avc1.420029",
     w8NativeVideoNativeSurfaceStatus: "latest-frame-presented",
@@ -858,6 +897,17 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("webBypass=24") &&
     text.includes("webBypassReason=native-main-surface-presenting") &&
     text.includes("webBypassFrame=188") &&
+    text.includes("progress=present-progress") &&
+    text.includes("windowMs=5000") &&
+    text.includes("presentDelta=120") &&
+    text.includes("presentFps=24.0") &&
+    text.includes("decodedDelta=121") &&
+    text.includes("decodedFps=24.2") &&
+    text.includes("webBypassDelta=120") &&
+    text.includes("webBypassFps=24.0") &&
+    text.includes("pushedDelta=122") &&
+    text.includes("submittedDelta=121") &&
+    text.includes("progressNext=continue-long-run-observation") &&
     text.includes("presenting=yes") &&
     text.includes("presentGap=0") &&
     text.includes("submitted=190") &&
@@ -1007,6 +1057,17 @@ function windowsClientSnapshotExpression() {
       w8NativeVideoWindowSwapchainReason: window.state?.w8NativeVideoWindowSwapchainReason ?? "",
       w8NativeVideoErrors: window.state?.w8NativeVideoErrors ?? 0,
       w8NativeVideoLastError: window.state?.w8NativeVideoLastError ?? "",
+      w8NativeVideoProgressStatus: window.state?.w8NativeVideoProgressStatus ?? "",
+      w8NativeVideoProgressNext: window.state?.w8NativeVideoProgressNext ?? "",
+      w8NativeVideoProgressWindowMs: window.state?.w8NativeVideoProgressWindowMs ?? 0,
+      w8NativeVideoPresentFrameDelta: window.state?.w8NativeVideoPresentFrameDelta ?? 0,
+      w8NativeVideoPresentFps: window.state?.w8NativeVideoPresentFps ?? 0,
+      w8NativeVideoDecodedFrameDelta: window.state?.w8NativeVideoDecodedFrameDelta ?? 0,
+      w8NativeVideoDecodedFps: window.state?.w8NativeVideoDecodedFps ?? 0,
+      w8NativeVideoWebBypassDelta: window.state?.w8NativeVideoWebBypassDelta ?? 0,
+      w8NativeVideoWebBypassFps: window.state?.w8NativeVideoWebBypassFps ?? 0,
+      w8NativeVideoFramesPushedDelta: window.state?.w8NativeVideoFramesPushedDelta ?? 0,
+      w8NativeVideoSubmittedFrameDelta: window.state?.w8NativeVideoSubmittedFrameDelta ?? 0,
       videoFrames: window.state?.videoFrames ?? 0,
       audioFrames: window.state?.audioFrames ?? 0,
       audioPlayedFrames: window.state?.audioPlayedFrames ?? 0,
@@ -5767,6 +5828,20 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoErrors: state.w8NativeVideoErrors,
         w8NativeVideoLastError: state.w8NativeVideoLastError,
         w8NativeVideoLastSnapshot: state.w8NativeVideoLastSnapshot,
+        w8NativeVideoProgressSamples: Array.isArray(state.w8NativeVideoProgressSamples)
+          ? state.w8NativeVideoProgressSamples.map((sample) => ({ ...sample }))
+          : [],
+        w8NativeVideoProgressStatus: state.w8NativeVideoProgressStatus,
+        w8NativeVideoProgressNext: state.w8NativeVideoProgressNext,
+        w8NativeVideoProgressWindowMs: state.w8NativeVideoProgressWindowMs,
+        w8NativeVideoPresentFrameDelta: state.w8NativeVideoPresentFrameDelta,
+        w8NativeVideoPresentFps: state.w8NativeVideoPresentFps,
+        w8NativeVideoDecodedFrameDelta: state.w8NativeVideoDecodedFrameDelta,
+        w8NativeVideoDecodedFps: state.w8NativeVideoDecodedFps,
+        w8NativeVideoWebBypassDelta: state.w8NativeVideoWebBypassDelta,
+        w8NativeVideoWebBypassFps: state.w8NativeVideoWebBypassFps,
+        w8NativeVideoFramesPushedDelta: state.w8NativeVideoFramesPushedDelta,
+        w8NativeVideoSubmittedFrameDelta: state.w8NativeVideoSubmittedFrameDelta,
         hostDiagnostics: { ...(state.hostDiagnostics || {}) },
         tauriDescriptor: Object.getOwnPropertyDescriptor(window, "__TAURI__"),
         videoDecoderDescriptor: Object.getOwnPropertyDescriptor(window, "VideoDecoder"),
@@ -6093,6 +6168,18 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoErrors = 0;
         state.w8NativeVideoLastError = "";
         state.w8NativeVideoLastSnapshot = null;
+        state.w8NativeVideoProgressSamples = [];
+        state.w8NativeVideoProgressStatus = "";
+        state.w8NativeVideoProgressNext = "";
+        state.w8NativeVideoProgressWindowMs = 0;
+        state.w8NativeVideoPresentFrameDelta = 0;
+        state.w8NativeVideoPresentFps = 0;
+        state.w8NativeVideoDecodedFrameDelta = 0;
+        state.w8NativeVideoDecodedFps = 0;
+        state.w8NativeVideoWebBypassDelta = 0;
+        state.w8NativeVideoWebBypassFps = 0;
+        state.w8NativeVideoFramesPushedDelta = 0;
+        state.w8NativeVideoSubmittedFrameDelta = 0;
         state.hostDiagnostics = {};
 
         await renderH264VideoFrame({
@@ -6295,6 +6382,47 @@ async function verifyH264KeyFrameDetection(session) {
           exportTextAfterNativeBypass.includes("WebCodecs 旁路 原生主画面 1") &&
           exportTextAfterNativeBypass.includes("解码 原生主画面");
 
+        state.w8NativeVideoProgressSamples = [{
+          at: 1000,
+          framesPushed: 10,
+          submittedFrames: 8,
+          decodedFrames: 7,
+          presentFrames: 6,
+          webBypass: 3,
+        }];
+        state.w8NativeVideoFramesPushed = 132;
+        state.w8NativeVideoDecoderSessionSubmittedFrames = 129;
+        state.w8NativeVideoDecoderSessionDecodedFrames = 128;
+        state.w8NativeVideoNativePresentFrames = 126;
+        state.h264WebDecodeBypassedForNativeSurface = 123;
+        const progress = updateW8NativeVideoProgressDiagnostics(6000);
+        const progressExportText = getVideoPerformanceExportStatus(6000);
+        const progressRecorded =
+          progress?.w8NativeVideoProgressStatus === "present-progress" &&
+          progress?.w8NativeVideoProgressNext === "continue-long-run-observation" &&
+          progress?.w8NativeVideoProgressWindowMs === 5000 &&
+          progress?.w8NativeVideoPresentFrameDelta === 120 &&
+          progress?.w8NativeVideoPresentFps === 24 &&
+          progress?.w8NativeVideoDecodedFrameDelta === 121 &&
+          progress?.w8NativeVideoDecodedFps === 24.2 &&
+          progress?.w8NativeVideoWebBypassDelta === 120 &&
+          progress?.w8NativeVideoWebBypassFps === 24 &&
+          progress?.w8NativeVideoFramesPushedDelta === 122 &&
+          progress?.w8NativeVideoSubmittedFrameDelta === 121 &&
+          state.hostDiagnostics?.w8NativeVideoProgressStatus === "present-progress" &&
+          state.hostDiagnostics?.w8NativeVideoPresentFrameDelta === 120 &&
+          progressExportText.includes("原生进展 present-progress") &&
+          progressExportText.includes("原生窗口 5000 ms") &&
+          progressExportText.includes("原生呈现增长 120") &&
+          progressExportText.includes("原生呈现 24.0 FPS") &&
+          progressExportText.includes("原生解码增长 121") &&
+          progressExportText.includes("原生解码 24.2 FPS") &&
+          progressExportText.includes("Web旁路增长 120") &&
+          progressExportText.includes("Web旁路 24.0 FPS") &&
+          progressExportText.includes("原生入站增长 122") &&
+          progressExportText.includes("原生提交增长 121") &&
+          progressExportText.includes("原生进展下一步 continue-long-run-observation");
+
         return {
           ok:
             isH264KeyFramePayload(annexbKey, "annexb-base64") &&
@@ -6302,13 +6430,16 @@ async function verifyH264KeyFrameDetection(session) {
             isH264KeyFramePayload(avcKey, "avc") &&
             h264EvidenceRecorded &&
             nativeQueueRecorded &&
-            nativeBypassRecorded,
+            nativeBypassRecorded &&
+            progressRecorded,
           annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
           annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
           avcKey: isH264KeyFramePayload(avcKey, "avc"),
           h264EvidenceRecorded,
           nativeQueueRecorded,
           nativeBypassRecorded,
+          progressRecorded,
+          progress,
           nativeCalls,
           webDecodeCallsBeforeNativeBypass,
           webDecodeCalls,
@@ -6417,6 +6548,7 @@ async function verifyH264KeyFrameDetection(session) {
           h264WebDecodeBypassLastFrameId: state.h264WebDecodeBypassLastFrameId,
           exportText,
           exportTextAfterNativeBypass,
+          progressExportText,
         };
       } finally {
         state.h264Decoder = original.h264Decoder;
@@ -6527,6 +6659,18 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoErrors = original.w8NativeVideoErrors;
         state.w8NativeVideoLastError = original.w8NativeVideoLastError;
         state.w8NativeVideoLastSnapshot = original.w8NativeVideoLastSnapshot;
+        state.w8NativeVideoProgressSamples = original.w8NativeVideoProgressSamples;
+        state.w8NativeVideoProgressStatus = original.w8NativeVideoProgressStatus;
+        state.w8NativeVideoProgressNext = original.w8NativeVideoProgressNext;
+        state.w8NativeVideoProgressWindowMs = original.w8NativeVideoProgressWindowMs;
+        state.w8NativeVideoPresentFrameDelta = original.w8NativeVideoPresentFrameDelta;
+        state.w8NativeVideoPresentFps = original.w8NativeVideoPresentFps;
+        state.w8NativeVideoDecodedFrameDelta = original.w8NativeVideoDecodedFrameDelta;
+        state.w8NativeVideoDecodedFps = original.w8NativeVideoDecodedFps;
+        state.w8NativeVideoWebBypassDelta = original.w8NativeVideoWebBypassDelta;
+        state.w8NativeVideoWebBypassFps = original.w8NativeVideoWebBypassFps;
+        state.w8NativeVideoFramesPushedDelta = original.w8NativeVideoFramesPushedDelta;
+        state.w8NativeVideoSubmittedFrameDelta = original.w8NativeVideoSubmittedFrameDelta;
         state.hostDiagnostics = original.hostDiagnostics;
         if (original.tauriDescriptor) {
           Object.defineProperty(window, "__TAURI__", original.tauriDescriptor);
