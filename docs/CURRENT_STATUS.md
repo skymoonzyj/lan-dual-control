@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W13 H.264 repeat-frame 观察证据
+- 为了让 Mac 端复验刚合入的 H.264 repeat-frame pacing，`scripts/mac/observe-mac-video.mjs` 已统计 `repeatPreviousFrame=true`，JSON 的 `observation.h264` 现在带 `repeatPreviousFrames` 和 `repeatPreviousFramePercent`；`scripts/mac/observe-mac-media.mjs --boardSummary` 的 H.264 摘要现在带 `h264Repeat=<n>(<pct>%)`。下一次 Mac 拉取后跑媒体基线或 W13 长测时，可以直接从板面判断补帧是否发生。该轮只消费现有视频帧可选字段，不改协议握手、不改认证/密码/音频/input/inject。
+
 ## 2026-06-22 W13 Mac H.264 低变化桌面补帧
 - W13 正式长测的 Plan 1 视频段失败在 `scripts/windows/probe-mac-host.mjs` 直接观察 `video_frame`：300 秒收到 1170/1200 帧，约 3.90/5 FPS，H.264 首帧、Annex B、ScreenCaptureKit 管线均正常；该阶段尚未进入 Windows client/browser/native QoS、音频或剪贴板。源码定位为 Mac H.264 端只在 ScreenCaptureKit 输出新 sample 时编码发送，低变化桌面会源端降帧。本轮在 `apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift` 增加 H.264 repeat-frame pacing：保留最近 `CVPixelBuffer`，按目标 FPS 在无新 sample 时重新编码上一帧，重复帧带 `repeatPreviousFrame=true` 供 Windows 诊断识别。当前只改视频侧，不改认证/密码/音频/input/inject；Windows 本机已通过 Node/源码回归，Mac 真机仍需拉取后 `swift build` 和真实长测复验。
 

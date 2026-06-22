@@ -297,6 +297,7 @@ function makeVideoFrame(frameId) {
     codec: "h264",
     encoding: "annexb-base64",
     keyFrame,
+    repeatPreviousFrame: frameId > 1 && frameId % 2 === 0,
     capturePipeline: "screencapturekit-h264",
     activeDisplayId: "main",
     displayName: "Main",
@@ -497,6 +498,7 @@ async function checkFakeHostJsonSuccess(args) {
     assert(payload.summary?.passed === 2 && payload.summary?.failed === 0, "fake host should pass video and audio");
     assert(payload.video?.ok === true && payload.video?.observation?.frameCount >= 4, "video result should pass with frames");
     assert(payload.video?.observation?.h264?.keyFramesWithParameterSets >= 1, "video result should include H.264 keyframe SPS/PPS/IDR evidence");
+    assert(payload.video?.observation?.h264?.repeatPreviousFrames >= 1, "video result should include H.264 repeat-frame evidence");
     assert((payload.video?.observation?.h264?.firstKeyFrameNalTypes || []).join(",") === "7,8,5", "video result should include first H.264 keyframe NAL types");
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
     assert(payload.summary?.noInput === true && payload.summary?.noInject === true, "summary should preserve no input/inject");
@@ -629,6 +631,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "boardSummary should include media request context");
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
     assert(lines[0].includes("h264Frames="), "boardSummary should include H.264 sent frame count");
+    assert(lines[0].includes("h264Repeat="), "boardSummary should include H.264 repeat-frame count");
     assert(lines[0].includes("h264Delta="), "boardSummary should include H.264 delta frame count");
     assert(lines[0].includes("keyParamMiss=0"), "boardSummary should include H.264 keyframes missing parameter sets");
     assert(lines[0].includes("firstKeyParam=yes"), "boardSummary should include first H.264 keyframe parameter-set status");

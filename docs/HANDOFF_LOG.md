@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 H.264 repeat-frame 观察证据
+开发端：Windows Codex
+本轮目标：补齐刚合入的 Mac H.264 repeat-frame pacing 的可观测性，让 Mac 端复验时能直接看到补帧数量和比例。
+完成内容：`observe-mac-video` 统计 `repeatPreviousFrame=true`，JSON 输出 `observation.h264.repeatPreviousFrames` 和 `repeatPreviousFramePercent`；`observe-mac-media --boardSummary` 的 H.264 摘要输出 `h264Repeat=<n>(<pct>%)`。测试 fake Mac host 会模拟重复帧，覆盖 JSON 和 boardSummary。
+修改文件：scripts/mac/observe-mac-video.mjs；scripts/mac/observe-mac-media.mjs；scripts/mac/test-mac-video-json-output.mjs；scripts/mac/test-mac-media-json-output.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于缺 `repeatPreviousFrames` / `h264Repeat`；实现后 `node scripts/mac/test-mac-video-json-output.mjs --timeoutMs 12000` 和 `node scripts/mac/test-mac-media-json-output.mjs --timeoutMs 20000` 通过。
+遗留问题：Windows 本机仍不能运行 Swift/ScreenCaptureKit 真机；Mac 端需要拉取、编译、重启 host 后观察真实 `h264Repeat`。
+下一步建议：Mac 端复跑媒体基线或 W13 formal 视频段时，把 `h264Repeat`、frames/fps、maxGap、timestampUs/durationUs 一起上板；若 `h264Repeat=0`，先确认 host 是否是最新 build。
+是否改了协议：否。只消费现有 `video_frame.repeatPreviousFrame` 可选字段。
+是否需要另一端配合：需要 Mac 端拉取并真机复验；不需要发送密码到通讯板，不发 input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 Mac H.264 低变化桌面补帧
 开发端：Windows Codex
 本轮目标：按通讯板 W13 长测失败证据，主要完成视频侧修改，定位并修复 300 秒 H.264 观察只有约 3.90 FPS 的源端低变化桌面产帧问题。

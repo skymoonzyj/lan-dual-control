@@ -733,6 +733,7 @@ function formatH264ProbeSummary(h264) {
     : Math.max(0, keyFrames - (h264.keyFramesWithParameterSets || 0));
   return [
     `h264Frames=${frames}`,
+    formatH264RepeatSummary(h264, frames),
     `h264Key=${keyFrames}`,
     `h264Delta=${deltaFrames}`,
     `sps=${h264.spsFrames || 0}`,
@@ -753,6 +754,13 @@ function formatH264ProbeSummary(h264) {
     formatH264TailGap("keyTailFrames", h264.keyFrameTailGapFrames),
     formatH264TailGap("keyTailMs", h264.keyFrameTailGapMs),
   ].filter(Boolean).join(",");
+}
+
+function formatH264RepeatSummary(h264, frames) {
+  const repeatFrames = Number(h264.repeatPreviousFrames);
+  if (!Number.isFinite(repeatFrames) || repeatFrames <= 0) return "h264Repeat=0";
+  const percent = frames > 0 ? ((repeatFrames * 100) / frames).toFixed(1) : "0.0";
+  return `h264Repeat=${Math.round(repeatFrames)}(${percent}%)`;
 }
 
 function formatH264KeyParam(label, value) {

@@ -171,6 +171,7 @@ function makeVideoFrame(frameId, options = {}) {
     codec: "h264",
     encoding: "annexb-base64",
     keyFrame,
+    repeatPreviousFrame: frameId > 1 && frameId % 2 === 0,
     capturePipeline: "screencapturekit-h264",
     activeDisplayId: "main",
     displayName: "Main",
@@ -399,6 +400,12 @@ async function assertJsonSuccess(timeoutMs) {
     }
     if (!Number.isFinite(Number(payload.observation.h264.deltaFrames)) || Number(payload.observation.h264.deltaFrames) < 1) {
       throw new Error(`JSON success should count H.264 delta frames.\n${result.stdout}`);
+    }
+    if (!Number.isFinite(Number(payload.observation.h264.repeatPreviousFrames)) || Number(payload.observation.h264.repeatPreviousFrames) < 1) {
+      throw new Error(`JSON success should count H.264 repeatPreviousFrame diagnostics.\n${result.stdout}`);
+    }
+    if (!Number.isFinite(Number(payload.observation.h264.repeatPreviousFramePercent)) || Number(payload.observation.h264.repeatPreviousFramePercent) <= 0) {
+      throw new Error(`JSON success should report H.264 repeatPreviousFrame percent.\n${result.stdout}`);
     }
     if (Number(payload.observation.h264.spsFrames) < 1 || Number(payload.observation.h264.ppsFrames) < 1 || Number(payload.observation.h264.idrFrames) < 1) {
       throw new Error(`JSON success should count H.264 SPS/PPS/IDR frames.\n${result.stdout}`);

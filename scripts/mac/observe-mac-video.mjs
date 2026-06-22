@@ -340,6 +340,7 @@ function createVideoStats(args) {
       keyFrames: 0,
       keyFrameFlagFrames: 0,
       payloadKeyFrames: 0,
+      repeatPreviousFrames: 0,
       spsFrames: 0,
       ppsFrames: 0,
       idrFrames: 0,
@@ -597,6 +598,7 @@ function trackH264Frame(stats, h264Info, frame = {}) {
   }
   if (h264Info.keyFrameFlag) stats.h264.keyFrameFlagFrames += 1;
   if (h264Info.payloadKeyFrame) stats.h264.payloadKeyFrames += 1;
+  if (frame.repeatPreviousFrame === true) stats.h264.repeatPreviousFrames += 1;
   if (h264Info.hasSps) stats.h264.spsFrames += 1;
   if (h264Info.hasPps) stats.h264.ppsFrames += 1;
   if (h264Info.hasIdr) stats.h264.idrFrames += 1;
@@ -731,6 +733,8 @@ function makeH264Observation(h264) {
     deltaFrames: Math.max(0, h264.frames - h264.keyFrames),
     keyFrameFlagFrames: h264.keyFrameFlagFrames,
     payloadKeyFrames: h264.payloadKeyFrames,
+    repeatPreviousFrames: h264.repeatPreviousFrames,
+    repeatPreviousFramePercent: h264.frames > 0 ? Number(((h264.repeatPreviousFrames * 100) / h264.frames).toFixed(1)) : 0,
     spsFrames: h264.spsFrames,
     ppsFrames: h264.ppsFrames,
     idrFrames: h264.idrFrames,
@@ -952,6 +956,7 @@ function actualFps(stats, args) {
 function formatH264Summary(h264) {
   return [
     `h264 key=${h264.keyFrames}`,
+    `repeat=${h264.repeatPreviousFrames}`,
     `sps=${h264.spsFrames}`,
     `pps=${h264.ppsFrames}`,
     `idr=${h264.idrFrames}`,
