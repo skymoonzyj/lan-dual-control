@@ -740,6 +740,55 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   return parts.join(" ");
 }
 
+function makeW14NativeVideoRetestSummary(value = {}) {
+  const receiverStatus = String(value.w14NativeReceiverStatus ?? value.status ?? "").trim();
+  const transport = String(value.w14NativeReceiverTransport ?? value.transport ?? "").trim();
+  const mediaOwner = String(value.w14NativeReceiverMediaOwner ?? value.mediaOwner ?? "").trim();
+  const videoFrames = positiveInteger(value.w14NativeVideoFrames ?? value.videoFrames);
+  const h264Frames = positiveInteger(value.w14NativeVideoH264Frames ?? value.h264Frames);
+  const pushed = positiveInteger(value.w14NativeVideoPushedFrames ?? value.pushed);
+  const accepted = positiveInteger(value.w14NativeVideoAcceptedFrames ?? value.accepted);
+  const dropped = positiveInteger(value.w14NativeVideoDroppedFrames ?? value.dropped);
+  const queueMs = positiveInteger(value.w14NativeVideoQueueMs ?? value.queueMs);
+  const decoded = positiveInteger(value.w14NativeVideoDecodedFrames ?? value.decoded);
+  const presentFrames = positiveInteger(value.w14NativeVideoPresentFrames ?? value.presentFrames);
+  const presentingValue = value.w14NativeVideoPresenting ?? value.presenting;
+  const presenting =
+    typeof presentingValue === "boolean" ? (presentingValue ? "yes" : "no") : String(presentingValue ?? "").trim();
+  const lastStatus = String(value.w14NativeVideoLastStatus ?? value.lastStatus ?? "").trim();
+  const lastReason = String(value.w14NativeVideoLastReason ?? value.lastReason ?? "").trim();
+  const lastError = String(value.w14NativeVideoLastError ?? value.lastError ?? "").trim();
+  const hasEvidence =
+    Boolean(receiverStatus || transport || mediaOwner || lastStatus || lastReason || lastError) ||
+    videoFrames > 0 ||
+    h264Frames > 0 ||
+    pushed > 0 ||
+    accepted > 0 ||
+    dropped > 0 ||
+    decoded > 0 ||
+    presentFrames > 0;
+
+  if (!hasEvidence) return "";
+
+  const parts = [];
+  if (receiverStatus) parts.push(`status=${compactBoardSummaryToken(receiverStatus, 60)}`);
+  if (transport) parts.push(`transport=${compactBoardSummaryToken(transport, 60)}`);
+  if (mediaOwner) parts.push(`mediaOwner=${compactBoardSummaryToken(mediaOwner, 60)}`);
+  if (videoFrames > 0) parts.push(`videoFrames=${videoFrames}`);
+  if (h264Frames > 0) parts.push(`h264Frames=${h264Frames}`);
+  if (pushed > 0) parts.push(`pushed=${pushed}`);
+  if (accepted > 0) parts.push(`accepted=${accepted}`);
+  if (dropped > 0) parts.push(`dropped=${dropped}`);
+  if (queueMs > 0) parts.push(`queueMs=${queueMs}`);
+  if (decoded > 0 || receiverStatus) parts.push(`decoded=${decoded}`);
+  if (presentFrames > 0 || decoded > 0 || receiverStatus) parts.push(`presentFrames=${presentFrames}`);
+  if (presenting) parts.push(`presenting=${compactBoardSummaryToken(presenting, 20)}`);
+  if (lastStatus) parts.push(`lastStatus=${compactBoardSummaryToken(lastStatus, 80)}`);
+  if (lastReason) parts.push(`lastReason=${compactBoardSummaryToken(lastReason.replace(/[;,|]+/g, ""), 100)}`);
+  if (lastError) parts.push(`lastError=${compactBoardSummaryToken(lastError, 100)}`);
+  return parts.join(" ");
+}
+
 function makeBoardSummary(summary) {
   const checks = Array.from(summary.checks || []);
   const checkText = checks.length ? checks.join(",") : "none";
@@ -759,6 +808,9 @@ function makeBoardSummary(summary) {
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
     details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 1200)}`);
+  }
+  if (summary.w14NativeVideo) {
+    details.push(`W14NativeVideo=${compactBoardSummaryText(summary.w14NativeVideo, 700)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -1023,6 +1075,52 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("deviceLost=yes") &&
     text.includes("errors=0");
   return { ok, text, w8NativeVideo, w8NativeVideoBehind, w8NativeVideoPredecodeDrops };
+}
+
+function verifyW14NativeVideoRetestSummary() {
+  const w14NativeVideo = makeW14NativeVideoRetestSummary({
+    w14NativeReceiverStatus: "streaming",
+    w14NativeReceiverTransport: "websocket-native",
+    w14NativeReceiverMediaOwner: "native-receiver",
+    w14NativeVideoFrames: 5,
+    w14NativeVideoH264Frames: 5,
+    w14NativeVideoPushedFrames: 5,
+    w14NativeVideoAcceptedFrames: 4,
+    w14NativeVideoDroppedFrames: 1,
+    w14NativeVideoQueueMs: 12,
+    w14NativeVideoDecodedFrames: 3,
+    w14NativeVideoPresentFrames: 2,
+    w14NativeVideoPresenting: true,
+    w14NativeVideoLastStatus: "latest-frame-nv12-converted-presented",
+    w14NativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
+    w14NativeVideoLastError: "",
+  });
+  const text = makeBoardSummary({
+    status: "passed",
+    mode: "connect",
+    target: "192.168.31.122:43770",
+    discoveryTarget: "192.168.31.122:43770",
+    checks: ["connection", "w14-native-receiver-entry"],
+    w14NativeVideo,
+    h264Errors: "0",
+  });
+  const ok =
+    text.includes("W14NativeVideo=") &&
+    text.includes("status=streaming") &&
+    text.includes("transport=websocket-native") &&
+    text.includes("mediaOwner=native-receiver") &&
+    text.includes("videoFrames=5") &&
+    text.includes("h264Frames=5") &&
+    text.includes("pushed=5") &&
+    text.includes("accepted=4") &&
+    text.includes("dropped=1") &&
+    text.includes("queueMs=12") &&
+    text.includes("decoded=3") &&
+    text.includes("presentFrames=2") &&
+    text.includes("presenting=yes") &&
+    text.includes("lastStatus=latest-frame-nv12-converted-presented") &&
+    text.includes("lastReason=ready_latest_NV12_frame_converted_and_presented_to_HWND");
+  return { ok, text, w14NativeVideo };
 }
 
 function emitBoardSummary(summary) {
@@ -10393,6 +10491,7 @@ async function run() {
         "OK",
         `W14 native receiver desktop entry: start=${w14EntryCheck.startCalls}, snapshots=${w14EntryCheck.snapshotCalls}, stop=${w14EntryCheck.stopCalls}`,
       );
+      summary.w14NativeVideo = makeW14NativeVideoRetestSummary(w14EntryCheck.diagnostics);
       const keyFrameCheck = await verifyH264KeyFrameDetection(session);
       summary.checks.push("h264-keyframe");
       print(
@@ -10439,6 +10538,12 @@ async function run() {
       }
       summary.checks.push("w8-native-summary");
       print("OK", `W8 native video summary: ${w8NativeSummaryCheck.w8NativeVideo}`);
+      const w14NativeSummaryCheck = verifyW14NativeVideoRetestSummary();
+      if (!w14NativeSummaryCheck.ok) {
+        throw new Error(`W14 native video summary check failed: ${JSON.stringify(w14NativeSummaryCheck)}`);
+      }
+      summary.checks.push("w14-native-summary");
+      print("OK", `W14 native video summary: ${w14NativeSummaryCheck.w14NativeVideo}`);
       summary.status = "passed";
       emitBoardSummary(summary);
       return;
@@ -10503,6 +10608,7 @@ async function run() {
       "OK",
       `W14 native receiver desktop entry: start=${w14EntryCheck.startCalls}, snapshots=${w14EntryCheck.snapshotCalls}, stop=${w14EntryCheck.stopCalls}`,
     );
+    summary.w14NativeVideo = makeW14NativeVideoRetestSummary(w14EntryCheck.diagnostics);
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
     summary.checks.push("h264-keyframe");
     print(
@@ -10549,6 +10655,12 @@ async function run() {
     }
     summary.checks.push("w8-native-summary");
     print("OK", `W8 native video summary: ${w8NativeSummaryCheck.w8NativeVideo}`);
+    const w14NativeSummaryCheck = verifyW14NativeVideoRetestSummary();
+    if (!w14NativeSummaryCheck.ok) {
+      throw new Error(`W14 native video summary check failed: ${JSON.stringify(w14NativeSummaryCheck)}`);
+    }
+    summary.checks.push("w14-native-summary");
+    print("OK", `W14 native video summary: ${w14NativeSummaryCheck.w14NativeVideo}`);
     const audioStabilityGateCheck = verifyW2W3RetestAudioStabilityGate();
     if (!audioStabilityGateCheck.ok) {
       throw new Error(`W2W3Retest audio stability gate check failed: ${JSON.stringify(audioStabilityGateCheck)}`);

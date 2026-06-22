@@ -14,6 +14,7 @@ const defaults = {
 
 const w8NativeLine = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback webDecode=native-main-surface webBypass=24 webBypassReason=native-main-surface-presenting webBypassFrame=188 status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 mediaSession=native-main nativeAck=presented nativeClass=device-lost-recovered nativeNext=watch-arrival-qos queueDrops=3722 queueDropScope=predecode queueReason=waiting-keyframe submitted=190 decoderGap=2 accepted=190 pushed=192 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
 const w8NativeLineMissingBypass = "W8NativeVideo=ui=html-shell mainSurface=native-hwnd canvasRole=diagnostic-fallback status=device-lost-rebuilt present=latest-frame-nv12-converted-presented presentFrames=188 decoded=188 presenting=yes presentGap=0 output=NV12 surface=latest-frame-presented copy=latest-frame-presented handoff=latest-frame-ready swapchain=ready streamChange=yes deviceLost=yes errors=0";
+const w14NativeLine = "W14NativeVideo=status=streaming transport=websocket-native mediaOwner=native-receiver videoFrames=5 h264Frames=5 pushed=5 accepted=4 dropped=1 queueMs=12 decoded=3 presentFrames=2 presenting=yes lastStatus=latest-frame-nv12-converted-presented lastReason=ready";
 const retestLine = "W2W3Retest=video=实收 63.9 FPS · 协商 60 Hz · 平均间隔 16 ms · 最大间隔 9100 ms · 远端媒体平均间隔 17 ms · 远端媒体最大间隔 21 ms · 追实时请求 42 次 · 本机队列 190 ms · 本地过期丢帧 125 · 可见恢复 2 次 · 原因 live-backlog-keyframe-request surface=none h264=status=rendering decoded=3722 skippedDelta=0 needsKeyframe=no queue=4 queueMs=190 staleDrops=125 reason=live-backlog-keyframe-request recv=3722 key=87 sps=87 pps=87 idr=87 lastNal=7/8/5, audio=队列 100 ms";
 
 function helpRequested(argv) {
@@ -167,6 +168,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--send", `help ${flag}`);
     assertIncludes(result.stdout, "W8NativeVideo", `help ${flag}`);
     assertIncludes(result.stdout, "W8NativeGate", `help ${flag}`);
+    assertIncludes(result.stdout, "W14NativeVideo", `help ${flag}`);
+    assertIncludes(result.stdout, "W14NativeGate", `help ${flag}`);
     assertSecretSafe(result.stdout + result.stderr, `help ${flag}`);
   }
   console.log("[OK] W8 desktop video board helper help is safe");
@@ -194,6 +197,37 @@ async function checkDryRunW8Only(args) {
     assert(board.messages.length === 0, `dry-run should not post messages, got ${board.messages.length}`);
     assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "dry-run");
     console.log("[OK] W8 desktop video board helper dry-run is no-post and secret-safe");
+  });
+}
+
+async function checkDryRunW14Only(args) {
+  await withFakeBoard(async (board) => {
+    const result = await run(["--server", board.url, "--text", `noise\n${w14NativeLine}\n`, "--json"], args);
+    assert(result.exitCode === 0, `W14 dry-run JSON failed\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "W14 dry-run JSON");
+    assert(payload.ok === true, "W14 dry-run should be ok");
+    assert(payload.send === false, "W14 dry-run should not send by default");
+    assert(payload.w14NativeVideoLine === w14NativeLine, "W14 dry-run should extract W14NativeVideo");
+    assertIncludes(payload.w14NativeGateSummary, "W14NativeGate=status=presenting-ok", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "receiver=streaming", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "transport=websocket-native", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "mediaOwner=native-receiver", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "pushed=5", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "accepted=4", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "dropped=1", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "queueMs=12", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "decoded=3", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "presentFrames=2", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "presenting=yes", "W14 dry-run gate");
+    assertIncludes(payload.w14NativeGateSummary, "next=continue-real-mac-long-run", "W14 dry-run gate");
+    assertIncludes(payload.boardSummary, "DesktopVideoPost=dry-run", "W14 dry-run board summary");
+    assertIncludes(payload.boardSummary, "w14NativeVideo=present", "W14 dry-run board summary");
+    assertIncludes(payload.boardSummary, "w14NativeGate=presenting-ok", "W14 dry-run board summary");
+    assertIncludes(payload.boardSummary, "w14Presenting=yes", "W14 dry-run board summary");
+    assertIncludes(payload.boardSummary, "w14Decoded=3", "W14 dry-run board summary");
+    assert(board.messages.length === 0, `W14 dry-run should not post messages, got ${board.messages.length}`);
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.requests), "W14 dry-run");
+    console.log("[OK] W14 desktop video board helper dry-run is no-post and secret-safe");
   });
 }
 
@@ -243,6 +277,28 @@ async function checkOptionalRetestGeneratesArrivalBacklog(args) {
   });
 }
 
+async function checkSendW8AndW14(args) {
+  await withFakeBoard(async (board) => {
+    const result = await run(["--server", board.url, "--text", `prefix\n${w8NativeLine}\n${w14NativeLine}\n`, "--send", "--json"], args);
+    assert(result.exitCode === 0, `send JSON with W14 failed\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "send JSON with W14");
+    assert(payload.ok === true, "send with W14 should be ok");
+    assert(payload.sentW8NativeVideo === true, "send with W14 should post W8 native video");
+    assert(payload.sentW14NativeVideo === true, "send with W14 should post W14 native video");
+    assert(board.messages.length === 1, `send with W14 should post one combined message, got ${board.messages.length}`);
+    assertIncludes(board.messages[0].text, w8NativeLine, "posted W8+W14 message");
+    assertIncludes(board.messages[0].text, w14NativeLine, "posted W8+W14 message");
+    assertIncludes(board.messages[0].text, "W8NativeGate=status=arrival-backlog-next", "posted W8+W14 message");
+    assertIncludes(board.messages[0].text, "W14NativeGate=status=presenting-ok", "posted W8+W14 message");
+    assertIncludes(board.messages[0].text, "next=continue-real-mac-long-run", "posted W8+W14 message");
+    assertIncludes(payload.boardSummary, "W8DesktopVideoPost=sent", "send W8+W14 board summary");
+    assertIncludes(payload.boardSummary, "DesktopVideoPost=sent", "send W8+W14 board summary");
+    assertIncludes(payload.boardSummary, "w14NativeGate=presenting-ok", "send W8+W14 board summary");
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "send with W14");
+    console.log("[OK] W8 desktop video board helper sends combined W8/W14 summary safely");
+  });
+}
+
 async function checkSendW8Only(args) {
   await withFakeBoard(async (board) => {
     const result = await run(["--server", board.url, "--text", `prefix\n${w8NativeLine}\n`, "--send", "--json"], args);
@@ -285,14 +341,25 @@ async function checkRejectsUnsafeInput(args) {
   });
 }
 
+async function checkRejectsUnsafeW14Input(args) {
+  await withFakeBoard(async (board) => {
+    const result = await run(["--server", board.url, "--text", `${w14NativeLine} password=super-secret input_event`, "--send", "--json"], args);
+    assert(result.exitCode !== 0, "unsafe W14 input should fail");
+    assert(board.messages.length === 0, `unsafe W14 input should not post, got ${board.messages.length}`);
+    assertIncludes(result.stderr || result.stdout, "unsafe", "unsafe W14 input failure");
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "unsafe W14 input");
+    console.log("[OK] W8 desktop video board helper rejects unsafe W14 input before posting");
+  });
+}
+
 async function checkRejectsMissingW8(args) {
   await withFakeBoard(async (board) => {
     const result = await run(["--server", board.url, "--text", "no native evidence", "--send", "--json"], args);
-    assert(result.exitCode !== 0, "missing W8 evidence should fail");
-    assert(board.messages.length === 0, `missing W8 should not post, got ${board.messages.length}`);
-    assertIncludes(result.stderr || result.stdout, "W8NativeVideo", "missing W8 failure");
-    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "missing W8");
-    console.log("[OK] W8 desktop video board helper rejects missing W8 evidence");
+    assert(result.exitCode !== 0, "missing native video evidence should fail");
+    assert(board.messages.length === 0, `missing native video evidence should not post, got ${board.messages.length}`);
+    assertIncludes(result.stderr || result.stdout, "W8NativeVideo or W14NativeVideo", "missing native video failure");
+    assertSecretSafe(result.stdout + result.stderr + JSON.stringify(board.messages), "missing native video");
+    console.log("[OK] W8 desktop video board helper rejects missing native video evidence");
   });
 }
 
@@ -315,11 +382,14 @@ async function main() {
   const args = parseArgs(process.argv);
   await checkHelp(args);
   await checkDryRunW8Only(args);
+  await checkDryRunW14Only(args);
   await checkW8GateRequiresBypass(args);
   await checkOptionalRetestGeneratesArrivalBacklog(args);
+  await checkSendW8AndW14(args);
   await checkSendW8Only(args);
   await checkStdinW8Only(args);
   await checkRejectsUnsafeInput(args);
+  await checkRejectsUnsafeW14Input(args);
   await checkRejectsMissingW8(args);
   await checkBoardRejectFailure(args);
   console.log("[OK] W8 desktop video board helper regression passed");

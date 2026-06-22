@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W14 native receiver 证据上板链路
+开发端：Windows Codex
+本轮目标：完成视频侧 W14 真实长测证据的摘要和上板链路，让复制诊断里的 W14 native receiver 接收/解码/呈现状态能直接发 Agent Link Board 判读；不改 W9 音频、Mac、协议/认证或 input/inject。
+完成内容：`test-windows-client-browser --boardSummary` 新增 `W14NativeVideo=`，从 W14 native receiver 诊断压缩 `status/transport/mediaOwner/videoFrames/h264Frames/pushed/accepted/dropped/queueMs/decoded/presentFrames/presenting/lastStatus/lastReason/lastError`。`post-w8-desktop-video-board` 现在可接受只含 `W14NativeVideo=` 的输入，也可同时发送 `W8NativeVideo=` + `W14NativeVideo=`，生成 `W14NativeGate=` 并给出 `presenting-ok|receiver-next|receive-next|decode-next|present-next|native-error-next` 与下一步。旧 W8NativeGate、W8ArrivalBacklog、W13LocalQos 保持兼容；所有上板仍做 secret-safe 检查，拒绝 password/token/input_event。
+修改文件：scripts/windows/post-w8-desktop-video-board.mjs；scripts/windows/test-post-w8-desktop-video-board.mjs；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯 1：`node scripts/windows/test-post-w8-desktop-video-board.mjs --timeoutMs 30000` 先失败于 help 缺 `W14NativeVideo`；实现后通过，覆盖 W14-only dry-run、W8+W14 combined send、unsafe W14 reject、missing evidence reject。TDD 红灯 2：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `makeW14NativeVideoRetestSummary is not defined`；实现后通过并输出 `W14 native video summary: ... presenting=yes ...`。
+遗留问题：本轮没有替用户无密连接真实 Mac 长测；下一次用户连接桌面端后复制诊断，直接用 `node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary` 上板，看 `W14NativeGate` 是否 `presenting-ok`。如 `decode-next` 查 MF decoder；如 `present-next` 查 D3D11/HWND present。
+下一步建议：等真实 Mac 长测上板后，先看 W14 gate，再看 W8NativeVideo 的 `mfIn/mfOut/presenting/progress`，避免回到 WebCodecs 主画面路径。
+是否改了协议：否。只改 Windows 视频摘要、上板 helper、测试和文档。
+是否需要另一端配合：Mac 端只需保持 host 在线并提供真实视频流；不需要改协议。密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W14 桌面 UI 媒体入口接入 native receiver
 开发端：Windows Codex
 本轮目标：按通讯板 W14 下一步，把 Windows 桌面控制端连接后的媒体入口接到 W14 native receiver；只做视频侧，不碰 W9 音频、Mac、协议/认证或 input/inject。

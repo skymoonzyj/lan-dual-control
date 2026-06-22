@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W14 native receiver 证据上板链路
+- Windows 视频侧把 W14 桌面媒体入口后的证据也接进了复测摘要和上板工具：`test-windows-client-browser --boardSummary` 现在会输出脱敏 `W14NativeVideo=`，字段包括 `status/transport/mediaOwner/videoFrames/h264Frames/pushed/accepted/dropped/queueMs/decoded/presentFrames/presenting/lastStatus/lastReason/lastError`。`post-w8-desktop-video-board` 现在接受 `W8NativeVideo=` 和/或 `W14NativeVideo=`；如果只有 W14 行也能 dry-run 或 `--send`，并生成 `W14NativeGate=`，把真实长测状态压成 `presenting-ok|receiver-next|receive-next|decode-next|present-next|native-error-next` 和下一步。旧 W8 gate、W8ArrivalBacklog、W13LocalQos 行为保持兼容；脚本仍拒绝 password/token/input_event 标记，不认证、不请求密码、不发 input/inject。验证：先红于 help 缺 W14 和 `makeW14NativeVideoRetestSummary is not defined`，实现后 `test-post-w8-desktop-video-board` 与 `test-windows-client-browser --onlyH264LatencyQueueGuard` 转绿。下一次真实 Mac 长测复制诊断后，可直接用 `node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary` 上板；优先看 `W14NativeGate` 是否 `presenting-ok`，再结合 `W8NativeVideo=` 判断 MF/D3D11/HWND。
+
 ## 2026-06-22 W12/W13 MF ProcessInput 背压实修
 - Supervisor 已确认 `2fed64e` 只是增加边界诊断，真实日志仍无可见进展：native parser 已收到 H.264 关键帧/SPS/PPS/IDR，但 `native input=362 accepted=41 decoded=0`，`MF输入 process-input-blocked 41/362`，`MF输出 not-attempted 0/41`。本轮 Windows 视频侧停止要求用户重复长测，改为实际修复 MF decoder 背压路径：`w8_native_video.rs` 在 `ProcessInput` 返回 `MF_E_NOTACCEPTING` 时不再直接判定 `process-input-blocked`，而是先调用 `ProcessOutput` drain decoder，随后重试同一个 input sample；如果 drain 已产出 decoded output，则记录 `drained-output-after-input-backpressure` / `accepted-after-input-backpressure-drain`，避免丢当前帧。H.264 MF sample 现在会把 IDR 标为 `MFSampleExtension_CleanPoint`，首帧标为 `MFSampleExtension_Discontinuity`，worker 启动后向 MFT 发送 `BEGIN_STREAMING` / `START_OF_STREAM`。只改 Windows 原生视频侧；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 
