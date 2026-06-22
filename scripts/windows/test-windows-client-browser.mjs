@@ -868,12 +868,18 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   if (audioPlayed > 0) parts.push(`audioPlayed=${audioPlayed}`);
   if (audioDropped > 0) parts.push(`audioDropped=${audioDropped}`);
   if (audioCallbacks > 0) parts.push(`audioCallbacks=${audioCallbacks}`);
+  if (audioCallbacks > 0) parts.push(`audioOutputCallbacks=${audioCallbacks}`);
   if (audioSignalCallbacks > 0) parts.push(`audioSignalCallbacks=${audioSignalCallbacks}`);
   if (audioSilentCallbacks > 0) parts.push(`audioSilentCallbacks=${audioSilentCallbacks}`);
   if (audioPeak > 0) parts.push(`audioPeak=${audioPeak}`);
   if (audioRms > 0) parts.push(`audioRms=${audioRms}`);
+  if (audioRms > 0) parts.push(`audioOutputRmsMilli=${audioRms}`);
   if (audioDevice) parts.push(`audioDevice=${compactBoardSummaryToken(audioDevice, 80)}`);
+  if (audioDevice) parts.push(`audioOutputDevice=${compactBoardSummaryToken(audioDevice, 80)}`);
   if (audioStream) parts.push(`audioStream=${compactBoardSummaryToken(audioStream, 40)}`);
+  if (typeof audioStreamRunningValue === "boolean") {
+    parts.push(`audioOutputStreamRunning=${audioStreamRunningValue ? "true" : "false"}`);
+  }
   if (lastStatus) parts.push(`lastStatus=${compactBoardSummaryToken(lastStatus, 80)}`);
   if (lastReason) parts.push(`lastReason=${compactBoardSummaryToken(lastReason.replace(/[;,|]+/g, ""), 100)}`);
   if (lastError) parts.push(`lastError=${compactBoardSummaryToken(lastError, 100)}`);
@@ -1273,12 +1279,16 @@ function verifyW14NativeVideoRetestSummary() {
     text.includes("audioQueueMs=20") &&
     text.includes("audioPlayed=480") &&
     text.includes("audioCallbacks=2") &&
+    text.includes("audioOutputCallbacks=2") &&
     text.includes("audioSignalCallbacks=1") &&
     text.includes("audioSilentCallbacks=1") &&
     text.includes("audioPeak=250") &&
     text.includes("audioRms=125") &&
+    text.includes("audioOutputRmsMilli=125") &&
     text.includes("audioDevice=Default_Output") &&
+    text.includes("audioOutputDevice=Default_Output") &&
     text.includes("audioStream=running") &&
+    text.includes("audioOutputStreamRunning=true") &&
     text.includes("sourceId=5") &&
     text.includes("w8Ids=latest:3/surface:3/present:1") &&
     text.includes("freshness=present-stale") &&
@@ -6230,7 +6240,8 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           request.preferredHeight === 1080 &&
           request.displayMode === "windowed" &&
           request.displayId === "main" &&
-          request.wantAudio === false &&
+          request.wantAudio === true &&
+          request.audioVolume === 80 &&
           diagnosticsBeforeStop.w14NativeReceiverRunning === true &&
           diagnosticsBeforeStop.w14NativeReceiverStatus === "streaming" &&
           diagnosticsBeforeStop.w14NativeReceiverTransport === "websocket-native" &&
@@ -6295,6 +6306,10 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           exportText.includes("W14音频 rms 125") &&
           exportText.includes("W14音频设备 Default Output") &&
           exportText.includes("W14音频流 running") &&
+          exportText.includes("W14AudioOutput=outputCallbacks=2") &&
+          exportText.includes("rmsMilli=125") &&
+          exportText.includes("device=Default_Output") &&
+          exportText.includes("streamRunning=true") &&
           exportText.includes("原生帧链 latest:3/surface:3/present:1") &&
           exportText.includes("原生新鲜度 present-stale") &&
           exportText.includes("W14原生状态 latest-frame-nv12-converted-presented");
@@ -8171,6 +8186,92 @@ async function verifyH264LatencyQueueGuard(session) {
           w13LocalQosDecoderText.includes("W13门槛 120/180 ms") &&
           w13LocalQosDecoderText.includes("W13下一步 local-qos-trim-request-keyframe");
 
+        const w13ArrivalGapSettings = [];
+        const w13ArrivalGapNow = performance.now();
+        state.connected = true;
+        state.hostDiagnostics = { ...originalHostDiagnostics };
+        state.client = {
+          sendDisplaySettings(message) {
+            w13ArrivalGapSettings.push(message);
+          },
+        };
+        Object.assign(state, {
+          w8NativeVideoFramesPushed: 2160,
+          w8NativeVideoDecoderSessionSubmittedFrames: 2160,
+          w8NativeVideoDecoderSessionDecodedFrames: 2160,
+          w8NativeVideoNativeSurfacePresentedFrames: 2160,
+          w8NativeVideoNativePresentFrames: 2160,
+          w8NativeVideoDecoderSessionStatus: "active",
+          w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+          w8NativeVideoDecoderSessionReason: "",
+          w8NativeVideoNativePresentReason: "fresh Present copied frames into HWND swapchain",
+          w8NativeVideoErrors: 0,
+          w8NativeVideoLastError: "",
+        });
+        state.h264FallbackActive = false;
+        state.h264Decoder = {
+          state: "configured",
+          decodeQueueSize: 3,
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 3 }, (_, index) => ({
+          frameId: index + 2160,
+          queuedAt: w13ArrivalGapNow - 104 + index,
+          timestampUs: index * 16667,
+          keyFrame: false,
+        }));
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderNeedsKeyFrame = false;
+        state.h264SkippedDeltaFrames = 0;
+        state.h264DecodedFrames = 2160;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+        state.h264LiveBacklogRecoveryLastRequestedAt = 0;
+        state.h264LiveBacklogRecoveryCount = 0;
+        state.videoFrameTimes = [
+          w13ArrivalGapNow - 9234,
+          w13ArrivalGapNow - 17,
+          w13ArrivalGapNow,
+        ];
+        state.videoFrameTimingSamples = [
+          { receivedAt: w13ArrivalGapNow - 9234, remoteMediaAtMs: 1000 },
+          { receivedAt: w13ArrivalGapNow - 17, remoteMediaAtMs: 1017 },
+          { receivedAt: w13ArrivalGapNow, remoteMediaAtMs: 1034 },
+        ];
+        const closeCallsBeforeW13ArrivalGap = closeCalls;
+        const w13ArrivalGapQos = maybeApplyW13LocalVideoQos({
+          isKeyFrame: false,
+          frameId: 2163,
+          now: w13ArrivalGapNow,
+        });
+        const w13ArrivalGapExportText = getVideoPerformanceExportStatus(w13ArrivalGapNow);
+        const w13ArrivalGapDecoderText = formatVideoDecoderDiagnostics(state.hostDiagnostics);
+        const w13ArrivalGapQosApplied =
+          w13ArrivalGapQos?.status === "local-backlog" &&
+          w13ArrivalGapQos?.arrivalSource === "windows-arrival-gap" &&
+          w13ArrivalGapQos?.queueMs === 104 &&
+          w13ArrivalGapQos?.localMaxMs >= 9000 &&
+          w13ArrivalGapQos?.remoteMediaMaxMs === 17 &&
+          w13ArrivalGapQos?.dropPolicy === "request-keyframe" &&
+          w13ArrivalGapQos?.keyframeRequest === "yes" &&
+          w13ArrivalGapQos?.requested === true &&
+          w13ArrivalGapQos?.dropFrame === false &&
+          closeCalls === closeCallsBeforeW13ArrivalGap &&
+          state.h264Decoder !== null &&
+          state.h264DecoderQueue.length === 3 &&
+          state.h264DecoderNeedsKeyFrame === false &&
+          state.h264LiveBacklogRecoveryCount === 1 &&
+          w13ArrivalGapSettings.length === 1 &&
+          w13ArrivalGapExportText.includes("W13本地QoS local-backlog") &&
+          w13ArrivalGapExportText.includes("W13到达来源 windows-arrival-gap") &&
+          w13ArrivalGapExportText.includes("W13本地最大间隔 9217 ms") &&
+          w13ArrivalGapExportText.includes("W13远端媒体最大间隔 17 ms") &&
+          w13ArrivalGapDecoderText.includes("W13到达来源 windows-arrival-gap");
+
         if (typeof maybeRecoverH264VideoFallback !== "function") {
           return { ok: false, reason: "missing H.264 fallback recovery helper" };
         }
@@ -8679,7 +8780,7 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264DecoderStatus === "rendering";
 
         return {
-          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && w13LocalQosApplied && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && nativeClassifier && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && w13LocalQosApplied && w13ArrivalGapQosApplied && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && nativeClassifier && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
           deltaOk,
           firstSurfaceQueueGrace,
           firstSurfaceGraceResync,
@@ -8693,6 +8794,10 @@ async function verifyH264LatencyQueueGuard(session) {
           w13LocalQosDrop,
           w13LocalQosExportText,
           w13LocalQosDecoderText,
+          w13ArrivalGapQosApplied,
+          w13ArrivalGapQos,
+          w13ArrivalGapExportText,
+          w13ArrivalGapDecoderText,
           liveBacklogKeyFrameJumpedLive,
           keyFrameWaitGrace,
           keyFrameWaitH264Recovery,

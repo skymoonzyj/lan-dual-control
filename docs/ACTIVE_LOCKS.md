@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-22
+最后更新：2026-06-23
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-23 本轮 | W13 Windows arrival-gap QoS 运行时口径：本地接收 gap 大而远端媒体正常时输出 `arrivalSource=windows-arrival-gap` 并请求关键帧；导出新增 W13 本地/远端 gap 字段。附带补 W14AudioOutput 机器可读音频输出证据和 `wantAudio` 请求开关。不改 Mac/协议/认证，不请求密码，不发 input/inject，不改系统声音输出。 |
 | Windows Codex | `apps/windows-desktop/src-tauri/src/w14_native_receiver.rs`, `apps/windows-desktop/src-tauri/src/w8_native_video.rs`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-22 本轮 | W14 first-frame freeze 视频 freshness 证据链：W8/W14 现在输出 source/latest/surface/present 帧 id、更新时间、freshness、idLag 和 presentAgeMs，现场导出和 `W8NativeVideo=` / `W14NativeVideo=` 可定位首帧后卡在哪一层。只改 Windows 视频侧证据，不改 Mac/协议/认证，不请求密码，不发 input/inject。 |
 | Windows Codex | `scripts/windows/start-windows-desktop-control-mac.mjs`, `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-desktop-control-mac-entry.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-22 本轮 | W14/W8 NativeVideoPost 首屏提示：桌面入口和恢复总览在旧 `W8Post=` 之外新增 `NativeVideoPost=` / `nativeVideoPostCommand`，指向同一安全 helper，明确支持 `W8NativeVideo=` 和/或 `W14NativeVideo=`。不改协议、不认证、不请求密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/post-w8-desktop-video-board.mjs`, `scripts/windows/test-post-w8-desktop-video-board.mjs`, `scripts/windows/test-windows-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md`, `docs/w8-windows-desktop-video-plan.md` | 2026-06-22 本轮 | W14 native receiver 证据上板链路：`test-windows-client-browser --boardSummary` 输出 `W14NativeVideo=`；`post-w8-desktop-video-board` 可安全读取 `W8NativeVideo=` 和/或 `W14NativeVideo=`，生成 `W14NativeGate=` 并支持 W14-only dry-run/send。旧 W8 gate、arrival/backlog、W13LocalQos 保持兼容；不改 W9 音频/Mac/协议/认证/input。 |

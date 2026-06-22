@@ -1,8 +1,12 @@
 # 当前开发状态
 
-最后更新：2026-06-22
+最后更新：2026-06-23
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
+
+## 2026-06-23 W13 Windows arrival-gap QoS 运行时口径
+- Supervisor 最新新版日志显示 W14 视频帧链已从 first-frame-freeze 恢复为 `source/latest/surface/present` 全部新鲜、`freshness=present-fresh`、`present lag=0`，因此本轮 Windows 视频侧不再追认证、Mac H.264、首帧或 keyframe。剩余视频问题集中在 W13 本地 QoS/backlog/arrival-age：旧运行时只用 WebCodecs 队列年龄触发 W13，本地接收最大间隔约 9.2s 但远端媒体间隔正常、队列约 104ms 时会被判成 `stable-candidate`。现在 `getW13LocalVideoQosDecision` 同步消费本地接收 `localAvgMs/localMaxMs` 与远端媒体 `remoteMediaAvgMs/remoteMediaMaxMs`：当 `localMaxMs>=1000` 且远端媒体没有同等长 gap 时，`arrivalSource=windows-arrival-gap`，W13 进入 `local-backlog` 并请求 H.264/annexb 关键帧；如果队列未超过 180ms，不会误关 decoder，只保留当前解码队列。现场视频导出和页面解码诊断新增 `W13到达来源`、`W13本地平均/最大间隔`、`W13远端媒体平均/最大间隔`，用于下一次复测直接区分 Windows 本地调度/到达断点与远端媒体 cadence。
+- 同步补了通讯板提到的音频证据导出缺口：W14 native receiver 请求现在跟随用户音频开关发送 `wantAudio`，现场导出额外给出机器可读 `W14AudioOutput=outputCallbacks/callbackFrames/signalCallbacks/silentCallbacks/peakMilli/rmsMilli/device/sampleFormat/streamRunning`，方便下一次无声时区分源端静音、Windows 输出回调静音、设备或 stream 状态。该项只补诊断和请求开关，不改系统声音输出。
 
 ## 2026-06-22 W14 first-frame freeze 视频 freshness 证据链
 - 用户现场确认问题形态改为 `first-frame-acquired-then-freeze`：不是认证、Mac H.264、首帧/keyframe 或入口启动问题，而是首帧后 W14 native receiver -> W8 MF/D3D11/HWND 持续推进需要定位。本轮 Windows 侧只做视频证据链：W8 decoder session 现在记录 `latestFrameId/latestFrameUpdatedAtMs`、`nativeSurfaceLastFrameId/nativeSurfaceUpdatedAtMs`、`nativePresentLastFrameId/nativePresentUpdatedAtMs`，并且 `latestFrameId` 改用真实传入的源帧 id，而不是内部 submitted 计数。W14 snapshot 同步输出 `lastVideoFrameId/lastVideoReceivedAtMs/nativeVideoLastPushedFrameId/nativeVideoLatestFrameId/nativeVideoSurfaceFrameId/nativeVideoPresentFrameId/nativeVideoFreshnessStatus/nativeVideoPresentFrameLag/nativeVideoPresentAgeMs`。Windows client、现场视频导出和 `W8NativeVideo=` / `W14NativeVideo=` 摘要现在会显示 `ids=latest:<n>/surface:<n>/present:<n>`、`w8Ids=...`、`freshness=present-fresh|present-stale|surface-only|decode-only`、`idLag=<n>`、`presentAgeMs=<ms>`；导出文本也会显示 `W14帧链` / `原生帧链`、`W14新鲜度` / `原生新鲜度`。这一步不改 Mac、不改协议/认证、不请求密码、不发 input/inject，也不宣称真实体感已通过；下一次用户复制诊断后，若 decoded/accepted 继续增长但 `present` id 不动或 `presentAgeMs` 持续变大，优先查 D3D11/HWND/swapchain 可见刷新边界。

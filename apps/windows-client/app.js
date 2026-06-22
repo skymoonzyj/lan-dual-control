@@ -182,6 +182,7 @@ const h264LiveBacklogFrameWindow = 6;
 const h264LiveBacklogKeyFrameRequestCooldownMs = 700;
 const h264W13LocalQosTargetQueueMs = 120;
 const h264W13LocalQosMaxQueueMs = 180;
+const h264W13LocalArrivalGapMs = 1000;
 const h264FirstSurfaceQueueGraceMs = 2200;
 const h264VisibilityRecoveryMinimumHiddenMs = 250;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -1830,20 +1831,35 @@ function updateVideoFrameAgeMetric(ageDiagnostics) {
 
 function formatW13LocalVideoQosDiagnostics(diagnostics = state.hostDiagnostics) {
   const status = String(diagnostics?.w13LocalVideoQosStatus || "").trim();
+  const arrivalSource = String(diagnostics?.w13LocalVideoQosArrivalSource || "").trim();
   const dropPolicy = String(diagnostics?.w13LocalVideoQosDropPolicy || "").trim();
   const keyframeRequest = String(diagnostics?.w13LocalVideoQosKeyframeRequest || "").trim();
+  const localAvgMs = Number(diagnostics?.w13LocalVideoQosLocalAvgMs);
+  const localMaxMs = Number(diagnostics?.w13LocalVideoQosLocalMaxMs);
+  const remoteMediaAvgMs = Number(diagnostics?.w13LocalVideoQosRemoteMediaAvgMs);
+  const remoteMediaMaxMs = Number(diagnostics?.w13LocalVideoQosRemoteMediaMaxMs);
   const targetQueueMs = Number(diagnostics?.w13LocalVideoQosTargetQueueMs);
   const maxQueueMs = Number(diagnostics?.w13LocalVideoQosMaxQueueMs);
   const next = String(diagnostics?.w13LocalVideoQosNext || "").trim();
+  const hasArrivalGap =
+    (Number.isFinite(localAvgMs) && localAvgMs > 0) ||
+    (Number.isFinite(localMaxMs) && localMaxMs > 0) ||
+    (Number.isFinite(remoteMediaAvgMs) && remoteMediaAvgMs > 0) ||
+    (Number.isFinite(remoteMediaMaxMs) && remoteMediaMaxMs > 0);
   const hasQueueThreshold =
     (Number.isFinite(targetQueueMs) && targetQueueMs > 0) ||
     (Number.isFinite(maxQueueMs) && maxQueueMs > 0);
-  if (!status && !dropPolicy && !keyframeRequest && !hasQueueThreshold && !next) {
+  if (!status && !arrivalSource && !dropPolicy && !keyframeRequest && !hasArrivalGap && !hasQueueThreshold && !next) {
     return [];
   }
 
   const parts = [];
   if (status) parts.push(`W13本地QoS ${status}`);
+  if (arrivalSource) parts.push(`W13到达来源 ${arrivalSource}`);
+  if (Number.isFinite(localAvgMs) && localAvgMs > 0) parts.push(`W13本地平均间隔 ${Math.round(localAvgMs)} ms`);
+  if (Number.isFinite(localMaxMs) && localMaxMs > 0) parts.push(`W13本地最大间隔 ${Math.round(localMaxMs)} ms`);
+  if (Number.isFinite(remoteMediaAvgMs) && remoteMediaAvgMs > 0) parts.push(`W13远端媒体平均间隔 ${Math.round(remoteMediaAvgMs)} ms`);
+  if (Number.isFinite(remoteMediaMaxMs) && remoteMediaMaxMs > 0) parts.push(`W13远端媒体最大间隔 ${Math.round(remoteMediaMaxMs)} ms`);
   if (dropPolicy) parts.push(`W13策略 ${dropPolicy}`);
   if (keyframeRequest) parts.push(`W13关键帧请求 ${keyframeRequest}`);
   if (hasQueueThreshold) {
@@ -7097,6 +7113,15 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     }
     if (w14AudioOutputSampleFormat) parts.push(`W14音频格式 ${w14AudioOutputSampleFormat}`);
     parts.push(`W14音频流 ${w14AudioOutputStreamRunning ? "running" : "stopped"}`);
+    const outputDeviceToken = w14AudioOutputDeviceName
+      ? w14AudioOutputDeviceName.replace(/\s+/g, "_").replace(/[;|,]+/g, "_").slice(0, 80)
+      : "unknown";
+    const outputFormatToken = w14AudioOutputSampleFormat
+      ? w14AudioOutputSampleFormat.replace(/\s+/g, "_").replace(/[;|,]+/g, "_").slice(0, 40)
+      : "unknown";
+    parts.push(
+      `W14AudioOutput=outputCallbacks=${Math.round(w14AudioOutputCallbacks)} callbackFrames=${Math.round(Number(state.hostDiagnostics?.w14NativeAudioOutputCallbackFrames) || 0)} signalCallbacks=${Math.round(w14AudioOutputSignalCallbacks)} silentCallbacks=${Math.round(w14AudioOutputSilentCallbacks)} peakMilli=${Math.round(w14AudioOutputPeakMilli)} rmsMilli=${Math.round(w14AudioOutputRmsMilli)} device=${outputDeviceToken} sampleFormat=${outputFormatToken} streamRunning=${w14AudioOutputStreamRunning ? "true" : "false"}`,
+    );
   }
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
     parts.push("界面 HTML 壳");
@@ -8854,7 +8879,7 @@ function buildW14NativeReceiverRequest({ host, port, password } = {}) {
     maxBandwidthKbps: Math.max(1000, Math.trunc(Number(settings.maxBandwidthKbps) || 50_000)),
     preferredWidth: Number.isFinite(width) && width > 0 ? Math.trunc(width) : 0,
     preferredHeight: Number.isFinite(height) && height > 0 ? Math.trunc(height) : 0,
-    wantAudio: false,
+    wantAudio: Boolean(settings.audio),
     audioVolume: Math.max(0, Math.min(100, Math.trunc(Number(settings.audioVolume) || 0))),
     displayMode: settings.displayMode,
     displayId: settings.displayId || "main",
@@ -12412,8 +12437,18 @@ function getW13LocalVideoQosDecision({ now = performance.now() } = {}) {
   const nativeClassifier = classifyW8NativeVideoSession(state);
   const nativeClass = String(nativeClassifier.nativeClass || "unknown").trim() || "unknown";
   const nativeNext = String(nativeClassifier.nativeNext || "unknown").trim() || "unknown";
+  const localGapStats = getVideoFrameGapStats();
   const remoteMediaGapStats = getVideoRemoteMediaGapStats();
+  const localAvgMs = Math.max(0, Math.round(Number(localGapStats.averageGapMs) || 0));
+  const localMaxMs = Math.max(0, Math.round(Number(localGapStats.maxGapMs) || 0));
+  const remoteMediaAvgMs = Math.max(0, Math.round(Number(remoteMediaGapStats.averageGapMs) || 0));
   const remoteMediaMaxMs = Math.max(0, Math.round(Number(remoteMediaGapStats.maxGapMs) || 0));
+  const remoteMediaGap =
+    remoteMediaMaxMs >= h264W13LocalArrivalGapMs &&
+    remoteMediaMaxMs >= Math.max(h264W13LocalArrivalGapMs, Math.round(localMaxMs * 0.8));
+  const windowsArrivalGap =
+    localMaxMs >= h264W13LocalArrivalGapMs &&
+    !remoteMediaGap;
   const decoderStatus = String(state.h264DecoderStatus || "").toLowerCase();
   const decodedFrames = Number(state.h264DecodedFrames) || 0;
   const canApplyLocalQos =
@@ -12439,11 +12474,11 @@ function getW13LocalVideoQosDecision({ now = performance.now() } = {}) {
     status = "native-present";
     next = "inspect-native-present";
     dropPolicy = "hold-qos";
-  } else if (remoteMediaMaxMs >= 1000) {
+  } else if (remoteMediaGap) {
     status = "remote-cadence";
     next = "ask-mac-readonly-media-cadence";
     dropPolicy = "hold-local";
-  } else if (canApplyLocalQos && nativeAllowsLocalQos && queueMs >= h264W13LocalQosTargetQueueMs) {
+  } else if (canApplyLocalQos && nativeAllowsLocalQos && (queueMs >= h264W13LocalQosTargetQueueMs || windowsArrivalGap)) {
     status = "local-backlog";
     next = "local-qos-trim-request-keyframe";
     dropPolicy = queueMs >= h264W13LocalQosMaxQueueMs ? "drop-old-keep-keyframe" : "request-keyframe";
@@ -12457,10 +12492,14 @@ function getW13LocalVideoQosDecision({ now = performance.now() } = {}) {
     status,
     nativeClass,
     nativeNext,
-    arrivalSource: remoteMediaMaxMs >= 1000 ? "remote-media-gap" : queueMs >= h264W13LocalQosTargetQueueMs ? "windows-queue-backlog" : "stable",
+    arrivalSource: remoteMediaGap ? "remote-media-gap" : windowsArrivalGap ? "windows-arrival-gap" : queueMs >= h264W13LocalQosTargetQueueMs ? "windows-queue-backlog" : "stable",
     queueMs,
+    localAvgMs,
+    localMaxMs,
+    remoteMediaAvgMs,
     remoteMediaMaxMs,
     presentGap: Number(nativeClassifier.presentGap) || 0,
+    arrivalGapThresholdMs: h264W13LocalArrivalGapMs,
     targetQueueMs: h264W13LocalQosTargetQueueMs,
     maxQueueMs: h264W13LocalQosMaxQueueMs,
     dropPolicy,
@@ -12488,6 +12527,11 @@ function requestW13LocalVideoQosKeyFrame(decision, now = performance.now(), fram
   state.videoLastDropReason = "w13-local-qos-keyframe-request";
   updateH264DecoderDiagnostics({
     w13LocalVideoQosStatus: decision.status,
+    w13LocalVideoQosArrivalSource: decision.arrivalSource,
+    w13LocalVideoQosLocalAvgMs: decision.localAvgMs,
+    w13LocalVideoQosLocalMaxMs: decision.localMaxMs,
+    w13LocalVideoQosRemoteMediaAvgMs: decision.remoteMediaAvgMs,
+    w13LocalVideoQosRemoteMediaMaxMs: decision.remoteMediaMaxMs,
     w13LocalVideoQosDropPolicy: decision.dropPolicy,
     w13LocalVideoQosKeyframeRequest: decision.keyframeRequest,
     w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,
@@ -12518,6 +12562,11 @@ function maybeApplyW13LocalVideoQos({ isKeyFrame = false, frameId = "", now = pe
     });
     updateH264DecoderDiagnostics({
       w13LocalVideoQosStatus: decision.status,
+      w13LocalVideoQosArrivalSource: decision.arrivalSource,
+      w13LocalVideoQosLocalAvgMs: decision.localAvgMs,
+      w13LocalVideoQosLocalMaxMs: decision.localMaxMs,
+      w13LocalVideoQosRemoteMediaAvgMs: decision.remoteMediaAvgMs,
+      w13LocalVideoQosRemoteMediaMaxMs: decision.remoteMediaMaxMs,
       w13LocalVideoQosDropPolicy: decision.dropPolicy,
       w13LocalVideoQosKeyframeRequest: "no",
       w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,
@@ -12543,6 +12592,11 @@ function maybeApplyW13LocalVideoQos({ isKeyFrame = false, frameId = "", now = pe
   });
   updateH264DecoderDiagnostics({
     w13LocalVideoQosStatus: decision.status,
+    w13LocalVideoQosArrivalSource: decision.arrivalSource,
+    w13LocalVideoQosLocalAvgMs: decision.localAvgMs,
+    w13LocalVideoQosLocalMaxMs: decision.localMaxMs,
+    w13LocalVideoQosRemoteMediaAvgMs: decision.remoteMediaAvgMs,
+    w13LocalVideoQosRemoteMediaMaxMs: decision.remoteMediaMaxMs,
     w13LocalVideoQosDropPolicy: decision.dropPolicy,
     w13LocalVideoQosKeyframeRequest: decision.keyframeRequest,
     w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,

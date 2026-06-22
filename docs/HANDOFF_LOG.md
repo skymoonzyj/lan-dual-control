@@ -17,6 +17,18 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-23 Windows Codex
+日期：2026-06-23 W13 Windows arrival-gap QoS 运行时口径
+开发端：Windows Codex
+本轮目标：按通讯板最新 `W14-NEW-BUILD-TEST-RESULT`，视频侧不再追 first-frame freeze，而是补 W13 本地 backlog/arrival-age 的运行时判读和导出字段；不改 Mac、不改协议/认证、不请求密码、不发 input/inject。
+完成内容：`getW13LocalVideoQosDecision` 现在同时读取本地接收间隔 `localAvgMs/localMaxMs` 和远端媒体间隔 `remoteMediaAvgMs/remoteMediaMaxMs`。若本地 `localMaxMs>=1000` 且远端媒体没有同等长 gap，会判为 `arrivalSource=windows-arrival-gap`、`status=local-backlog` 并请求 H.264/annexb 关键帧；队列低于 180ms 时不关闭 decoder，避免把 104ms 队列误处理成强制重同步。页面解码诊断和现场视频导出新增 `W13到达来源`、`W13本地平均/最大间隔`、`W13远端媒体平均/最大间隔`。另按通讯板 W9 提示补 W14 音频输出证据导出：W14 请求跟随用户音频开关，现场导出新增 `W14AudioOutput=outputCallbacks/callbackFrames/signalCallbacks/silentCallbacks/peakMilli/rmsMilli/device/sampleFormat/streamRunning`。`test-windows-client-browser` 新增 9.2s 本地 arrival gap / 17ms 远端媒体 gap / 104ms 队列的回归场景，并覆盖 W14 音频 output 机器字段。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --boardSummary --clientPort 5297 --debugPort 9437` 先显示 `w13ArrivalGapQosApplied=false`，旧决策为 `stable-candidate/arrivalSource=stable`；实现后同命令通过，并保留 W8/W14 摘要通过。
+遗留问题：还需要用户下一次用新构建复测，确认真实日志中的 `W13到达来源` 与 `localMaxMs/remoteMediaMaxMs` 是否能解释体感卡顿；如果仍有画面体感问题但 W13 是 stable，继续查真实 HWND 可见刷新/桌面合成边界。若仍无声，先看 `W14AudioOutput` 的 callback/RMS/device/streamRunning，不要直接改系统声音输出。
+下一步建议：下一轮真实复制诊断优先看 `W13到达来源`：`windows-arrival-gap` 查 Windows 本地调度/消息转发/窗口后台；`windows-queue-backlog` 查队列 trim；`remote-media-gap` 才让 Mac 只读查媒体 cadence。音频只看 `W14AudioOutput` 证据分流。
+是否改了协议：否。
+是否需要另一端配合：Mac 端只需保持 host 在线供复测；不需要改协议。密码不上板，不发 input/inject。
+
 ## 2026-06-22 Windows Codex
 日期：2026-06-22 W14 first-frame freeze 视频 freshness 证据链
 开发端：Windows Codex
