@@ -505,13 +505,23 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     presentFrames > 0 ||
     surfaceFrames > 0 ||
     Boolean(status || present || surface || copy || handoff || swapchain);
+  const surfaceLower = `${surface} ${copy}`.toLowerCase();
+  const nativeAck =
+    isWindowPresenting ? "presented" :
+      surfaceFrames > 0 || surfaceLower.includes("presented") ? "surface" :
+        decoded > 0 ? "decoded" :
+          submitted > 0 ? "submitted" :
+            framesPushed > 0 ? "received" : "none";
+  const mediaSession = isWindowPresenting ? "native-main" : hasNativePipeline ? "native-pending" : "web-diagnostic";
 
   if (!hasEvidence) return "";
 
   const parts = [];
   parts.push("ui=html-shell");
+  parts.push(`mediaSession=${mediaSession}`);
   parts.push(`mainSurface=${isWindowPresenting ? "native-hwnd" : hasNativePipeline ? "native-pending" : "unknown"}`);
   parts.push("canvasRole=diagnostic-fallback");
+  if (nativeAck !== "none") parts.push(`nativeAck=${nativeAck}`);
   if (webDecode) parts.push(`webDecode=${compactBoardSummaryToken(webDecode, 60)}`);
   if (webBypass > 0) {
     parts.push(`webBypass=${webBypass}`);
@@ -576,7 +586,7 @@ function makeBoardSummary(summary) {
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
-    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 560)}`);
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 680)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -751,8 +761,10 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("presentFrames=188") &&
     text.includes("decoded=188") &&
     text.includes("ui=html-shell") &&
+    text.includes("mediaSession=native-main") &&
     text.includes("mainSurface=native-hwnd") &&
     text.includes("canvasRole=diagnostic-fallback") &&
+    text.includes("nativeAck=presented") &&
     text.includes("webDecode=native-main-surface") &&
     text.includes("webBypass=24") &&
     text.includes("webBypassReason=native-main-surface-presenting") &&
@@ -762,6 +774,8 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("submitted=190") &&
     text.includes("decoderGap=2") &&
     w8NativeVideoBehind.includes("mainSurface=native-pending") &&
+    w8NativeVideoBehind.includes("mediaSession=native-pending") &&
+    w8NativeVideoBehind.includes("nativeAck=surface") &&
     w8NativeVideoBehind.includes("presenting=no") &&
     w8NativeVideoBehind.includes("presentGap=12") &&
     w8NativeVideoBehind.includes("submitted=14") &&
@@ -770,6 +784,8 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoPredecodeDrops.includes("queueDropScope=predecode") &&
     w8NativeVideoPredecodeDrops.includes("queueReason=waiting-keyframe") &&
     w8NativeVideoPredecodeDrops.includes("mainSurface=native-hwnd") &&
+    w8NativeVideoPredecodeDrops.includes("mediaSession=native-main") &&
+    w8NativeVideoPredecodeDrops.includes("nativeAck=presented") &&
     w8NativeVideoPredecodeDrops.includes("presenting=yes") &&
     text.includes("output=NV12") &&
     text.includes("codec=avc1.420029") &&

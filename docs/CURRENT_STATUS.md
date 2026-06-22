@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12 native media session 状态进入视频摘要
+- Windows 主线按 W11 审计继续推进 W12 第一小步：`W8NativeVideo=` 现在会输出 `mediaSession=native-main|native-pending|web-diagnostic` 和 `nativeAck=received|submitted|decoded|surface|presented`。这不是继续加普通说明文字，而是把已有 W8 原生链路的关键阶段压成可验收状态：收到 H.264、提交 MF/D3D11 decoder、decoded、写入 D3D latest-frame surface、最终 HWND Present。`--onlyH264LatencyQueueGuard` 专项已验证 `mediaSession=native-main nativeAck=presented mainSurface=native-hwnd presenting=yes presentGap=0 ... errors=0` 可以稳定出现在 W8 摘要中。本轮只改 Windows 视频侧诊断摘要和测试，不改 Mac、协议、认证/密码、音频实现或 input/inject。
+
 ## 2026-06-22 W11 RustDesk 视频路线审计
 - Windows 主线已按通讯板开工令交付 `docs/w8-rustdesk-audit.md`。该文档只做架构映射，不复制 RustDesk AGPL 源码；内容覆盖 RustDesk `video_service` 常驻 capturer/encoder loop、`VideoQoS` 的 delay/RTT/FPS/ratio 思路、硬编解码失败 fallback、`VideoReceived` / present ack 节奏，以及音频 10ms/Opus/设备重启模型如何交给 W9。对应到我们自己的落地：W12 收束 Windows 桌面端 native media session 主路径，W13 做本地实时 QoS 控制器，W9 独立处理 native PCM playback。配套新增 `scripts/windows/test-w8-rustdesk-audit-doc.mjs`，强制审计文档包含“RustDesk 做法 / 我们怎么自己实现 / 涉及我们文件 / 最小补丁 / 测试命令 / 真实验收字段 / AGPL 边界”。
 

@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W12 native media session 状态进入视频摘要：`W8NativeVideo=` 新增 `mediaSession=native-main|native-pending|web-diagnostic` 与 `nativeAck=received|submitted|decoded|surface|presented`，用现有 H.264/native decoder/surface/present 信号标明原生主路径推进阶段。`--onlyH264LatencyQueueGuard` 覆盖 `mediaSession=native-main nativeAck=presented mainSurface=native-hwnd presenting=yes presentGap=0 errors=0`。不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。
 - [x] W11 RustDesk 视频路线审计：新增 `docs/w8-rustdesk-audit.md` 和 `scripts/windows/test-w8-rustdesk-audit-doc.mjs`。审计文档按通讯板要求逐项回答 `RustDesk 做法 / 我们怎么自己实现 / 涉及我们文件 / 最小补丁 / 测试命令 / 真实验收字段`，并写明 AGPL 边界：只学架构策略，不复制代码。下一步进入 W12 native media session 主路径和 W13 实时 QoS，不再继续停在摘要字段补丁。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8 短摘要显示 decoder 差值：`post-w8-desktop-video-board --boardSummary` 和 `post-w2w3-retest-board --boardSummary` 现在会追加 `w8Decoder=pushed:<n>/submitted:<n>/gap:<n>`，从 `W8NativeGate=` 已有的 `pushed/submitted/decoderGap` 压缩出一眼可读的 decoder 负载差值。下一次真实桌面长跑看短摘要即可先判断 W8 原生队列、MF/D3D11 decoder 和低延迟预过滤之间的差距。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。
 - [x] W8NativeGate 转述 decoder 提交差值：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 生成的 `W8NativeGate=` 现在会从 `W8NativeVideo=` 转述 `pushed/submitted/decoderGap`，让通讯板 gate 行也能直接判读原生队列推入帧、提交 decoder 帧和预过滤差值。不改协议、不改 Mac、不认证、不请求密码、不发 input/inject。

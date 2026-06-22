@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12 native media session 状态进入视频摘要
+开发端：Windows Codex
+本轮目标：按用户要求主要推进视频侧，从 W11 RustDesk 审计进入 W12 第一小步，把 Windows 桌面端原生视频主路径的阶段状态压进 `W8NativeVideo=` 摘要。
+完成内容：`W8NativeVideo=` 现在输出 `mediaSession=native-main|native-pending|web-diagnostic` 和 `nativeAck=received|submitted|decoded|surface|presented`。`mediaSession=native-main nativeAck=presented` 表示已到 HWND 原生主画面；`native-pending` 可继续用 ack 判断卡在收到 H.264、提交 decoder、decoded、latest-frame surface 还是 Present 前。W8 摘要压缩上限从 560 放宽到 680，避免新增字段挤掉 `deviceLost/errors` 等尾部证据。
+修改文件：scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于 `W8 native video summary check failed`，旧摘要缺 `mediaSession/nativeAck`；实现后视频专项 `node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 转绿，并输出 `W8NativeVideo=... mediaSession=native-main ... nativeAck=presented ... presenting=yes ... errors=0`。
+遗留问题：完整 `--diagnosticsOnly` 已通过 W8 视频摘要段，但随后卡在独立 W9 audio playback buffer guard；这不作为本轮视频阻塞，音频侧另行处理。本轮没有做 W12 native state machine/failure classifier/rebuild 的实现，也没有跑 C5 15 分钟真实体验。
+下一步建议：继续 W12，不要只加摘要字段；优先把 `apps/windows-client/app.js` 的 H.264 入站与 `apps/windows-desktop/src-tauri/src/w8_native_video.rs` 会话状态收束成常驻 native media session，补 failure classifier 和可恢复重建。之后再进入 W13 本地实时 QoS。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 继续保持 host 在线与只读证据。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W11 RustDesk 视频路线审计
 开发端：Windows Codex
 本轮目标：按通讯板 W11 开工令输出 `W8-RUSTDESK-AUDIT`，回答“RustDesk 怎么做 / 我们怎么自己实现 / 改哪些文件 / 怎么测”，并明确 AGPL 边界。
