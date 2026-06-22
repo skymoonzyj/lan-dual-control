@@ -901,6 +901,9 @@ const state = {
     w14NativeAudioOutputSilentCallbacks: 0,
     w14NativeAudioOutputPeakMilli: 0,
     w14NativeAudioOutputRmsMilli: 0,
+    w14NativeAudioOutputBufferFrames: 0,
+    w14NativeAudioOutputBufferMs: 0,
+    w14NativeAudioOutputLowLatency: false,
     w14NativeAudioOutputDeviceName: "",
     w14NativeAudioOutputSampleFormat: "",
     w14NativeAudioOutputStreamRunning: false,
@@ -1282,6 +1285,9 @@ function getEmptyHostDiagnostics() {
     w14NativeAudioOutputSilentCallbacks: 0,
     w14NativeAudioOutputPeakMilli: 0,
     w14NativeAudioOutputRmsMilli: 0,
+    w14NativeAudioOutputBufferFrames: 0,
+    w14NativeAudioOutputBufferMs: 0,
+    w14NativeAudioOutputLowLatency: false,
     w14NativeAudioOutputDeviceName: "",
     w14NativeAudioOutputSampleFormat: "",
     w14NativeAudioOutputStreamRunning: false,
@@ -7012,6 +7018,9 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const w14AudioOutputSilentCallbacks = Number(state.hostDiagnostics?.w14NativeAudioOutputSilentCallbacks) || 0;
   const w14AudioOutputPeakMilli = Number(state.hostDiagnostics?.w14NativeAudioOutputPeakMilli) || 0;
   const w14AudioOutputRmsMilli = Number(state.hostDiagnostics?.w14NativeAudioOutputRmsMilli) || 0;
+  const w14AudioOutputBufferFrames = Number(state.hostDiagnostics?.w14NativeAudioOutputBufferFrames) || 0;
+  const w14AudioOutputBufferMs = Number(state.hostDiagnostics?.w14NativeAudioOutputBufferMs) || 0;
+  const w14AudioOutputLowLatency = Boolean(state.hostDiagnostics?.w14NativeAudioOutputLowLatency);
   const w14AudioOutputDeviceName = String(state.hostDiagnostics?.w14NativeAudioOutputDeviceName || "").trim();
   const w14AudioOutputSampleFormat = String(state.hostDiagnostics?.w14NativeAudioOutputSampleFormat || "").trim();
   const w14AudioOutputStreamRunning = Boolean(state.hostDiagnostics?.w14NativeAudioOutputStreamRunning);
@@ -7108,6 +7117,10 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     }
     parts.push(`W14音频 peak ${Math.round(w14AudioOutputPeakMilli)}`);
     parts.push(`W14音频 rms ${Math.round(w14AudioOutputRmsMilli)}`);
+    if (w14AudioOutputBufferMs > 0 || w14AudioOutputBufferFrames > 0) {
+      parts.push(`W14音频输出buffer ${Math.round(w14AudioOutputBufferMs)} ms/${Math.round(w14AudioOutputBufferFrames)}f`);
+    }
+    parts.push(`W14音频低延迟 ${w14AudioOutputLowLatency ? "yes" : "no"}`);
     if (w14AudioOutputDeviceName) {
       parts.push(`W14音频设备 ${w14AudioOutputDeviceName.replace(/\s+/g, " ").slice(0, 80)}`);
     }
@@ -7120,7 +7133,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
       ? w14AudioOutputSampleFormat.replace(/\s+/g, "_").replace(/[;|,]+/g, "_").slice(0, 40)
       : "unknown";
     parts.push(
-      `W14AudioOutput=outputCallbacks=${Math.round(w14AudioOutputCallbacks)} callbackFrames=${Math.round(Number(state.hostDiagnostics?.w14NativeAudioOutputCallbackFrames) || 0)} signalCallbacks=${Math.round(w14AudioOutputSignalCallbacks)} silentCallbacks=${Math.round(w14AudioOutputSilentCallbacks)} peakMilli=${Math.round(w14AudioOutputPeakMilli)} rmsMilli=${Math.round(w14AudioOutputRmsMilli)} device=${outputDeviceToken} sampleFormat=${outputFormatToken} streamRunning=${w14AudioOutputStreamRunning ? "true" : "false"}`,
+      `W14AudioOutput=outputCallbacks=${Math.round(w14AudioOutputCallbacks)} callbackFrames=${Math.round(Number(state.hostDiagnostics?.w14NativeAudioOutputCallbackFrames) || 0)} signalCallbacks=${Math.round(w14AudioOutputSignalCallbacks)} silentCallbacks=${Math.round(w14AudioOutputSilentCallbacks)} peakMilli=${Math.round(w14AudioOutputPeakMilli)} rmsMilli=${Math.round(w14AudioOutputRmsMilli)} bufferMs=${Math.round(w14AudioOutputBufferMs)} bufferFrames=${Math.round(w14AudioOutputBufferFrames)} lowLatency=${w14AudioOutputLowLatency ? "true" : "false"} device=${outputDeviceToken} sampleFormat=${outputFormatToken} streamRunning=${w14AudioOutputStreamRunning ? "true" : "false"}`,
     );
   }
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
@@ -7361,6 +7374,9 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
     const nativeSourceFrameMaxMs = Number(state.nativeAudioSnapshot?.sourceFrameMaxMs);
     const nativeSourceFrameCadenceMs = Number(state.nativeAudioSnapshot?.sourceFrameCadenceMs);
     const nativeSourceCadenceFrames = Number(state.nativeAudioSnapshot?.sourceCadenceFrames);
+    const nativeOutputBufferFrames = Number(state.nativeAudioSnapshot?.outputBufferFrames);
+    const nativeOutputBufferMs = Number(state.nativeAudioSnapshot?.outputBufferMs);
+    const nativeOutputLowLatency = state.nativeAudioSnapshot?.outputLowLatency === true;
     if (Number.isFinite(nativeSourceFrameMs) && nativeSourceFrameMs > 0) {
       parts.push(`原生源帧 ${Math.round(nativeSourceFrameMs)} ms`);
     }
@@ -7375,6 +7391,15 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
     ) {
       parts.push(`原生节奏 ${Math.round(nativeSourceCadenceFrames)}x${Math.round(nativeSourceFrameCadenceMs)} ms`);
     }
+    if (
+      (Number.isFinite(nativeOutputBufferMs) && nativeOutputBufferMs > 0) ||
+      (Number.isFinite(nativeOutputBufferFrames) && nativeOutputBufferFrames > 0)
+    ) {
+      parts.push(
+        `原生输出buffer ${Math.round(nativeOutputBufferMs || 0)} ms/${Math.round(nativeOutputBufferFrames || 0)}f`,
+      );
+    }
+    parts.push(`原生低延迟输出 ${nativeOutputLowLatency ? "yes" : "no"}`);
   }
   const firstFrameWaitStatus = getAudioFirstFrameWaitStatus(now);
   if (firstFrameWaitStatus.waiting) {
@@ -8958,6 +8983,9 @@ function normalizeW14NativeReceiverDiagnostics(snapshot = state.w14NativeReceive
     w14NativeAudioOutputSilentCallbacks: numberValue("audioOutputSilentCallbacks"),
     w14NativeAudioOutputPeakMilli: numberValue("audioOutputPeakMilli"),
     w14NativeAudioOutputRmsMilli: numberValue("audioOutputRmsMilli"),
+    w14NativeAudioOutputBufferFrames: numberValue("audioOutputBufferFrames"),
+    w14NativeAudioOutputBufferMs: numberValue("audioOutputBufferMs"),
+    w14NativeAudioOutputLowLatency: source.audioOutputLowLatency === true,
     w14NativeAudioOutputDeviceName: stringValue("audioOutputDeviceName"),
     w14NativeAudioOutputSampleFormat: stringValue("audioOutputSampleFormat"),
     w14NativeAudioOutputStreamRunning: source.audioOutputStreamRunning === true,

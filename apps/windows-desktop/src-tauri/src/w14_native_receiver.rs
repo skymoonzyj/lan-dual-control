@@ -114,6 +114,9 @@ pub struct W14NativeReceiverSnapshot {
     pub audio_output_silent_callbacks: u64,
     pub audio_output_peak_milli: u64,
     pub audio_output_rms_milli: u64,
+    pub audio_output_buffer_frames: u64,
+    pub audio_output_buffer_ms: u64,
+    pub audio_output_low_latency: bool,
     pub audio_output_device_name: String,
     pub audio_output_sample_format: String,
     pub audio_output_stream_running: bool,
@@ -186,6 +189,9 @@ impl Default for W14NativeReceiverSnapshot {
             audio_output_silent_callbacks: 0,
             audio_output_peak_milli: 0,
             audio_output_rms_milli: 0,
+            audio_output_buffer_frames: 0,
+            audio_output_buffer_ms: 0,
+            audio_output_low_latency: false,
             audio_output_device_name: String::new(),
             audio_output_sample_format: String::new(),
             audio_output_stream_running: false,
@@ -1029,6 +1035,9 @@ fn apply_audio_playback_stats(
     snapshot.audio_output_silent_callbacks = stats.output_silent_callbacks;
     snapshot.audio_output_peak_milli = stats.output_peak_milli;
     snapshot.audio_output_rms_milli = stats.output_rms_milli;
+    snapshot.audio_output_buffer_frames = stats.output_buffer_frames;
+    snapshot.audio_output_buffer_ms = stats.output_buffer_ms;
+    snapshot.audio_output_low_latency = stats.output_low_latency;
     snapshot.audio_output_device_name = stats.output_device_name;
     snapshot.audio_output_sample_format = stats.output_sample_format;
     snapshot.audio_output_stream_running = stats.output_stream_running;
@@ -1268,6 +1277,9 @@ mod tests {
                 output_silent_callbacks: 0,
                 output_peak_milli: 250,
                 output_rms_milli: 125,
+                output_buffer_frames: 480,
+                output_buffer_ms: 10,
+                output_low_latency: true,
                 output_device_name: "Default Output".to_string(),
                 output_sample_format: "F32".to_string(),
                 output_stream_running: true,
@@ -1291,6 +1303,9 @@ mod tests {
         assert_eq!(snapshot.audio_output_silent_callbacks, 0);
         assert_eq!(snapshot.audio_output_peak_milli, 250);
         assert_eq!(snapshot.audio_output_rms_milli, 125);
+        assert_eq!(snapshot.audio_output_buffer_frames, 480);
+        assert_eq!(snapshot.audio_output_buffer_ms, 10);
+        assert!(snapshot.audio_output_low_latency);
         assert_eq!(snapshot.audio_output_device_name, "Default Output");
         assert_eq!(snapshot.audio_output_sample_format, "F32");
         assert!(snapshot.audio_output_stream_running);

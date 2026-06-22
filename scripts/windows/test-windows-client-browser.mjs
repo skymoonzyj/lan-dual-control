@@ -809,6 +809,11 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   );
   const audioPeak = positiveInteger(value.w14NativeAudioOutputPeakMilli ?? value.audioOutputPeakMilli);
   const audioRms = positiveInteger(value.w14NativeAudioOutputRmsMilli ?? value.audioOutputRmsMilli);
+  const audioOutputBufferMs = positiveInteger(value.w14NativeAudioOutputBufferMs ?? value.audioOutputBufferMs);
+  const audioOutputBufferFrames = positiveInteger(
+    value.w14NativeAudioOutputBufferFrames ?? value.audioOutputBufferFrames,
+  );
+  const audioLowLatencyValue = value.w14NativeAudioOutputLowLatency ?? value.audioOutputLowLatency;
   const audioDevice = String(value.w14NativeAudioOutputDeviceName ?? value.audioOutputDeviceName ?? "").trim();
   const audioStreamRunningValue = value.w14NativeAudioOutputStreamRunning ?? value.audioOutputStreamRunning;
   const audioStream =
@@ -836,6 +841,7 @@ function makeW14NativeVideoRetestSummary(value = {}) {
     presentFrameId !== null ||
     audioFrames > 0 ||
     audioCallbacks > 0 ||
+    audioOutputBufferMs > 0 ||
     Boolean(audioDevice || audioStream);
 
   if (!hasEvidence) return "";
@@ -874,6 +880,11 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   if (audioPeak > 0) parts.push(`audioPeak=${audioPeak}`);
   if (audioRms > 0) parts.push(`audioRms=${audioRms}`);
   if (audioRms > 0) parts.push(`audioOutputRmsMilli=${audioRms}`);
+  if (audioOutputBufferMs > 0) parts.push(`audioOutputBufferMs=${audioOutputBufferMs}`);
+  if (audioOutputBufferFrames > 0) parts.push(`audioOutputBufferFrames=${audioOutputBufferFrames}`);
+  if (typeof audioLowLatencyValue === "boolean") {
+    parts.push(`audioOutputLowLatency=${audioLowLatencyValue ? "true" : "false"}`);
+  }
   if (audioDevice) parts.push(`audioDevice=${compactBoardSummaryToken(audioDevice, 80)}`);
   if (audioDevice) parts.push(`audioOutputDevice=${compactBoardSummaryToken(audioDevice, 80)}`);
   if (audioStream) parts.push(`audioStream=${compactBoardSummaryToken(audioStream, 40)}`);
@@ -1250,6 +1261,9 @@ function verifyW14NativeVideoRetestSummary() {
     w14NativeAudioOutputSilentCallbacks: 1,
     w14NativeAudioOutputPeakMilli: 250,
     w14NativeAudioOutputRmsMilli: 125,
+    w14NativeAudioOutputBufferMs: 10,
+    w14NativeAudioOutputBufferFrames: 480,
+    w14NativeAudioOutputLowLatency: true,
     w14NativeAudioOutputDeviceName: "Default Output",
     w14NativeAudioOutputStreamRunning: true,
   });
@@ -1285,6 +1299,9 @@ function verifyW14NativeVideoRetestSummary() {
     text.includes("audioPeak=250") &&
     text.includes("audioRms=125") &&
     text.includes("audioOutputRmsMilli=125") &&
+    text.includes("audioOutputBufferMs=10") &&
+    text.includes("audioOutputBufferFrames=480") &&
+    text.includes("audioOutputLowLatency=true") &&
     text.includes("audioDevice=Default_Output") &&
     text.includes("audioOutputDevice=Default_Output") &&
     text.includes("audioStream=running") &&
@@ -1295,8 +1312,8 @@ function verifyW14NativeVideoRetestSummary() {
     text.includes("idLag=2") &&
     text.includes("presentAgeMs=4800") &&
     text.includes("presenting=yes") &&
-    text.includes("lastStatus=latest-frame-nv12-converted-presented") &&
-    text.includes("lastReason=ready_latest_NV12_frame_converted_and_presented_to_HWND");
+    w14NativeVideo.includes("lastStatus=latest-frame-nv12-converted-presented") &&
+    w14NativeVideo.includes("lastReason=ready_latest_NV12_frame_converted_and_presented_to_HWND");
   return { ok, text, w14NativeVideo };
 }
 
@@ -6166,6 +6183,9 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         audioOutputSilentCallbacks: 1,
         audioOutputPeakMilli: 250,
         audioOutputRmsMilli: 125,
+        audioOutputBufferFrames: 480,
+        audioOutputBufferMs: 10,
+        audioOutputLowLatency: true,
         audioOutputDeviceName: "Default Output",
         audioOutputSampleFormat: "F32",
         audioOutputStreamRunning: true,
@@ -6271,6 +6291,9 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           diagnosticsBeforeStop.w14NativeAudioOutputSilentCallbacks === 1 &&
           diagnosticsBeforeStop.w14NativeAudioOutputPeakMilli === 250 &&
           diagnosticsBeforeStop.w14NativeAudioOutputRmsMilli === 125 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputBufferFrames === 480 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputBufferMs === 10 &&
+          diagnosticsBeforeStop.w14NativeAudioOutputLowLatency === true &&
           diagnosticsBeforeStop.w14NativeAudioOutputDeviceName === "Default Output" &&
           diagnosticsBeforeStop.w14NativeAudioOutputSampleFormat === "F32" &&
           diagnosticsBeforeStop.w14NativeAudioOutputStreamRunning === true &&
@@ -6304,10 +6327,15 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           exportText.includes("W14音频静音回调 1") &&
           exportText.includes("W14音频 peak 250") &&
           exportText.includes("W14音频 rms 125") &&
+          exportText.includes("W14音频输出buffer 10 ms/480f") &&
+          exportText.includes("W14音频低延迟 yes") &&
           exportText.includes("W14音频设备 Default Output") &&
           exportText.includes("W14音频流 running") &&
           exportText.includes("W14AudioOutput=outputCallbacks=2") &&
           exportText.includes("rmsMilli=125") &&
+          exportText.includes("bufferMs=10") &&
+          exportText.includes("bufferFrames=480") &&
+          exportText.includes("lowLatency=true") &&
           exportText.includes("device=Default_Output") &&
           exportText.includes("streamRunning=true") &&
           exportText.includes("原生帧链 latest:3/surface:3/present:1") &&
@@ -10102,6 +10130,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   sourceFrameMaxMs: 0,
                   sourceFrameCadenceMs: 20,
                   sourceCadenceFrames: 0,
+                  outputBufferFrames: 480,
+                  outputBufferMs: 10,
+                  outputLowLatency: true,
                   lastReason: "native-playback-started",
                 };
               }
@@ -10119,6 +10150,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   sourceFrameMaxMs: 100,
                   sourceFrameCadenceMs: 20,
                   sourceCadenceFrames: 5,
+                  outputBufferFrames: 480,
+                  outputBufferMs: 10,
+                  outputLowLatency: true,
                   lastReason: "native-playback-queued",
                 };
               }
@@ -10136,6 +10170,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   sourceFrameMaxMs: 0,
                   sourceFrameCadenceMs: 20,
                   sourceCadenceFrames: 0,
+                  outputBufferFrames: 480,
+                  outputBufferMs: 10,
+                  outputLowLatency: true,
                   lastReason: "native-playback-stopped",
                 };
               }
@@ -10173,7 +10210,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
           getAudioQueueMs() === 24 &&
           nativeAudioExportText.includes("原生源帧 20 ms") &&
           nativeAudioExportText.includes("原生最大源帧 100 ms") &&
-          nativeAudioExportText.includes("原生节奏 5x20 ms");
+          nativeAudioExportText.includes("原生节奏 5x20 ms") &&
+          nativeAudioExportText.includes("原生输出buffer 10 ms/480f") &&
+          nativeAudioExportText.includes("原生低延迟输出 yes");
 
         window.__TAURI__ = original.tauri;
 

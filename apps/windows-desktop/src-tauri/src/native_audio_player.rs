@@ -2,7 +2,8 @@
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    FromSample, Sample, SampleFormat, SizedSample, Stream, StreamConfig,
+    BufferSize, FromSample, Sample, SampleFormat, SampleRate, SizedSample, Stream, StreamConfig,
+    SupportedBufferSize,
 };
 use std::collections::VecDeque;
 use std::sync::{
@@ -13,6 +14,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const DEFAULT_SOURCE_CADENCE_MS: u64 = 20;
+const LOW_LATENCY_OUTPUT_BUFFER_MS: u64 = 10;
 
 #[derive(Debug, Clone, Copy)]
 pub struct NativeAudioPlaybackConfig {
@@ -50,6 +52,9 @@ pub struct NativeAudioPlaybackStats {
     pub output_silent_callbacks: u64,
     pub output_peak_milli: u64,
     pub output_rms_milli: u64,
+    pub output_buffer_frames: u64,
+    pub output_buffer_ms: u64,
+    pub output_low_latency: bool,
     pub output_device_name: String,
     pub output_sample_format: String,
     pub output_stream_running: bool,
@@ -76,6 +81,9 @@ pub struct NativeAudioOutput {
     config: NativeAudioPlaybackConfig,
     device_name: String,
     sample_format: String,
+    output_buffer_frames: u64,
+    output_buffer_ms: u64,
+    output_low_latency: bool,
     stream_running: bool,
     worker: Option<JoinHandle<()>>,
 }
@@ -103,6 +111,9 @@ impl NativeAudioOutput {
             config: output_info.config,
             device_name: output_info.device_name,
             sample_format: output_info.sample_format,
+            output_buffer_frames: output_info.output_buffer_frames,
+            output_buffer_ms: output_info.output_buffer_ms,
+            output_low_latency: output_info.output_low_latency,
             stream_running: true,
             worker: Some(worker),
         })
@@ -131,6 +142,9 @@ impl NativeAudioOutput {
             .map_err(|_| "W9 原生音频播放状态读取超时".to_string())??;
         stats.output_device_name = self.device_name.clone();
         stats.output_sample_format = self.sample_format.clone();
+        stats.output_buffer_frames = self.output_buffer_frames;
+        stats.output_buffer_ms = self.output_buffer_ms;
+        stats.output_low_latency = self.output_low_latency;
         stats.output_stream_running = self.stream_running;
         Ok(stats)
     }
@@ -153,6 +167,9 @@ struct NativeAudioOutputInfo {
     config: NativeAudioPlaybackConfig,
     device_name: String,
     sample_format: String,
+    output_buffer_frames: u64,
+    output_buffer_ms: u64,
+    output_low_latency: bool,
 }
 
 fn run_audio_worker(
@@ -212,23 +229,50 @@ fn create_audio_worker(
         .name()
         .unwrap_or_else(|_| "unknown output device".to_string());
     let sample_format = format!("{:?}", supported_config.sample_format());
-    let stream_config = StreamConfig {
+    let low_latency_stream_config = low_latency_stream_config(
+        supported_config.channels(),
+        supported_config.sample_rate().0,
+        supported_config.buffer_size(),
+    );
+    let default_stream_config = StreamConfig {
         channels: supported_config.channels(),
         sample_rate: supported_config.sample_rate(),
-        buffer_size: cpal::BufferSize::Default,
+        buffer_size: BufferSize::Default,
     };
     let playback_config = NativeAudioPlaybackConfig {
-        sample_rate: stream_config.sample_rate.0,
-        channels: stream_config.channels,
+        sample_rate: low_latency_stream_config.sample_rate.0,
+        channels: low_latency_stream_config.channels,
         ..config
     };
     let buffer = Arc::new(Mutex::new(NativeAudioPlaybackBuffer::new(playback_config)));
-    let stream = build_output_stream(
+    let low_latency_result = build_output_stream(
         supported_config.sample_format(),
         &device,
-        &stream_config,
+        &low_latency_stream_config,
         buffer.clone(),
-    )?;
+    );
+    let (stream, selected_stream_config, output_low_latency) = match low_latency_result {
+        Ok(stream) => (stream, low_latency_stream_config, true),
+        Err(low_latency_error) => {
+            let stream = build_output_stream(
+                supported_config.sample_format(),
+                &device,
+                &default_stream_config,
+                buffer.clone(),
+            )
+            .map_err(|default_error| {
+                format!(
+                    "{default_error}; low-latency output buffer also failed: {low_latency_error}"
+                )
+            })?;
+            (stream, default_stream_config, false)
+        }
+    };
+    let output_buffer_frames = match selected_stream_config.buffer_size {
+        BufferSize::Fixed(frames) => u64::from(frames),
+        BufferSize::Default => 0,
+    };
+    let output_buffer_ms = frames_to_ms(output_buffer_frames, selected_stream_config.sample_rate.0);
     Ok((
         stream,
         buffer,
@@ -236,8 +280,29 @@ fn create_audio_worker(
             config: playback_config,
             device_name,
             sample_format,
+            output_buffer_frames,
+            output_buffer_ms,
+            output_low_latency,
         },
     ))
+}
+
+fn low_latency_stream_config(
+    channels: u16,
+    sample_rate: u32,
+    supported_buffer_size: &SupportedBufferSize,
+) -> StreamConfig {
+    let desired_frames = ms_to_frames(LOW_LATENCY_OUTPUT_BUFFER_MS, sample_rate)
+        .clamp(1, u64::from(u32::MAX)) as u32;
+    let fixed_frames = match supported_buffer_size {
+        SupportedBufferSize::Range { min, max } => desired_frames.clamp(*min, *max),
+        SupportedBufferSize::Unknown => desired_frames,
+    };
+    StreamConfig {
+        channels,
+        sample_rate: SampleRate(sample_rate),
+        buffer_size: BufferSize::Fixed(fixed_frames),
+    }
 }
 
 fn build_output_stream(
@@ -431,7 +496,10 @@ fn output_signal_levels_milli(output: &[f32]) -> (u64, u64) {
         sum_squares += value * value;
     }
     let rms = (sum_squares / output.len() as f64).sqrt();
-    ((peak * 1000.0).round() as u64, (rms * 1000.0).round() as u64)
+    (
+        (peak * 1000.0).round() as u64,
+        (rms * 1000.0).round() as u64,
+    )
 }
 
 #[cfg(test)]
@@ -537,5 +605,21 @@ mod tests {
         assert_eq!(stats.output_silent_callbacks, 1);
         assert_eq!(stats.output_peak_milli, 0);
         assert_eq!(stats.output_rms_milli, 0);
+    }
+
+    #[test]
+    fn low_latency_stream_config_prefers_ten_ms_fixed_buffer_when_supported() {
+        let config = low_latency_stream_config(
+            2,
+            48_000,
+            &cpal::SupportedBufferSize::Range {
+                min: 128,
+                max: 4096,
+            },
+        );
+
+        assert_eq!(config.channels, 2);
+        assert_eq!(config.sample_rate.0, 48_000);
+        assert_eq!(config.buffer_size, cpal::BufferSize::Fixed(480));
     }
 }

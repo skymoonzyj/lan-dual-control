@@ -55,6 +55,9 @@ pub struct W9NativeAudioSnapshot {
     pub output_silent_callbacks: u64,
     pub output_peak_milli: u64,
     pub output_rms_milli: u64,
+    pub output_buffer_frames: u64,
+    pub output_buffer_ms: u64,
+    pub output_low_latency: bool,
     pub output_device_name: String,
     pub output_sample_format: String,
     pub output_stream_running: bool,
@@ -190,6 +193,9 @@ fn snapshot_from_stats(
         output_silent_callbacks: stats.output_silent_callbacks,
         output_peak_milli: stats.output_peak_milli,
         output_rms_milli: stats.output_rms_milli,
+        output_buffer_frames: stats.output_buffer_frames,
+        output_buffer_ms: stats.output_buffer_ms,
+        output_low_latency: stats.output_low_latency,
         output_device_name: stats.output_device_name,
         output_sample_format: stats.output_sample_format,
         output_stream_running: stats.output_stream_running,
@@ -243,6 +249,9 @@ mod tests {
                 output_silent_callbacks: 1,
                 output_peak_milli: 250,
                 output_rms_milli: 125,
+                output_buffer_frames: 480,
+                output_buffer_ms: 10,
+                output_low_latency: true,
                 output_device_name: "Default Output".to_string(),
                 output_sample_format: "F32".to_string(),
                 output_stream_running: true,
@@ -267,6 +276,9 @@ mod tests {
         assert_eq!(snapshot.output_silent_callbacks, 1);
         assert_eq!(snapshot.output_peak_milli, 250);
         assert_eq!(snapshot.output_rms_milli, 125);
+        assert_eq!(snapshot.output_buffer_frames, 480);
+        assert_eq!(snapshot.output_buffer_ms, 10);
+        assert!(snapshot.output_low_latency);
         assert_eq!(snapshot.output_device_name, "Default Output");
         assert_eq!(snapshot.output_sample_format, "F32");
         assert!(snapshot.output_stream_running);
