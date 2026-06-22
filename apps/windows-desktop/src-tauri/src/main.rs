@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod w14_native_receiver;
 mod w8_native_video;
 mod w9_native_audio;
 
@@ -2209,6 +2210,7 @@ fn main() {
         .manage(ClipboardFileReadState::default())
         .manage(w8_native_video::W8NativeVideoState::default())
         .manage(w9_native_audio::W9NativeAudioState::default())
+        .manage(w14_native_receiver::W14NativeReceiverState::default())
         .invoke_handler(tauri::generate_handler![
             write_files_to_clipboard,
             begin_clipboard_file_write,
@@ -2241,7 +2243,10 @@ fn main() {
             w9_native_audio::start_w9_native_audio_session,
             w9_native_audio::push_w9_native_pcm_f32_frame,
             w9_native_audio::get_w9_native_audio_snapshot,
-            w9_native_audio::stop_w9_native_audio_session
+            w9_native_audio::stop_w9_native_audio_session,
+            w14_native_receiver::start_w14_native_receiver_session,
+            w14_native_receiver::get_w14_native_receiver_snapshot,
+            w14_native_receiver::stop_w14_native_receiver_session
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {
