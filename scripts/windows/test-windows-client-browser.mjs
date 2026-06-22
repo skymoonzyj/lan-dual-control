@@ -576,6 +576,13 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const handoff = String(value.w8NativeVideoFrameHandoffStatus || "").trim();
   const swapchain = String(value.w8NativeVideoWindowSwapchainStatus || "").trim();
   const codec = String(value.w8NativeVideoCodecString || "").trim();
+  const nativeNal = String(value.w8NativeVideoNativeNalTypes || "").trim();
+  const nativeSps = positiveInteger(value.w8NativeVideoNativeSpsCount);
+  const nativePps = positiveInteger(value.w8NativeVideoNativePpsCount);
+  const nativeIdr = positiveInteger(value.w8NativeVideoNativeIdrCount);
+  const nativeKeyFrames = positiveInteger(value.w8NativeVideoNativeKeyFrames);
+  const nativeBytes = positiveInteger(value.w8NativeVideoNativeByteLen);
+  const nativeIsKeyframe = value.w8NativeVideoNativeIsKeyframe === true;
   const lastError = String(value.w8NativeVideoLastError || "").trim();
   const queueReason = String(value.w8NativeVideoLastReason || "").trim();
   const reasonText = [
@@ -668,6 +675,13 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
   if (framesPushed > 0) parts.push(`pushed=${framesPushed}`);
+  if (nativeNal) parts.push(`nativeNal=${compactBoardSummaryToken(nativeNal, 60)}`);
+  if (nativeIsKeyframe) parts.push("nativeKey=yes");
+  if (nativeKeyFrames > 0) parts.push(`nativeKeys=${nativeKeyFrames}`);
+  if (nativeSps > 0) parts.push(`nativeSps=${nativeSps}`);
+  if (nativePps > 0) parts.push(`nativePps=${nativePps}`);
+  if (nativeIdr > 0) parts.push(`nativeIdr=${nativeIdr}`);
+  if (nativeBytes > 0) parts.push(`nativeBytes=${nativeBytes}`);
   if (output) parts.push(`output=${output}`);
   if (codec) parts.push(`codec=${codec}`);
   if (surface) parts.push(`surface=${surface}`);
@@ -701,7 +715,7 @@ function makeBoardSummary(summary) {
   const w2w3Retest = makeW2W3RetestSummary(summary);
   if (w2w3Retest) details.push(w2w3Retest);
   if (summary.w8NativeVideo) {
-    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 920)}`);
+    details.push(`W8NativeVideo=${compactBoardSummaryText(summary.w8NativeVideo, 1200)}`);
   }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
@@ -829,6 +843,16 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoFramesPushedDelta: 122,
     w8NativeVideoSubmittedFrameDelta: 121,
     w8NativeVideoProgressNext: "continue-long-run-observation",
+    w8NativeVideoNativeNalTypes: "7/8/5",
+    w8NativeVideoNativeHasSps: true,
+    w8NativeVideoNativeHasPps: true,
+    w8NativeVideoNativeHasIdr: true,
+    w8NativeVideoNativeIsKeyframe: true,
+    w8NativeVideoNativeKeyFrames: 1,
+    w8NativeVideoNativeSpsCount: 1,
+    w8NativeVideoNativePpsCount: 1,
+    w8NativeVideoNativeIdrCount: 1,
+    w8NativeVideoNativeByteLen: 23,
     w8NativeVideoDecoderSessionOutputSubtype: "NV12",
     w8NativeVideoCodecString: "avc1.420029",
     w8NativeVideoNativeSurfaceStatus: "latest-frame-presented",
@@ -912,6 +936,13 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("presentGap=0") &&
     text.includes("submitted=190") &&
     text.includes("decoderGap=2") &&
+    text.includes("nativeNal=7/8/5") &&
+    text.includes("nativeKey=yes") &&
+    text.includes("nativeKeys=1") &&
+    text.includes("nativeSps=1") &&
+    text.includes("nativePps=1") &&
+    text.includes("nativeIdr=1") &&
+    text.includes("nativeBytes=23") &&
     w8NativeVideoBehind.includes("mainSurface=native-pending") &&
     w8NativeVideoBehind.includes("mediaSession=native-pending") &&
     w8NativeVideoBehind.includes("nativeAck=surface") &&
@@ -1036,6 +1067,16 @@ function windowsClientSnapshotExpression() {
       w8NativeVideoDroppedFrames: window.state?.w8NativeVideoDroppedFrames ?? 0,
       w8NativeVideoHasDecoderConfig: window.state?.w8NativeVideoHasDecoderConfig ?? false,
       w8NativeVideoCodecString: window.state?.w8NativeVideoCodecString ?? "",
+      w8NativeVideoNativeNalTypes: window.state?.w8NativeVideoNativeNalTypes ?? "",
+      w8NativeVideoNativeHasSps: window.state?.w8NativeVideoNativeHasSps ?? false,
+      w8NativeVideoNativeHasPps: window.state?.w8NativeVideoNativeHasPps ?? false,
+      w8NativeVideoNativeHasIdr: window.state?.w8NativeVideoNativeHasIdr ?? false,
+      w8NativeVideoNativeIsKeyframe: window.state?.w8NativeVideoNativeIsKeyframe ?? false,
+      w8NativeVideoNativeKeyFrames: window.state?.w8NativeVideoNativeKeyFrames ?? 0,
+      w8NativeVideoNativeSpsCount: window.state?.w8NativeVideoNativeSpsCount ?? 0,
+      w8NativeVideoNativePpsCount: window.state?.w8NativeVideoNativePpsCount ?? 0,
+      w8NativeVideoNativeIdrCount: window.state?.w8NativeVideoNativeIdrCount ?? 0,
+      w8NativeVideoNativeByteLen: window.state?.w8NativeVideoNativeByteLen ?? 0,
       w8NativeVideoDecoderSessionActive: window.state?.w8NativeVideoDecoderSessionActive ?? false,
       w8NativeVideoDecoderSessionReason: window.state?.w8NativeVideoDecoderSessionReason ?? "",
       w8NativeVideoDecoderSessionStatus: window.state?.w8NativeVideoDecoderSessionStatus ?? "",
@@ -5784,6 +5825,16 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
         w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
         w8NativeVideoCodecString: state.w8NativeVideoCodecString,
+        w8NativeVideoNativeNalTypes: state.w8NativeVideoNativeNalTypes,
+        w8NativeVideoNativeHasSps: state.w8NativeVideoNativeHasSps,
+        w8NativeVideoNativeHasPps: state.w8NativeVideoNativeHasPps,
+        w8NativeVideoNativeHasIdr: state.w8NativeVideoNativeHasIdr,
+        w8NativeVideoNativeIsKeyframe: state.w8NativeVideoNativeIsKeyframe,
+        w8NativeVideoNativeKeyFrames: state.w8NativeVideoNativeKeyFrames,
+        w8NativeVideoNativeSpsCount: state.w8NativeVideoNativeSpsCount,
+        w8NativeVideoNativePpsCount: state.w8NativeVideoNativePpsCount,
+        w8NativeVideoNativeIdrCount: state.w8NativeVideoNativeIdrCount,
+        w8NativeVideoNativeByteLen: state.w8NativeVideoNativeByteLen,
         w8NativeVideoDecoderProbePromise: state.w8NativeVideoDecoderProbePromise,
         w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
         w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
@@ -6120,6 +6171,16 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDroppedFrames = 0;
         state.w8NativeVideoHasDecoderConfig = false;
         state.w8NativeVideoCodecString = "";
+        state.w8NativeVideoNativeNalTypes = "";
+        state.w8NativeVideoNativeHasSps = false;
+        state.w8NativeVideoNativeHasPps = false;
+        state.w8NativeVideoNativeHasIdr = false;
+        state.w8NativeVideoNativeIsKeyframe = false;
+        state.w8NativeVideoNativeKeyFrames = 0;
+        state.w8NativeVideoNativeSpsCount = 0;
+        state.w8NativeVideoNativePpsCount = 0;
+        state.w8NativeVideoNativeIdrCount = 0;
+        state.w8NativeVideoNativeByteLen = 0;
         state.w8NativeVideoDecoderProbePromise = null;
         state.w8NativeVideoDecoderReady = false;
         state.w8NativeVideoDecoderMode = "";
@@ -6239,6 +6300,16 @@ async function verifyH264KeyFrameDetection(session) {
           state.hostDiagnostics?.w8NativeVideoDroppedFrames === 7 &&
           state.hostDiagnostics?.w8NativeVideoHasDecoderConfig === true &&
           state.hostDiagnostics?.w8NativeVideoCodecString === "avc1.420029" &&
+          state.hostDiagnostics?.w8NativeVideoNativeNalTypes === "7/8/5" &&
+          state.hostDiagnostics?.w8NativeVideoNativeHasSps === true &&
+          state.hostDiagnostics?.w8NativeVideoNativeHasPps === true &&
+          state.hostDiagnostics?.w8NativeVideoNativeHasIdr === true &&
+          state.hostDiagnostics?.w8NativeVideoNativeIsKeyframe === true &&
+          state.hostDiagnostics?.w8NativeVideoNativeKeyFrames === 1 &&
+          state.hostDiagnostics?.w8NativeVideoNativeSpsCount === 1 &&
+          state.hostDiagnostics?.w8NativeVideoNativePpsCount === 1 &&
+          state.hostDiagnostics?.w8NativeVideoNativeIdrCount === 1 &&
+          state.hostDiagnostics?.w8NativeVideoNativeByteLen === 23 &&
           state.hostDiagnostics?.w8NativeVideoDecoderReady === true &&
           state.hostDiagnostics?.w8NativeVideoDecoderMode === "media-foundation-h264-d3d11-probe" &&
           state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel === "11_1" &&
@@ -6301,6 +6372,11 @@ async function verifyH264KeyFrameDetection(session) {
           exportText.includes("原生预队列丢旧帧 7") &&
           !exportText.includes("原生丢旧帧 7") &&
           exportText.includes("原生解码配置 avc1.420029") &&
+          exportText.includes("原生NAL 7/8/5") &&
+          exportText.includes("原生SPS/PPS/IDR 1/1/1") &&
+          exportText.includes("原生关键帧 yes") &&
+          exportText.includes("原生关键帧累计 1") &&
+          exportText.includes("原生字节 23") &&
           exportText.includes("原生解码器 ready") &&
           exportText.includes("D3D11 11_1") &&
           exportText.includes("原生解码初始化 ready") &&
@@ -6537,6 +6613,16 @@ async function verifyH264KeyFrameDetection(session) {
           w8NativeVideoDroppedFrames: state.hostDiagnostics?.w8NativeVideoDroppedFrames,
           w8NativeVideoHasDecoderConfig: state.hostDiagnostics?.w8NativeVideoHasDecoderConfig,
           w8NativeVideoCodecString: state.hostDiagnostics?.w8NativeVideoCodecString,
+          w8NativeVideoNativeNalTypes: state.hostDiagnostics?.w8NativeVideoNativeNalTypes,
+          w8NativeVideoNativeHasSps: state.hostDiagnostics?.w8NativeVideoNativeHasSps,
+          w8NativeVideoNativeHasPps: state.hostDiagnostics?.w8NativeVideoNativeHasPps,
+          w8NativeVideoNativeHasIdr: state.hostDiagnostics?.w8NativeVideoNativeHasIdr,
+          w8NativeVideoNativeIsKeyframe: state.hostDiagnostics?.w8NativeVideoNativeIsKeyframe,
+          w8NativeVideoNativeKeyFrames: state.hostDiagnostics?.w8NativeVideoNativeKeyFrames,
+          w8NativeVideoNativeSpsCount: state.hostDiagnostics?.w8NativeVideoNativeSpsCount,
+          w8NativeVideoNativePpsCount: state.hostDiagnostics?.w8NativeVideoNativePpsCount,
+          w8NativeVideoNativeIdrCount: state.hostDiagnostics?.w8NativeVideoNativeIdrCount,
+          w8NativeVideoNativeByteLen: state.hostDiagnostics?.w8NativeVideoNativeByteLen,
           w8NativeVideoDecoderReady: state.hostDiagnostics?.w8NativeVideoDecoderReady,
           w8NativeVideoDecoderMode: state.hostDiagnostics?.w8NativeVideoDecoderMode,
           w8NativeVideoD3dFeatureLevel: state.hostDiagnostics?.w8NativeVideoD3dFeatureLevel,
@@ -6688,6 +6774,16 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoDroppedFrames = original.w8NativeVideoDroppedFrames;
         state.w8NativeVideoHasDecoderConfig = original.w8NativeVideoHasDecoderConfig;
         state.w8NativeVideoCodecString = original.w8NativeVideoCodecString;
+        state.w8NativeVideoNativeNalTypes = original.w8NativeVideoNativeNalTypes;
+        state.w8NativeVideoNativeHasSps = original.w8NativeVideoNativeHasSps;
+        state.w8NativeVideoNativeHasPps = original.w8NativeVideoNativeHasPps;
+        state.w8NativeVideoNativeHasIdr = original.w8NativeVideoNativeHasIdr;
+        state.w8NativeVideoNativeIsKeyframe = original.w8NativeVideoNativeIsKeyframe;
+        state.w8NativeVideoNativeKeyFrames = original.w8NativeVideoNativeKeyFrames;
+        state.w8NativeVideoNativeSpsCount = original.w8NativeVideoNativeSpsCount;
+        state.w8NativeVideoNativePpsCount = original.w8NativeVideoNativePpsCount;
+        state.w8NativeVideoNativeIdrCount = original.w8NativeVideoNativeIdrCount;
+        state.w8NativeVideoNativeByteLen = original.w8NativeVideoNativeByteLen;
         state.w8NativeVideoDecoderProbePromise = original.w8NativeVideoDecoderProbePromise;
         state.w8NativeVideoDecoderReady = original.w8NativeVideoDecoderReady;
         state.w8NativeVideoDecoderMode = original.w8NativeVideoDecoderMode;

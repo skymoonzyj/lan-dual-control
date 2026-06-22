@@ -624,6 +624,16 @@ const state = {
   w8NativeVideoDroppedFrames: 0,
   w8NativeVideoHasDecoderConfig: false,
   w8NativeVideoCodecString: "",
+  w8NativeVideoNativeNalTypes: "",
+  w8NativeVideoNativeHasSps: false,
+  w8NativeVideoNativeHasPps: false,
+  w8NativeVideoNativeHasIdr: false,
+  w8NativeVideoNativeIsKeyframe: false,
+  w8NativeVideoNativeKeyFrames: 0,
+  w8NativeVideoNativeSpsCount: 0,
+  w8NativeVideoNativePpsCount: 0,
+  w8NativeVideoNativeIdrCount: 0,
+  w8NativeVideoNativeByteLen: 0,
   w8NativeVideoDecoderProbePromise: null,
   w8NativeVideoDecoderReady: false,
   w8NativeVideoDecoderMode: "",
@@ -830,6 +840,16 @@ const state = {
     w8NativeVideoDroppedFrames: 0,
     w8NativeVideoHasDecoderConfig: false,
     w8NativeVideoCodecString: "",
+    w8NativeVideoNativeNalTypes: "",
+    w8NativeVideoNativeHasSps: false,
+    w8NativeVideoNativeHasPps: false,
+    w8NativeVideoNativeHasIdr: false,
+    w8NativeVideoNativeIsKeyframe: false,
+    w8NativeVideoNativeKeyFrames: 0,
+    w8NativeVideoNativeSpsCount: 0,
+    w8NativeVideoNativePpsCount: 0,
+    w8NativeVideoNativeIdrCount: 0,
+    w8NativeVideoNativeByteLen: 0,
     w8NativeVideoDecoderReady: false,
     w8NativeVideoDecoderMode: "",
     w8NativeVideoDecoderReason: "",
@@ -1138,6 +1158,16 @@ function getEmptyHostDiagnostics() {
     w8NativeVideoDroppedFrames: 0,
     w8NativeVideoHasDecoderConfig: false,
     w8NativeVideoCodecString: "",
+    w8NativeVideoNativeNalTypes: "",
+    w8NativeVideoNativeHasSps: false,
+    w8NativeVideoNativeHasPps: false,
+    w8NativeVideoNativeHasIdr: false,
+    w8NativeVideoNativeIsKeyframe: false,
+    w8NativeVideoNativeKeyFrames: 0,
+    w8NativeVideoNativeSpsCount: 0,
+    w8NativeVideoNativePpsCount: 0,
+    w8NativeVideoNativeIdrCount: 0,
+    w8NativeVideoNativeByteLen: 0,
     w8NativeVideoDecoderReady: false,
     w8NativeVideoDecoderMode: "",
     w8NativeVideoDecoderReason: "",
@@ -1697,6 +1727,13 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeDroppedFrames = Number(diagnostics.w8NativeVideoDroppedFrames);
   const nativeHasDecoderConfig = Boolean(diagnostics.w8NativeVideoHasDecoderConfig);
   const nativeCodecString = String(diagnostics.w8NativeVideoCodecString || "").trim();
+  const nativeNalTypes = String(diagnostics.w8NativeVideoNativeNalTypes || "").trim();
+  const nativeIsKeyframe = diagnostics.w8NativeVideoNativeIsKeyframe === true;
+  const nativeKeyFrames = Number(diagnostics.w8NativeVideoNativeKeyFrames);
+  const nativeSpsCount = Number(diagnostics.w8NativeVideoNativeSpsCount);
+  const nativePpsCount = Number(diagnostics.w8NativeVideoNativePpsCount);
+  const nativeIdrCount = Number(diagnostics.w8NativeVideoNativeIdrCount);
+  const nativeByteLen = Number(diagnostics.w8NativeVideoNativeByteLen);
   const nativeDecoderReady = Boolean(diagnostics.w8NativeVideoDecoderReady);
   const nativeDecoderMode = String(diagnostics.w8NativeVideoDecoderMode || "").trim();
   const nativeDecoderReason = String(diagnostics.w8NativeVideoDecoderReason || "").trim();
@@ -1832,6 +1869,27 @@ function formatVideoDecoderDiagnostics(diagnostics) {
     parts.push(`原生解码配置 ${nativeCodecString}`);
   } else if (nativeHasDecoderConfig) {
     parts.push("原生解码配置已到达");
+  }
+  if (nativeNalTypes) {
+    parts.push(`原生NAL ${nativeNalTypes}`);
+  }
+  if (
+    (Number.isFinite(nativeSpsCount) && nativeSpsCount > 0) ||
+    (Number.isFinite(nativePpsCount) && nativePpsCount > 0) ||
+    (Number.isFinite(nativeIdrCount) && nativeIdrCount > 0)
+  ) {
+    parts.push(
+      `原生SPS/PPS/IDR ${Math.max(0, nativeSpsCount || 0)}/${Math.max(0, nativePpsCount || 0)}/${Math.max(0, nativeIdrCount || 0)}`,
+    );
+  }
+  if (nativeIsKeyframe) {
+    parts.push("原生关键帧 yes");
+  }
+  if (Number.isFinite(nativeKeyFrames) && nativeKeyFrames > 0) {
+    parts.push(`原生关键帧累计 ${Math.round(nativeKeyFrames)}`);
+  }
+  if (Number.isFinite(nativeByteLen) && nativeByteLen > 0) {
+    parts.push(`原生字节 ${Math.round(nativeByteLen)}`);
   }
   if (nativeDecoderMode) {
     parts.push(`原生解码器 ${nativeDecoderReady ? "ready" : "blocked"}`);
@@ -6280,6 +6338,37 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeCodecString = String(
     state.w8NativeVideoCodecString || state.hostDiagnostics?.w8NativeVideoCodecString || "",
   ).trim();
+  const nativeNalTypes = String(
+    state.w8NativeVideoNativeNalTypes || state.hostDiagnostics?.w8NativeVideoNativeNalTypes || "",
+  ).trim();
+  const nativeIsKeyframe = Boolean(
+    state.w8NativeVideoNativeIsKeyframe || state.hostDiagnostics?.w8NativeVideoNativeIsKeyframe,
+  );
+  const nativeKeyFrames =
+    Number(
+      state.w8NativeVideoNativeKeyFrames ||
+        state.hostDiagnostics?.w8NativeVideoNativeKeyFrames,
+    ) || 0;
+  const nativeSpsCount =
+    Number(
+      state.w8NativeVideoNativeSpsCount ||
+        state.hostDiagnostics?.w8NativeVideoNativeSpsCount,
+    ) || 0;
+  const nativePpsCount =
+    Number(
+      state.w8NativeVideoNativePpsCount ||
+        state.hostDiagnostics?.w8NativeVideoNativePpsCount,
+    ) || 0;
+  const nativeIdrCount =
+    Number(
+      state.w8NativeVideoNativeIdrCount ||
+        state.hostDiagnostics?.w8NativeVideoNativeIdrCount,
+    ) || 0;
+  const nativeByteLen =
+    Number(
+      state.w8NativeVideoNativeByteLen ||
+        state.hostDiagnostics?.w8NativeVideoNativeByteLen,
+    ) || 0;
   const nativeDecoderReady = Boolean(
     state.w8NativeVideoDecoderReady || state.hostDiagnostics?.w8NativeVideoDecoderReady,
   );
@@ -6631,6 +6720,13 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   if (nativeCodecString) parts.push(`原生解码配置 ${nativeCodecString}`);
   else if (nativeHasDecoderConfig) parts.push("原生解码配置已到达");
+  if (nativeNalTypes) parts.push(`原生NAL ${nativeNalTypes}`);
+  if (nativeSpsCount > 0 || nativePpsCount > 0 || nativeIdrCount > 0) {
+    parts.push(`原生SPS/PPS/IDR ${nativeSpsCount}/${nativePpsCount}/${nativeIdrCount}`);
+  }
+  if (nativeIsKeyframe) parts.push("原生关键帧 yes");
+  if (nativeKeyFrames > 0) parts.push(`原生关键帧累计 ${Math.round(nativeKeyFrames)}`);
+  if (nativeByteLen > 0) parts.push(`原生字节 ${Math.round(nativeByteLen)}`);
   if (nativeDecoderMode) parts.push(`原生解码器 ${nativeDecoderReady ? "ready" : "blocked"}`);
   if (nativeD3dFeatureLevel) parts.push(`D3D11 ${nativeD3dFeatureLevel}`);
   if (nativeDecoderReason && !nativeDecoderReady) {
@@ -8198,6 +8294,16 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoDroppedFrames = 0;
   state.w8NativeVideoHasDecoderConfig = false;
   state.w8NativeVideoCodecString = "";
+  state.w8NativeVideoNativeNalTypes = "";
+  state.w8NativeVideoNativeHasSps = false;
+  state.w8NativeVideoNativeHasPps = false;
+  state.w8NativeVideoNativeHasIdr = false;
+  state.w8NativeVideoNativeIsKeyframe = false;
+  state.w8NativeVideoNativeKeyFrames = 0;
+  state.w8NativeVideoNativeSpsCount = 0;
+  state.w8NativeVideoNativePpsCount = 0;
+  state.w8NativeVideoNativeIdrCount = 0;
+  state.w8NativeVideoNativeByteLen = 0;
   state.w8NativeVideoDecoderProbePromise = null;
   state.w8NativeVideoDecoderReady = false;
   state.w8NativeVideoDecoderMode = "";
@@ -8425,6 +8531,13 @@ function updateW8NativeVideoProgressDiagnostics(now = performance.now()) {
   return diagnostics;
 }
 
+function normalizeW8NativeNalTypes(nalTypes) {
+  if (!Array.isArray(nalTypes)) return [];
+  return nalTypes
+    .map((item) => Math.trunc(Number(item)))
+    .filter((item) => Number.isFinite(item) && item >= 0 && item <= 255);
+}
+
 function updateW8NativeVideoDiagnostics({
   snapshot = state.w8NativeVideoLastSnapshot,
   pushResult = null,
@@ -8450,6 +8563,29 @@ function updateW8NativeVideoDiagnostics({
   }
   if (summary.hasDecoderConfig === true || codecString) {
     state.w8NativeVideoHasDecoderConfig = true;
+  }
+  const nativeNalTypes = normalizeW8NativeNalTypes(summary.nalTypes);
+  if (nativeNalTypes.length > 0) {
+    const nativeSpsCount = Math.max(0, Math.trunc(Number(summary.spsCount) || 0));
+    const nativePpsCount = Math.max(0, Math.trunc(Number(summary.ppsCount) || 0));
+    const nativeIdrCount = nativeNalTypes.filter((item) => item === 5).length;
+    const nativeHasSps = summary.hasSps === true || nativeSpsCount > 0 || nativeNalTypes.includes(7);
+    const nativeHasPps = summary.hasPps === true || nativePpsCount > 0 || nativeNalTypes.includes(8);
+    const nativeHasIdr = summary.hasIdr === true || nativeIdrCount > 0;
+    const nativeIsKeyframe =
+      summary.isKeyframe === true || nativeHasIdr || nativeHasSps || nativeHasPps;
+    state.w8NativeVideoNativeNalTypes = nativeNalTypes.slice(0, 16).join("/");
+    state.w8NativeVideoNativeHasSps = state.w8NativeVideoNativeHasSps || nativeHasSps;
+    state.w8NativeVideoNativeHasPps = state.w8NativeVideoNativeHasPps || nativeHasPps;
+    state.w8NativeVideoNativeHasIdr = state.w8NativeVideoNativeHasIdr || nativeHasIdr;
+    state.w8NativeVideoNativeIsKeyframe = nativeIsKeyframe;
+    if (nativeIsKeyframe) {
+      state.w8NativeVideoNativeKeyFrames += 1;
+    }
+    state.w8NativeVideoNativeSpsCount += nativeSpsCount || (nativeHasSps ? 1 : 0);
+    state.w8NativeVideoNativePpsCount += nativePpsCount || (nativeHasPps ? 1 : 0);
+    state.w8NativeVideoNativeIdrCount += nativeIdrCount || (nativeHasIdr ? 1 : 0);
+    state.w8NativeVideoNativeByteLen = Math.max(0, Math.trunc(Number(summary.byteLen) || 0));
   }
   const decoderInit = pushResult?.decoderInit || summary.decoderInit || null;
   if (decoderInit && typeof decoderInit === "object") {
@@ -8573,6 +8709,16 @@ function updateW8NativeVideoDiagnostics({
     w8NativeVideoDroppedFrames: state.w8NativeVideoDroppedFrames,
     w8NativeVideoHasDecoderConfig: state.w8NativeVideoHasDecoderConfig,
     w8NativeVideoCodecString: state.w8NativeVideoCodecString,
+    w8NativeVideoNativeNalTypes: state.w8NativeVideoNativeNalTypes,
+    w8NativeVideoNativeHasSps: state.w8NativeVideoNativeHasSps,
+    w8NativeVideoNativeHasPps: state.w8NativeVideoNativeHasPps,
+    w8NativeVideoNativeHasIdr: state.w8NativeVideoNativeHasIdr,
+    w8NativeVideoNativeIsKeyframe: state.w8NativeVideoNativeIsKeyframe,
+    w8NativeVideoNativeKeyFrames: state.w8NativeVideoNativeKeyFrames,
+    w8NativeVideoNativeSpsCount: state.w8NativeVideoNativeSpsCount,
+    w8NativeVideoNativePpsCount: state.w8NativeVideoNativePpsCount,
+    w8NativeVideoNativeIdrCount: state.w8NativeVideoNativeIdrCount,
+    w8NativeVideoNativeByteLen: state.w8NativeVideoNativeByteLen,
     w8NativeVideoDecoderReady: state.w8NativeVideoDecoderReady,
     w8NativeVideoDecoderMode: state.w8NativeVideoDecoderMode,
     w8NativeVideoDecoderReason: state.w8NativeVideoDecoderReason,

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12/W13 W8 native H.264 解析证据
+- Windows 视频侧补齐 `W8NativeVideo=` 和现场视频导出的 native parser 证据：`apps/windows-client/app.js` 现在会消费 `push_w8_native_h264_annexb_frame` 返回的 `summary.nalTypes/hasSps/hasPps/hasIdr/isKeyframe/spsCount/ppsCount/byteLen`，记录 `原生NAL`、`原生SPS/PPS/IDR`、`原生关键帧`、`原生关键帧累计` 和 `原生字节`；`test-windows-client-browser` 的 `W8NativeVideo=` 同步输出 `nativeNal/nativeKey/nativeKeys/nativeSps/nativePps/nativeIdr/nativeBytes`，摘要上限放宽到 1200，避免新增字段挤掉 `streamChange/deviceLost/errors`。这轮不宣称真实长测已通过，目的是下一次诊断能直接区分 “Web 收到了关键帧/SPS/PPS/IDR 但 native parser 没吃到” 和 “native parser 已吃到但 decoder/present 仍没出画面”。只改 Windows 视频诊断和测试；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W12/W13 AVC lengthSize 归一化补强
 - Windows 视频侧继续收紧 W8 native Annex B 入站防回归：上一轮已修复 length-prefixed/AVC H.264 未转 Annex B 就送 `push_w8_native_h264_annexb_frame` 的主因，本轮把 `apps/windows-client/app.js` 的 AVC 解析从固定 4 字节长度头扩展为自动识别 4/2/1 字节 lengthSize，并只接受看起来像 H.264 NAL 的分段。这样即使后续 Mac 或其他 H.264 源输出 2 字节或 1 字节 length-prefixed access unit，Windows Web 侧识别到的 SPS/PPS/IDR 也会以 Annex B base64 进入 W8 native queue，避免 native 侧再次长期 `waiting-keyframe`。`test-windows-client-browser --onlyH264LatencyQueueGuard` 红灯先失败于 `avcLen2=false avcLen1=false`，实现后输出 `avcLen4=true avcLen2=true avcLen1=true`。只改 Windows 视频 payload 归一化和回归测试；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 

@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12/W13 W8 native H.264 解析证据
+开发端：Windows Codex
+本轮目标：按用户要求主要完成视频侧修改，处理 W12/W13 长测仍看不到主画面的证据缺口，避免继续让用户重复同一长测。
+完成内容：Windows client 现在会把 W8 原生 H.264 push 返回的 `summary.nalTypes/hasSps/hasPps/hasIdr/isKeyframe/spsCount/ppsCount/byteLen` 写入 `hostDiagnostics`、页面解码诊断、现场视频复制导出和 `W8NativeVideo=`。新增字段包括 `nativeNal/nativeKey/nativeKeys/nativeSps/nativePps/nativeIdr/nativeBytes`，中文导出显示 `原生NAL`、`原生SPS/PPS/IDR`、`原生关键帧`、`原生关键帧累计`、`原生字节`。`W8NativeVideo=` 压缩上限放宽到 1200，保留新增 parser 证据后仍不丢 `streamChange/deviceLost/errors`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `nativeQueueRecorded=false`，导出缺 `原生NAL/原生SPS/PPS/IDR/nativeNal`；实现后同命令通过并输出 `nativeNal=7/8/5 nativeKey=yes nativeKeys=1 nativeSps=1 nativePps=1 nativeIdr=1 nativeBytes=23`。
+遗留问题：本轮是证据补强，不宣称真实主画面已经修好；仍需要后续新版桌面端真实长测来判断 native parser 与 decoder/present 的边界。
+下一步建议：下一次长测先对照 Web `recv/key/sps/pps/idr` 与 W8 native `nativeNal/nativeKeys/nativeSps/nativePps/nativeIdr`。native 字段缺失时查 Windows payload/native summary；native 字段存在但不出画面时查 MF decoder / D3D11 present / HWND swapchain。
+是否改了协议：否。只消费既有 Tauri native summary。
+是否需要另一端配合：不需要 Mac 改协议；后续需要用户用新版 Windows 桌面端复制真实诊断。不请求或上板密码，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12/W13 AVC lengthSize 归一化补强
 开发端：Windows Codex
 本轮目标：按用户要求继续主要完成视频侧修改，补强 W8 native keyframe gate 的 H.264 payload 归一化防回归。
