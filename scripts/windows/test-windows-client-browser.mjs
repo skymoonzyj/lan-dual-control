@@ -5794,6 +5794,200 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
   return result;
 }
 
+async function verifyW14NativeReceiverDesktopEntry(session) {
+  const result = await evaluate(
+    session,
+    `(async () => {
+      if (
+        typeof startW14NativeReceiverForConnection !== "function" ||
+        typeof refreshW14NativeReceiverSnapshot !== "function" ||
+        typeof stopW14NativeReceiver !== "function" ||
+        typeof getVideoPerformanceExportStatus !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing W14 native receiver desktop entry helpers" };
+      }
+
+      const original = {
+        tauriDescriptor: Object.getOwnPropertyDescriptor(window, "__TAURI__"),
+        hostDiagnostics: { ...(state.hostDiagnostics || {}) },
+        activeHost: state.activeHost,
+        activePort: state.activePort,
+        w14NativeReceiverStarted: state.w14NativeReceiverStarted,
+        w14NativeReceiverPromise: state.w14NativeReceiverPromise,
+        w14NativeReceiverSnapshot: state.w14NativeReceiverSnapshot,
+        w14NativeReceiverSnapshotTimer: state.w14NativeReceiverSnapshotTimer,
+        w14NativeReceiverLastError: state.w14NativeReceiverLastError,
+        connectionState: state.connectionState,
+        connected: state.connected,
+      };
+      const nativeCalls = [];
+      const streamingSnapshot = {
+        running: true,
+        status: "streaming",
+        transport: "websocket-native",
+        mediaOwner: "native-receiver",
+        host: "192.168.31.122",
+        port: 43770,
+        connected: true,
+        authenticated: true,
+        sessionActive: true,
+        videoFrames: 5,
+        h264Frames: 5,
+        audioFrames: 0,
+        lastVideoCodec: "h264",
+        lastVideoEncoding: "annexb-base64",
+        nativeVideoRunning: true,
+        nativeVideoRendererMode: "w14-native-receiver-w8-mf-d3d11",
+        nativeVideoPushedFrames: 5,
+        nativeVideoAcceptedFrames: 4,
+        nativeVideoDroppedFrames: 1,
+        nativeVideoQueueMs: 12,
+        nativeVideoDecodedFrames: 3,
+        nativeVideoPresentFrames: 2,
+        nativeVideoPresenting: true,
+        nativeVideoLastStatus: "latest-frame-nv12-converted-presented",
+        nativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
+        nativeVideoLastError: "",
+        lastMessageType: "video_frame",
+        lastError: "",
+        startedAtMs: 1000,
+        updatedAtMs: 2000,
+      };
+
+      try {
+        Object.defineProperty(window, "__TAURI__", {
+          configurable: true,
+          value: {
+            core: {
+              invoke: async (command, payload = {}) => {
+                nativeCalls.push({ command, payload });
+                if (command === "start_w14_native_receiver_session") {
+                  return { ...streamingSnapshot, status: "starting", nativeVideoPushedFrames: 0 };
+                }
+                if (command === "get_w14_native_receiver_snapshot") {
+                  return streamingSnapshot;
+                }
+                if (command === "stop_w14_native_receiver_session") {
+                  return { ...streamingSnapshot, running: false, status: "stopping" };
+                }
+                throw new Error("unexpected invoke " + command);
+              },
+            },
+          },
+        });
+
+        state.hostDiagnostics = {};
+        state.activeHost = "192.168.31.122";
+        state.activePort = "43770";
+        state.connected = true;
+        state.connectionState = "connected";
+        elements.transportSelect.value = "websocket";
+        elements.hostInput.value = "192.168.31.122";
+        elements.portInput.value = "43770";
+        elements.passwordInput.value = "demo-password";
+        elements.resolutionSelect.value = "1920x1080";
+        elements.fpsSelect.value = "60";
+        elements.bandwidthSelect.value = "50";
+        elements.displaySelect.value = "main";
+        elements.audioToggle.checked = true;
+
+        await startW14NativeReceiverForConnection({
+          host: "192.168.31.122",
+          port: "43770",
+          password: "demo-password",
+        });
+        await refreshW14NativeReceiverSnapshot();
+        const exportText = getVideoPerformanceExportStatus();
+        const diagnosticsBeforeStop = { ...(state.hostDiagnostics || {}) };
+        await stopW14NativeReceiver();
+
+        const startCalls = nativeCalls.filter((call) => call.command === "start_w14_native_receiver_session");
+        const snapshotCalls = nativeCalls.filter((call) => call.command === "get_w14_native_receiver_snapshot");
+        const stopCalls = nativeCalls.filter((call) => call.command === "stop_w14_native_receiver_session");
+        const request = startCalls[0]?.payload?.request || {};
+        const ok =
+          startCalls.length === 1 &&
+          snapshotCalls.length >= 1 &&
+          stopCalls.length === 1 &&
+          request.host === "192.168.31.122" &&
+          request.port === 43770 &&
+          request.password === "demo-password" &&
+          request.maxFps === 60 &&
+          request.maxBandwidthKbps === 50000 &&
+          request.preferredWidth === 1920 &&
+          request.preferredHeight === 1080 &&
+          request.displayMode === "windowed" &&
+          request.displayId === "main" &&
+          request.wantAudio === false &&
+          diagnosticsBeforeStop.w14NativeReceiverRunning === true &&
+          diagnosticsBeforeStop.w14NativeReceiverStatus === "streaming" &&
+          diagnosticsBeforeStop.w14NativeReceiverTransport === "websocket-native" &&
+          diagnosticsBeforeStop.w14NativeReceiverMediaOwner === "native-receiver" &&
+          diagnosticsBeforeStop.w14NativeVideoPushedFrames === 5 &&
+          diagnosticsBeforeStop.w14NativeVideoAcceptedFrames === 4 &&
+          diagnosticsBeforeStop.w14NativeVideoDroppedFrames === 1 &&
+          diagnosticsBeforeStop.w14NativeVideoQueueMs === 12 &&
+          diagnosticsBeforeStop.w14NativeVideoDecodedFrames === 3 &&
+          diagnosticsBeforeStop.w14NativeVideoPresentFrames === 2 &&
+          diagnosticsBeforeStop.w14NativeVideoPresenting === true &&
+          diagnosticsBeforeStop.w14NativeVideoLastStatus === "latest-frame-nv12-converted-presented" &&
+          diagnosticsBeforeStop.w8NativeVideoDecoderSessionDecodedFrames === 3 &&
+          diagnosticsBeforeStop.w8NativeVideoNativePresentFrames === 2 &&
+          diagnosticsBeforeStop.w8NativeVideoNativePresentStatus ===
+            "latest-frame-nv12-converted-presented" &&
+          diagnosticsBeforeStop.w8NativeVideoNativePresentReady === true &&
+          exportText.includes("视频主画面 原生 MF/D3D11/HWND") &&
+          exportText.includes("W14原生接收 streaming") &&
+          exportText.includes("W14原生视频 pushed 5") &&
+          exportText.includes("W14原生视频 accepted 4") &&
+          exportText.includes("W14原生视频 dropped 1") &&
+          exportText.includes("W14原生视频 queue 12 ms") &&
+          exportText.includes("W14原生解码 3") &&
+          exportText.includes("W14原生呈现 2") &&
+          exportText.includes("W14原生画面 yes") &&
+          exportText.includes("W14原生状态 latest-frame-nv12-converted-presented");
+
+        return {
+          ok,
+          startCalls: startCalls.length,
+          snapshotCalls: snapshotCalls.length,
+          stopCalls: stopCalls.length,
+          request,
+          diagnostics: diagnosticsBeforeStop,
+          exportText,
+        };
+      } finally {
+        if (original.w14NativeReceiverSnapshotTimer) {
+          clearInterval(original.w14NativeReceiverSnapshotTimer);
+        }
+        if (state.w14NativeReceiverSnapshotTimer) {
+          clearInterval(state.w14NativeReceiverSnapshotTimer);
+        }
+        state.hostDiagnostics = original.hostDiagnostics;
+        state.activeHost = original.activeHost;
+        state.activePort = original.activePort;
+        state.w14NativeReceiverStarted = original.w14NativeReceiverStarted;
+        state.w14NativeReceiverPromise = original.w14NativeReceiverPromise;
+        state.w14NativeReceiverSnapshot = original.w14NativeReceiverSnapshot;
+        state.w14NativeReceiverSnapshotTimer = original.w14NativeReceiverSnapshotTimer;
+        state.w14NativeReceiverLastError = original.w14NativeReceiverLastError;
+        state.connectionState = original.connectionState;
+        state.connected = original.connected;
+        if (original.tauriDescriptor) {
+          Object.defineProperty(window, "__TAURI__", original.tauriDescriptor);
+        } else {
+          delete window.__TAURI__;
+        }
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`W14 native receiver desktop entry check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyH264KeyFrameDetection(session) {
   const result = await evaluate(
     session,
@@ -10193,6 +10387,12 @@ async function run() {
     );
 
     if (args.onlyH264LatencyQueueGuard) {
+      const w14EntryCheck = await verifyW14NativeReceiverDesktopEntry(session);
+      summary.checks.push("w14-native-receiver-entry");
+      print(
+        "OK",
+        `W14 native receiver desktop entry: start=${w14EntryCheck.startCalls}, snapshots=${w14EntryCheck.snapshotCalls}, stop=${w14EntryCheck.stopCalls}`,
+      );
       const keyFrameCheck = await verifyH264KeyFrameDetection(session);
       summary.checks.push("h264-keyframe");
       print(
@@ -10297,6 +10497,12 @@ async function run() {
     const videoStutterCheck = await verifyVideoStutterDiagnostics(session);
     summary.checks.push("video-stutter-diagnostics");
     print("OK", `Video stutter diagnostics: ${videoStutterCheck.exportText}`);
+    const w14EntryCheck = await verifyW14NativeReceiverDesktopEntry(session);
+    summary.checks.push("w14-native-receiver-entry");
+    print(
+      "OK",
+      `W14 native receiver desktop entry: start=${w14EntryCheck.startCalls}, snapshots=${w14EntryCheck.snapshotCalls}, stop=${w14EntryCheck.stopCalls}`,
+    );
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
     summary.checks.push("h264-keyframe");
     print(

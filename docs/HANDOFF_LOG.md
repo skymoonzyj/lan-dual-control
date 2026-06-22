@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W14 桌面 UI 媒体入口接入 native receiver
+开发端：Windows Codex
+本轮目标：按通讯板 W14 下一步，把 Windows 桌面控制端连接后的媒体入口接到 W14 native receiver；只做视频侧，不碰 W9 音频、Mac、协议/认证或 input/inject。
+完成内容：`apps/windows-client/app.js` 新增 W14 native receiver 前端入口：连接成功后调用 Tauri `start_w14_native_receiver_session`，请求复用当前分辨率、刷新率、码率和显示器，并显式 `wantAudio=false`，避免本轮引入双路声音；原 ProtocolClient 继续负责控制、输入和剪贴板。前端会轮询 `get_w14_native_receiver_snapshot`，把 W14 `nativeVideo...` 指标写入现场视频导出，并镜像到 W8 主画面诊断，让 WebCodecs/canvas 在 W14 presenting 后继续按原逻辑旁路为诊断备用。W14 运行时，旧 JS H.264 路径不再重复启动/推送 W8 原生会话，避免和 Rust native receiver 争抢同一 W8 session。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `missing W14 native receiver desktop entry helpers`；实现后同命令通过，输出 `W14 native receiver desktop entry: start=1, snapshots=1, stop=1`，并继续通过 H.264 keyframe、latency queue、W2W3 H.264 summary 和 W8 native summary。
+遗留问题：本轮没有无密替用户连接真实 Mac 长测；下一步需要打开 Windows 桌面端连接 Mac，复制诊断或上板，看 `W14原生接收 streaming`、`W14原生解码 >0`、最好 `W14原生画面 yes` / `nativeVideoPresenting=true`。如 W14 收帧但 presenting=no，继续查 W8 MF/D3D11/HWND；如 W14 启动失败，先看本地 Tauri/密码/host/port。
+下一步建议：真实 Mac 短测先看 W14 行，再看 W8NativeVideo 摘要；如果 W14/W8 都有 decoded/presenting 但体感仍卡，再转 arrival/backlog/W13 QoS，而不是回到 WebCodecs 主画面路径。
+是否改了协议：否。只调用已有 Tauri W14 命令，消费既有 H.264 `video_frame`。
+是否需要另一端配合：Mac 端不需要改协议；只需保持 Mac host 在线。密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W14 native receiver 视频桥接
 开发端：Windows Codex
 本轮目标：按通讯板 W14 拆分，Windows 主线只做视频半边：native receiver 收 H.264 后直接进入 W8 MF/D3D11/HWND present 链路；不碰 W9 音频。

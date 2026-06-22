@@ -617,6 +617,11 @@ const state = {
   h264WebDecodeBypassedForNativeSurface: 0,
   h264WebDecodeBypassReason: "",
   h264WebDecodeBypassLastFrameId: "",
+  w14NativeReceiverStarted: false,
+  w14NativeReceiverPromise: null,
+  w14NativeReceiverSnapshot: null,
+  w14NativeReceiverSnapshotTimer: null,
+  w14NativeReceiverLastError: "",
   w8NativeVideoSessionStarted: false,
   w8NativeVideoSessionPromise: null,
   w8NativeVideoPushPromise: null,
@@ -835,6 +840,30 @@ const state = {
     h264WebDecodeBypassedForNativeSurface: 0,
     h264WebDecodeBypassReason: "",
     h264WebDecodeBypassLastFrameId: "",
+    w14NativeReceiverRunning: false,
+    w14NativeReceiverStatus: "",
+    w14NativeReceiverTransport: "",
+    w14NativeReceiverMediaOwner: "",
+    w14NativeReceiverConnected: false,
+    w14NativeReceiverAuthenticated: false,
+    w14NativeReceiverSessionActive: false,
+    w14NativeReceiverLastError: "",
+    w14NativeVideoFrames: 0,
+    w14NativeVideoH264Frames: 0,
+    w14NativeVideoLastCodec: "",
+    w14NativeVideoLastEncoding: "",
+    w14NativeVideoRunning: false,
+    w14NativeVideoRendererMode: "",
+    w14NativeVideoPushedFrames: 0,
+    w14NativeVideoAcceptedFrames: 0,
+    w14NativeVideoDroppedFrames: 0,
+    w14NativeVideoQueueMs: 0,
+    w14NativeVideoDecodedFrames: 0,
+    w14NativeVideoPresentFrames: 0,
+    w14NativeVideoPresenting: false,
+    w14NativeVideoLastStatus: "",
+    w14NativeVideoLastReason: "",
+    w14NativeVideoLastError: "",
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -1153,6 +1182,30 @@ function getEmptyHostDiagnostics() {
     h264WebDecodeBypassedForNativeSurface: 0,
     h264WebDecodeBypassReason: "",
     h264WebDecodeBypassLastFrameId: "",
+    w14NativeReceiverRunning: false,
+    w14NativeReceiverStatus: "",
+    w14NativeReceiverTransport: "",
+    w14NativeReceiverMediaOwner: "",
+    w14NativeReceiverConnected: false,
+    w14NativeReceiverAuthenticated: false,
+    w14NativeReceiverSessionActive: false,
+    w14NativeReceiverLastError: "",
+    w14NativeVideoFrames: 0,
+    w14NativeVideoH264Frames: 0,
+    w14NativeVideoLastCodec: "",
+    w14NativeVideoLastEncoding: "",
+    w14NativeVideoRunning: false,
+    w14NativeVideoRendererMode: "",
+    w14NativeVideoPushedFrames: 0,
+    w14NativeVideoAcceptedFrames: 0,
+    w14NativeVideoDroppedFrames: 0,
+    w14NativeVideoQueueMs: 0,
+    w14NativeVideoDecodedFrames: 0,
+    w14NativeVideoPresentFrames: 0,
+    w14NativeVideoPresenting: false,
+    w14NativeVideoLastStatus: "",
+    w14NativeVideoLastReason: "",
+    w14NativeVideoLastError: "",
     w8NativeVideoFramesPushed: 0,
     w8NativeVideoQueueMs: 0,
     w8NativeVideoDroppedFrames: 0,
@@ -3228,6 +3281,7 @@ function refreshReconnectCountdown() {
 }
 
 function setUiDisconnected(statusText = "未连接", logDetail = "会话已关闭") {
+  void stopW14NativeReceiver({ resetDiagnostics: true, force: true });
   state.connected = false;
   state.connecting = false;
   resetReverseControlState();
@@ -3263,6 +3317,7 @@ function markConnectionStable() {
 }
 
 function handleUnexpectedClose(reason = "被控端关闭了连接") {
+  void stopW14NativeReceiver({ resetDiagnostics: true, force: true });
   state.client = null;
   state.connected = false;
   state.connecting = false;
@@ -4031,6 +4086,7 @@ function resetVideoFrameStats() {
   state.videoFrameClockSkewed = false;
   state.requestedFps = 0;
   state.negotiatedFps = 0;
+  resetW14NativeReceiverState();
   resetW8NativeVideoState();
   elements.metricLatency.textContent = "-- ms";
 }
@@ -6789,6 +6845,23 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     Number(
       state.w8NativeVideoSubmittedFrameDelta || state.hostDiagnostics?.w8NativeVideoSubmittedFrameDelta,
     ) || 0;
+  const w14ReceiverStatus = String(state.hostDiagnostics?.w14NativeReceiverStatus || "").trim();
+  const w14ReceiverTransport = String(state.hostDiagnostics?.w14NativeReceiverTransport || "").trim();
+  const w14ReceiverMediaOwner = String(state.hostDiagnostics?.w14NativeReceiverMediaOwner || "").trim();
+  const w14VideoRunning = Boolean(state.hostDiagnostics?.w14NativeVideoRunning);
+  const w14VideoRendererMode = String(state.hostDiagnostics?.w14NativeVideoRendererMode || "").trim();
+  const w14VideoPushedFrames = Number(state.hostDiagnostics?.w14NativeVideoPushedFrames) || 0;
+  const w14VideoAcceptedFrames = Number(state.hostDiagnostics?.w14NativeVideoAcceptedFrames) || 0;
+  const w14VideoDroppedFrames = Number(state.hostDiagnostics?.w14NativeVideoDroppedFrames) || 0;
+  const w14VideoQueueMs = Number(state.hostDiagnostics?.w14NativeVideoQueueMs) || 0;
+  const w14VideoDecodedFrames = Number(state.hostDiagnostics?.w14NativeVideoDecodedFrames) || 0;
+  const w14VideoPresentFrames = Number(state.hostDiagnostics?.w14NativeVideoPresentFrames) || 0;
+  const w14VideoPresenting = Boolean(state.hostDiagnostics?.w14NativeVideoPresenting);
+  const w14VideoLastStatus = String(state.hostDiagnostics?.w14NativeVideoLastStatus || "").trim();
+  const w14VideoLastReason = String(state.hostDiagnostics?.w14NativeVideoLastReason || "").trim();
+  const w14VideoLastError = String(
+    state.hostDiagnostics?.w14NativeVideoLastError || state.hostDiagnostics?.w14NativeReceiverLastError || "",
+  ).trim();
   const nativeClassifier = classifyW8NativeVideoSession(state);
   const w13LocalQosParts = formatW13LocalVideoQosDiagnostics(state.hostDiagnostics);
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
@@ -6834,6 +6907,28 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`SPS/PPS/IDR ${receivedSps}/${receivedPps}/${receivedIdr}`);
   }
   if (lastNalTypes) parts.push(`NAL ${lastNalTypes}`);
+  if (w14ReceiverStatus || w14VideoRunning || w14VideoPushedFrames > 0) {
+    parts.push(`W14原生接收 ${w14ReceiverStatus || "starting"}`);
+    if (w14ReceiverTransport) parts.push(`W14传输 ${w14ReceiverTransport}`);
+    if (w14ReceiverMediaOwner) parts.push(`W14媒体 ${w14ReceiverMediaOwner}`);
+    if (w14VideoRendererMode) parts.push(`W14渲染 ${w14VideoRendererMode}`);
+    parts.push(`W14原生视频 pushed ${Math.round(w14VideoPushedFrames)}`);
+    parts.push(`W14原生视频 accepted ${Math.round(w14VideoAcceptedFrames)}`);
+    if (w14VideoDroppedFrames > 0) {
+      parts.push(`W14原生视频 dropped ${Math.round(w14VideoDroppedFrames)}`);
+    }
+    if (w14VideoQueueMs > 0) parts.push(`W14原生视频 queue ${Math.round(w14VideoQueueMs)} ms`);
+    parts.push(`W14原生解码 ${Math.round(w14VideoDecodedFrames)}`);
+    parts.push(`W14原生呈现 ${Math.round(w14VideoPresentFrames)}`);
+    parts.push(`W14原生画面 ${w14VideoPresenting ? "yes" : "no"}`);
+    if (w14VideoLastStatus) parts.push(`W14原生状态 ${w14VideoLastStatus}`);
+    if (w14VideoLastReason && !w14VideoPresenting) {
+      parts.push(`W14原生原因 ${w14VideoLastReason.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+    if (w14VideoLastError) {
+      parts.push(`W14原生错误 ${w14VideoLastError.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+  }
   if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
     parts.push("界面 HTML 壳");
     parts.push(
@@ -7568,6 +7663,7 @@ async function connect({ reconnect = false } = {}) {
       answer.runtime = discoveredDevice.runtime;
     }
     setUiConnected(answer);
+    void startW14NativeReceiverForConnection({ host, port, password });
     rememberCurrentConnection();
     addLog(
       "连接成功",
@@ -8529,6 +8625,17 @@ function resetW8NativeVideoState() {
   state.w8NativeVideoSubmittedFrameDelta = 0;
 }
 
+function resetW14NativeReceiverState() {
+  if (state.w14NativeReceiverSnapshotTimer) {
+    window.clearInterval(state.w14NativeReceiverSnapshotTimer);
+  }
+  state.w14NativeReceiverStarted = false;
+  state.w14NativeReceiverPromise = null;
+  state.w14NativeReceiverSnapshot = null;
+  state.w14NativeReceiverSnapshotTimer = null;
+  state.w14NativeReceiverLastError = "";
+}
+
 function getW8NativeVideoPort() {
   const port = Number(state.activePort || elements.portInput.value);
   return Number.isFinite(port) && port > 0 ? Math.trunc(port) : undefined;
@@ -8537,6 +8644,213 @@ function getW8NativeVideoPort() {
 function getW8NativeVideoFps() {
   const fps = Number(state.negotiatedFps || state.requestedFps || elements.fpsSelect.value);
   return Number.isFinite(fps) && fps > 0 ? Math.max(1, Math.min(240, Math.trunc(fps))) : 60;
+}
+
+function canUseW14NativeReceiver() {
+  return Boolean(getTauriInvoke()) && elements.transportSelect.value === "websocket";
+}
+
+function buildW14NativeReceiverRequest({ host, port, password } = {}) {
+  const settings = currentDisplaySettings();
+  const width = Number(settings.width);
+  const height = Number(settings.height);
+  const parsedPort = Number(port || state.activePort || elements.portInput.value);
+  return {
+    host: String(host || state.activeHost || elements.hostInput.value || "").trim(),
+    port:
+      Number.isFinite(parsedPort) && parsedPort > 0
+        ? Math.max(1, Math.min(65535, Math.trunc(parsedPort)))
+        : 0,
+    password: String(password ?? elements.passwordInput.value ?? ""),
+    maxFps: Math.max(1, Math.min(240, Math.trunc(Number(settings.fps) || 60))),
+    maxBandwidthKbps: Math.max(1000, Math.trunc(Number(settings.maxBandwidthKbps) || 50_000)),
+    preferredWidth: Number.isFinite(width) && width > 0 ? Math.trunc(width) : 0,
+    preferredHeight: Number.isFinite(height) && height > 0 ? Math.trunc(height) : 0,
+    wantAudio: false,
+    audioVolume: Math.max(0, Math.min(100, Math.trunc(Number(settings.audioVolume) || 0))),
+    displayMode: settings.displayMode,
+    displayId: settings.displayId || "main",
+  };
+}
+
+function normalizeW14NativeReceiverDiagnostics(snapshot = state.w14NativeReceiverSnapshot) {
+  const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const numberValue = (key) => Math.max(0, Math.trunc(Number(source[key]) || 0));
+  const stringValue = (key) => String(source[key] ?? "").trim();
+  const nativeVideoPresenting = source.nativeVideoPresenting === true;
+  const nativeVideoPresentFrames = numberValue("nativeVideoPresentFrames");
+  const nativeVideoDecodedFrames = numberValue("nativeVideoDecodedFrames");
+  const nativeVideoLastStatus = stringValue("nativeVideoLastStatus");
+  const nativeVideoLastReason = stringValue("nativeVideoLastReason");
+  return {
+    w14NativeReceiverRunning: source.running === true,
+    w14NativeReceiverStatus: stringValue("status"),
+    w14NativeReceiverTransport: stringValue("transport"),
+    w14NativeReceiverMediaOwner: stringValue("mediaOwner"),
+    w14NativeReceiverConnected: source.connected === true,
+    w14NativeReceiverAuthenticated: source.authenticated === true,
+    w14NativeReceiverSessionActive: source.sessionActive === true,
+    w14NativeReceiverLastError: state.w14NativeReceiverLastError || stringValue("lastError"),
+    w14NativeVideoFrames: numberValue("videoFrames"),
+    w14NativeVideoH264Frames: numberValue("h264Frames"),
+    w14NativeVideoLastCodec: stringValue("lastVideoCodec"),
+    w14NativeVideoLastEncoding: stringValue("lastVideoEncoding"),
+    w14NativeVideoRunning: source.nativeVideoRunning === true,
+    w14NativeVideoRendererMode: stringValue("nativeVideoRendererMode"),
+    w14NativeVideoPushedFrames: numberValue("nativeVideoPushedFrames"),
+    w14NativeVideoAcceptedFrames: numberValue("nativeVideoAcceptedFrames"),
+    w14NativeVideoDroppedFrames: numberValue("nativeVideoDroppedFrames"),
+    w14NativeVideoQueueMs: numberValue("nativeVideoQueueMs"),
+    w14NativeVideoDecodedFrames: nativeVideoDecodedFrames,
+    w14NativeVideoPresentFrames: nativeVideoPresentFrames,
+    w14NativeVideoPresenting: nativeVideoPresenting,
+    w14NativeVideoLastStatus: nativeVideoLastStatus,
+    w14NativeVideoLastReason: nativeVideoLastReason,
+    w14NativeVideoLastError: stringValue("nativeVideoLastError"),
+    w8NativeVideoFramesPushed: numberValue("nativeVideoPushedFrames"),
+    w8NativeVideoQueueMs: numberValue("nativeVideoQueueMs"),
+    w8NativeVideoDroppedFrames: numberValue("nativeVideoDroppedFrames"),
+    w8NativeVideoDecoderSessionActive: source.nativeVideoRunning === true,
+    w8NativeVideoDecoderSessionMode: stringValue("nativeVideoRendererMode"),
+    w8NativeVideoDecoderSessionStatus: nativeVideoLastStatus,
+    w8NativeVideoDecoderSessionDecodedFrames: nativeVideoDecodedFrames,
+    w8NativeVideoNativePresentReady: nativeVideoPresenting,
+    w8NativeVideoNativePresentMode: stringValue("nativeVideoRendererMode"),
+    w8NativeVideoNativePresentStatus: nativeVideoLastStatus,
+    w8NativeVideoNativePresentFrames: nativeVideoPresentFrames,
+    w8NativeVideoNativePresentReason: nativeVideoLastReason,
+  };
+}
+
+function updateW14NativeReceiverDiagnostics({ snapshot = null, error = "" } = {}) {
+  if (snapshot && typeof snapshot === "object") {
+    state.w14NativeReceiverSnapshot = snapshot;
+  }
+  if (error) {
+    state.w14NativeReceiverLastError = String(error).replace(/\s+/g, " ").slice(0, 160);
+  } else if (snapshot) {
+    state.w14NativeReceiverLastError = "";
+  }
+  const diagnostics = normalizeW14NativeReceiverDiagnostics();
+  if (snapshot) {
+    state.w14NativeReceiverStarted =
+      diagnostics.w14NativeReceiverRunning &&
+      diagnostics.w14NativeReceiverStatus !== "stopped" &&
+      diagnostics.w14NativeReceiverStatus !== "error";
+  }
+  updateHostDiagnostics(diagnostics);
+  return diagnostics;
+}
+
+function scheduleW14NativeReceiverSnapshotPolling() {
+  if (state.w14NativeReceiverSnapshotTimer || !state.w14NativeReceiverStarted) return;
+  state.w14NativeReceiverSnapshotTimer = window.setInterval(() => {
+    if (!state.connected || !state.w14NativeReceiverStarted) {
+      if (state.w14NativeReceiverSnapshotTimer) {
+        window.clearInterval(state.w14NativeReceiverSnapshotTimer);
+      }
+      state.w14NativeReceiverSnapshotTimer = null;
+      return;
+    }
+    void refreshW14NativeReceiverSnapshot();
+  }, 1000);
+}
+
+async function refreshW14NativeReceiverSnapshot() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return null;
+  try {
+    const snapshot = await invoke("get_w14_native_receiver_snapshot");
+    updateW14NativeReceiverDiagnostics({ snapshot });
+    return snapshot || null;
+  } catch (error) {
+    updateW14NativeReceiverDiagnostics({ error: error?.message || String(error) });
+    return null;
+  }
+}
+
+async function startW14NativeReceiverForConnection({ host, port, password } = {}) {
+  const invoke = getTauriInvoke();
+  if (!invoke || !canUseW14NativeReceiver()) return null;
+  if (state.w14NativeReceiverStarted) {
+    return state.w14NativeReceiverSnapshot;
+  }
+  if (state.w14NativeReceiverPromise) {
+    return state.w14NativeReceiverPromise;
+  }
+
+  const request = buildW14NativeReceiverRequest({ host, port, password });
+  if (!request.host || !request.port || !request.password) return null;
+
+  state.w14NativeReceiverPromise = invoke("start_w14_native_receiver_session", { request })
+    .then((snapshot) => {
+      state.w14NativeReceiverStarted = true;
+      state.w14NativeReceiverSnapshot = snapshot || null;
+      state.w14NativeReceiverLastError = "";
+      updateW14NativeReceiverDiagnostics({ snapshot });
+      scheduleW14NativeReceiverSnapshotPolling();
+      addLog("W14 原生视频", "已启动桌面原生接收入口");
+      return snapshot || null;
+    })
+    .catch((error) => {
+      state.w14NativeReceiverStarted = false;
+      updateW14NativeReceiverDiagnostics({ error: error?.message || String(error) });
+      addLog("W14 原生视频", state.w14NativeReceiverLastError || "桌面原生接收入口启动失败");
+      return null;
+    })
+    .finally(() => {
+      state.w14NativeReceiverPromise = null;
+    });
+
+  return state.w14NativeReceiverPromise;
+}
+
+async function stopW14NativeReceiver({ resetDiagnostics = false, force = false } = {}) {
+  const invoke = getTauriInvoke();
+  if (state.w14NativeReceiverSnapshotTimer) {
+    window.clearInterval(state.w14NativeReceiverSnapshotTimer);
+    state.w14NativeReceiverSnapshotTimer = null;
+  }
+  const shouldStop =
+    force ||
+    state.w14NativeReceiverStarted ||
+    state.w14NativeReceiverPromise ||
+    state.w14NativeReceiverSnapshot;
+  state.w14NativeReceiverStarted = false;
+  state.w14NativeReceiverPromise = null;
+  if (!invoke || !shouldStop) {
+    if (resetDiagnostics) resetW14NativeReceiverState();
+    return null;
+  }
+
+  try {
+    const snapshot = await invoke("stop_w14_native_receiver_session");
+    if (!resetDiagnostics) {
+      updateW14NativeReceiverDiagnostics({ snapshot });
+    }
+    return snapshot || null;
+  } catch (error) {
+    if (!resetDiagnostics) {
+      updateW14NativeReceiverDiagnostics({ error: error?.message || String(error) });
+    }
+    return null;
+  } finally {
+    if (resetDiagnostics) resetW14NativeReceiverState();
+  }
+}
+
+function shouldUseW14NativeReceiverVideoPath() {
+  const status = String(state.hostDiagnostics?.w14NativeReceiverStatus || "").toLowerCase();
+  return Boolean(
+    state.w14NativeReceiverStarted ||
+      state.w14NativeReceiverPromise ||
+      status === "starting" ||
+      status === "connecting" ||
+      status === "connected" ||
+      status === "authenticating" ||
+      status === "negotiating" ||
+      status === "streaming",
+  );
 }
 
 function roundW8NativeProgressFps(value) {
@@ -12519,7 +12833,9 @@ async function renderH264VideoFrame(frame) {
     const nalTypes = getH264PayloadNalTypes(payloadBytes, frame.encoding);
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFrameNalTypes(nalTypes);
     recordH264ReceiveEvidence({ frame, nalTypes, isKeyFrame });
-    void pushW8NativeH264AnnexBFrame(frame, getNativeH264AnnexBPayloadBase64(frame, payloadBytes));
+    if (!shouldUseW14NativeReceiverVideoPath()) {
+      void pushW8NativeH264AnnexBFrame(frame, getNativeH264AnnexBPayloadBase64(frame, payloadBytes));
+    }
     if (isW8NativeVideoMainSurfacePresenting()) {
       bypassWebH264DecodeForNativeMainSurface(frame);
       return;
