@@ -13,6 +13,7 @@ const defaultExePath = resolve(
 );
 const defaultTimeoutMs = 120000;
 const w8DesktopVideoPostCommand = "node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary";
+const nativeVideoPostCommand = w8DesktopVideoPostCommand;
 
 function printHelp() {
   console.log(`Usage:
@@ -129,6 +130,7 @@ function makeReport(args, extra = {}) {
     dryRun: Boolean(args.dryRun),
     longRun: "desktop-connect-copy-diagnostics",
     w8DesktopVideoPostCommand,
+    nativeVideoPostCommand,
     webGate: "diagnostic-only",
     safety: {
       requestPassword: false,
@@ -151,6 +153,7 @@ function makeBoardSummary(report) {
     `Build=${report.buildCommand}`,
     `LongRun=${report.longRun}`,
     `W8Post=${report.w8DesktopVideoPostCommand}`,
+    `NativeVideoPost=${report.nativeVideoPostCommand}`,
     `WebGate=${report.webGate}`,
     "Safety=no-password,no-auth,no-input-inject",
   ].join(" ");
@@ -169,7 +172,8 @@ function printReport(report, args) {
   console.log(`Exe: ${report.exeRelativePath}`);
   console.log(`Start: ${report.startCommand}`);
   console.log(`Build: ${report.buildCommand}`);
-  console.log("Long run: open the desktop app, connect to the Mac host, then copy diagnostics for W8NativeVideo.");
+  console.log("Long run: open the desktop app, connect to the Mac host, then copy diagnostics for W8NativeVideo/W14NativeVideo.");
+  console.log(`Post native video diagnostics: ${report.nativeVideoPostCommand}`);
   console.log(`Post W8 diagnostics: ${report.w8DesktopVideoPostCommand}`);
 }
 

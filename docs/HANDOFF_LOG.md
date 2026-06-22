@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W14/W8 NativeVideoPost 首屏提示
+开发端：Windows Codex
+本轮目标：在不改真实媒体链路的前提下，减少真实 W14 长测后复制诊断上板入口歧义；保留旧 `W8Post=` 兼容，同时给出更准确的 `NativeVideoPost=`。
+完成内容：`start-windows-desktop-control-mac.mjs` 的 dry-run JSON/boardSummary 新增 `nativeVideoPostCommand` / `NativeVideoPost=`；`check-windows-resume-status.mjs` 的 `commands.windowsDesktopEntry` 新增 `nativeVideoPostCommand`，`WindowsDesktopEntry=` 摘要新增 `nativeVideoPost=...`。命令仍是 `node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`，但现在名字明确覆盖 `W8NativeVideo=` 和 `W14NativeVideo=`。旧 `W8Post=` 和 `w8PostCommand` 保持不变。
+修改文件：scripts/windows/start-windows-desktop-control-mac.mjs；scripts/windows/check-windows-resume-status.mjs；scripts/windows/test-windows-desktop-control-mac-entry.mjs；scripts/windows/test-windows-resume-status.mjs；scripts/windows/test-windows-resume-status-powershell.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯：`test-windows-desktop-control-mac-entry` 先失败于缺 `NativeVideoPost=`；`test-windows-resume-status` 和 `test-windows-resume-status-powershell` 先失败于缺 `nativeVideoPostCommand`。实现后三组测试全部通过。
+遗留问题：真实 W14 decoded/presenting 仍需要用户在 Windows 桌面端本机输入 Mac 临时密码后长测；本轮只是把首屏入口文案收准。
+下一步建议：用户完成真实桌面长测后复制诊断，优先用 `NativeVideoPost=` 上板，看 `W14NativeGate=` 和 `W8NativeVideo=`；不要回到 Web/browser 主画面路径。
+是否改了协议：否。
+是否需要另一端配合：Mac 端不需要改协议；保持 host 在线即可。密码不上板，不认证，不发 input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W14 native receiver 证据上板链路
 开发端：Windows Codex
 本轮目标：完成视频侧 W14 真实长测证据的摘要和上板链路，让复制诊断里的 W14 native receiver 接收/解码/呈现状态能直接发 Agent Link Board 判读；不改 W9 音频、Mac、协议/认证或 input/inject。

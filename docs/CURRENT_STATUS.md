@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W14/W8 NativeVideoPost 首屏提示
+- Windows 桌面入口和恢复总览现在会在保留旧 `W8Post=` 兼容字段的同时，额外输出 `NativeVideoPost=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`。这个命令实际支持 `W8NativeVideo=` 和/或 `W14NativeVideo=`，用于真实 W14 长测后把复制诊断安全上板并生成 `W14NativeGate=`。`start-windows-desktop-control-mac --dryRun --json|--boardSummary` 也会输出 `nativeVideoPostCommand` / `NativeVideoPost=`；`check-windows-resume-status` JSON 的 `commands.windowsDesktopEntry` 同步新增 `nativeVideoPostCommand`。旧字段不删除，避免旧脚本断链；不认证、不请求密码、不发 input/inject。
+
 ## 2026-06-22 W14 native receiver 证据上板链路
 - Windows 视频侧把 W14 桌面媒体入口后的证据也接进了复测摘要和上板工具：`test-windows-client-browser --boardSummary` 现在会输出脱敏 `W14NativeVideo=`，字段包括 `status/transport/mediaOwner/videoFrames/h264Frames/pushed/accepted/dropped/queueMs/decoded/presentFrames/presenting/lastStatus/lastReason/lastError`。`post-w8-desktop-video-board` 现在接受 `W8NativeVideo=` 和/或 `W14NativeVideo=`；如果只有 W14 行也能 dry-run 或 `--send`，并生成 `W14NativeGate=`，把真实长测状态压成 `presenting-ok|receiver-next|receive-next|decode-next|present-next|native-error-next` 和下一步。旧 W8 gate、W8ArrivalBacklog、W13LocalQos 行为保持兼容；脚本仍拒绝 password/token/input_event 标记，不认证、不请求密码、不发 input/inject。验证：先红于 help 缺 W14 和 `makeW14NativeVideoRetestSummary is not defined`，实现后 `test-post-w8-desktop-video-board` 与 `test-windows-client-browser --onlyH264LatencyQueueGuard` 转绿。下一次真实 Mac 长测复制诊断后，可直接用 `node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary` 上板；优先看 `W14NativeGate` 是否 `presenting-ok`，再结合 `W8NativeVideo=` 判断 MF/D3D11/HWND。
 

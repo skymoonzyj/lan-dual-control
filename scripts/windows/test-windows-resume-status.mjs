@@ -12,7 +12,8 @@ const script = "scripts/windows/check-windows-resume-status.mjs";
 const windowsDesktopEntryCommand = "Start-Windows-Desktop-Control-Mac.cmd";
 const windowsDesktopBuildCommand = "Build-Windows-Desktop-Control-Mac.cmd";
 const windowsDesktopW8PostCommand = "node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary";
-const windowsDesktopEntrySummary = "start=Start-Windows-Desktop-Control-Mac.cmd build=Build-Windows-Desktop-Control-Mac.cmd status=node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary next=desktop-connect-copy-diagnostics w8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary web=diagnostic-only safety=no-password,no-auth,no-input-inject";
+const windowsDesktopNativeVideoPostCommand = windowsDesktopW8PostCommand;
+const windowsDesktopEntrySummary = "start=Start-Windows-Desktop-Control-Mac.cmd build=Build-Windows-Desktop-Control-Mac.cmd status=node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary next=desktop-connect-copy-diagnostics w8Post=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary nativeVideoPost=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary web=diagnostic-only safety=no-password,no-auth,no-input-inject";
 const windowsClientRetestUserEntryCommand = "Run-WinClientRetest.cmd";
 const windowsClientRetestAndPostUserEntryCommand = "Run-WinClientRetest-And-Post.cmd";
 const w2VisibilityRetestSummary = "status=pending-user-retest action=switch-away-and-back evidence=visibility-return-h264-recovery next=Run-WinClientRetest-And-Post.cmd safety=no-password-on-board,no-auth,no-input-inject";
@@ -430,6 +431,7 @@ async function checkMockJson(args) {
     assert(payload.commands?.windowsDesktopEntry?.buildCommand === windowsDesktopBuildCommand, "mock JSON should expose Windows desktop build command");
     assert(payload.commands?.windowsDesktopEntry?.statusCommand === "node scripts/windows/start-windows-desktop-control-mac.mjs --dryRun --boardSummary", "mock JSON should expose Windows desktop status command");
     assert(payload.commands?.windowsDesktopEntry?.w8PostCommand === windowsDesktopW8PostCommand, "mock JSON should expose Windows desktop W8 post command");
+    assert(payload.commands?.windowsDesktopEntry?.nativeVideoPostCommand === windowsDesktopNativeVideoPostCommand, "mock JSON should expose Windows desktop native video post command");
     assert(payload.commands?.windowsDesktopEntry?.webGate === "diagnostic-only", "mock JSON should mark Web gate diagnostic-only");
     assert(payload.commands?.windowsDesktopEntry?.summary === windowsDesktopEntrySummary, "mock JSON should include Windows desktop summary");
     assertIncludes(payload.boardSummary, `WindowsDesktopEntry=${windowsDesktopEntrySummary}.`, "mock JSON board summary Windows desktop entry");
