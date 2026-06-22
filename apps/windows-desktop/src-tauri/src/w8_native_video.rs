@@ -1,6 +1,9 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, sync::Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 #[cfg(windows)]
 use std::{ffi::c_void, mem::ManuallyDrop, ptr, slice, sync::mpsc, thread, time::Duration};
 
@@ -496,9 +499,9 @@ fn find_annexb_start_code(data: &[u8], from: usize) -> Option<(usize, usize)> {
     None
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct W8NativeVideoState {
-    session: Mutex<W8NativeVideoSession>,
+    session: Arc<Mutex<W8NativeVideoSession>>,
 }
 
 struct W8NativeVideoSession {
@@ -3148,45 +3151,93 @@ unsafe fn release_mft_activates(
     CoTaskMemFree(Some(activates as *const c_void));
 }
 
+impl W8NativeVideoState {
+    pub fn start_session(
+        &self,
+        window: &tauri::Window,
+        request: W8NativeVideoStartRequest,
+    ) -> Result<W8NativeVideoSnapshot, String> {
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| "W8 视频会话锁定失败".to_string())?;
+        let config = NativeVideoQueueConfig {
+            target_queue_ms: request.target_queue_ms.unwrap_or(DEFAULT_TARGET_QUEUE_MS),
+            hard_max_queue_ms: request
+                .hard_max_queue_ms
+                .unwrap_or(DEFAULT_HARD_MAX_QUEUE_MS),
+            max_frames: request.max_frames.unwrap_or(DEFAULT_MAX_FRAMES),
+        }
+        .normalized();
+
+        session.running = true;
+        session.host = request.host;
+        session.port = request.port;
+        session.requested_fps = request.requested_fps.unwrap_or(60).clamp(1, 240);
+        session.renderer_mode = request
+            .renderer_mode
+            .unwrap_or_else(|| "native-video-queue-mvp".to_string());
+        session.queue = NativeVideoQueue::new(config);
+        session.decoder_init = None;
+        session.decode_step = None;
+        session.decoder_session.reset();
+        #[cfg(windows)]
+        {
+            session.window_present_target = resolve_native_window_present_target(window);
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = window;
+        }
+        Ok(session.snapshot())
+    }
+
+    pub fn push_h264_annexb_bytes(
+        &self,
+        id: u64,
+        received_at_ms: u64,
+        data: Vec<u8>,
+    ) -> Result<NativeH264AnnexBPushResult, String> {
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| "W8 视频会话锁定失败".to_string())?;
+        if !session.running {
+            return Err("W8 视频会话尚未启动".to_string());
+        }
+        session.push_h264_annexb_frame(id, received_at_ms, data)
+    }
+
+    pub fn snapshot(&self) -> Result<W8NativeVideoSnapshot, String> {
+        let session = self
+            .session
+            .lock()
+            .map_err(|_| "W8 视频会话锁定失败".to_string())?;
+        Ok(session.snapshot())
+    }
+
+    pub fn stop_session(&self) -> Result<W8NativeVideoSnapshot, String> {
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| "W8 视频会话锁定失败".to_string())?;
+        session.running = false;
+        session.decoder_session.reset();
+        #[cfg(windows)]
+        {
+            session.window_present_target = None;
+        }
+        Ok(session.snapshot())
+    }
+}
+
 #[tauri::command]
 pub fn start_w8_native_video_session(
     window: tauri::Window,
     request: W8NativeVideoStartRequest,
     state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W8NativeVideoSnapshot, String> {
-    let mut session = state
-        .session
-        .lock()
-        .map_err(|_| "W8 视频会话锁定失败".to_string())?;
-    let config = NativeVideoQueueConfig {
-        target_queue_ms: request.target_queue_ms.unwrap_or(DEFAULT_TARGET_QUEUE_MS),
-        hard_max_queue_ms: request
-            .hard_max_queue_ms
-            .unwrap_or(DEFAULT_HARD_MAX_QUEUE_MS),
-        max_frames: request.max_frames.unwrap_or(DEFAULT_MAX_FRAMES),
-    }
-    .normalized();
-
-    session.running = true;
-    session.host = request.host;
-    session.port = request.port;
-    session.requested_fps = request.requested_fps.unwrap_or(60).clamp(1, 240);
-    session.renderer_mode = request
-        .renderer_mode
-        .unwrap_or_else(|| "native-video-queue-mvp".to_string());
-    session.queue = NativeVideoQueue::new(config);
-    session.decoder_init = None;
-    session.decode_step = None;
-    session.decoder_session.reset();
-    #[cfg(windows)]
-    {
-        session.window_present_target = resolve_native_window_present_target(&window);
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = window;
-    }
-    Ok(session.snapshot())
+    state.start_session(&window, request)
 }
 
 #[tauri::command]
@@ -3212,42 +3263,21 @@ pub fn push_w8_native_h264_annexb_frame(
     let data = general_purpose::STANDARD
         .decode(request.data_base64.as_bytes())
         .map_err(|_| "W8 H.264 Annex B base64 解码失败".to_string())?;
-    let mut session = state
-        .session
-        .lock()
-        .map_err(|_| "W8 视频会话锁定失败".to_string())?;
-    if !session.running {
-        return Err("W8 视频会话尚未启动".to_string());
-    }
-    session.push_h264_annexb_frame(request.id, request.received_at_ms, data)
+    state.push_h264_annexb_bytes(request.id, request.received_at_ms, data)
 }
 
 #[tauri::command]
 pub fn get_w8_native_video_snapshot(
     state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W8NativeVideoSnapshot, String> {
-    let session = state
-        .session
-        .lock()
-        .map_err(|_| "W8 视频会话锁定失败".to_string())?;
-    Ok(session.snapshot())
+    state.snapshot()
 }
 
 #[tauri::command]
 pub fn stop_w8_native_video_session(
     state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W8NativeVideoSnapshot, String> {
-    let mut session = state
-        .session
-        .lock()
-        .map_err(|_| "W8 视频会话锁定失败".to_string())?;
-    session.running = false;
-    session.decoder_session.reset();
-    #[cfg(windows)]
-    {
-        session.window_present_target = None;
-    }
-    Ok(session.snapshot())
+    state.stop_session()
 }
 
 impl W8NativeVideoSession {

@@ -1,3 +1,6 @@
+use crate::w8_native_video::{
+    NativeH264AnnexBPushResult, W8NativeVideoStartRequest, W8NativeVideoState,
+};
 use base64::{engine::general_purpose, Engine as _};
 use lan_dual_control_windows_audio::native_audio_player::{
     NativeAudioOutput, NativeAudioPlaybackConfig, NativeAudioPlaybackStats,
@@ -66,6 +69,18 @@ pub struct W14NativeReceiverSnapshot {
     pub audio_frames: u64,
     pub last_video_codec: String,
     pub last_video_encoding: String,
+    pub native_video_running: bool,
+    pub native_video_renderer_mode: String,
+    pub native_video_pushed_frames: u64,
+    pub native_video_accepted_frames: u64,
+    pub native_video_dropped_frames: u64,
+    pub native_video_queue_ms: u64,
+    pub native_video_decoded_frames: u64,
+    pub native_video_present_frames: u64,
+    pub native_video_presenting: bool,
+    pub native_video_last_status: String,
+    pub native_video_last_reason: String,
+    pub native_video_last_error: String,
     pub last_audio_codec: String,
     pub last_audio_encoding: String,
     pub audio_sample_rate: u32,
@@ -105,6 +120,18 @@ impl Default for W14NativeReceiverSnapshot {
             audio_frames: 0,
             last_video_codec: String::new(),
             last_video_encoding: String::new(),
+            native_video_running: false,
+            native_video_renderer_mode: String::new(),
+            native_video_pushed_frames: 0,
+            native_video_accepted_frames: 0,
+            native_video_dropped_frames: 0,
+            native_video_queue_ms: 0,
+            native_video_decoded_frames: 0,
+            native_video_present_frames: 0,
+            native_video_presenting: false,
+            native_video_last_status: String::new(),
+            native_video_last_reason: String::new(),
+            native_video_last_error: String::new(),
             last_audio_codec: String::new(),
             last_audio_encoding: String::new(),
             audio_sample_rate: 0,
@@ -131,8 +158,10 @@ impl Default for W14NativeReceiverSnapshot {
 
 #[tauri::command]
 pub fn start_w14_native_receiver_session(
+    window: tauri::Window,
     request: W14NativeReceiverStartRequest,
     state: tauri::State<'_, W14NativeReceiverState>,
+    video_state: tauri::State<'_, W8NativeVideoState>,
 ) -> Result<W14NativeReceiverSnapshot, String> {
     if request.host.trim().is_empty() {
         return Err("W14 native receiver host is required".to_string());
@@ -141,12 +170,18 @@ pub fn start_w14_native_receiver_session(
         return Err("W14 native receiver password is required locally".to_string());
     }
 
+    let video_state_handle = video_state.inner().clone();
+    let video_snapshot =
+        video_state_handle.start_session(&window, build_w8_native_video_start_request(&request))?;
     let stop = Arc::new(AtomicBool::new(false));
     let snapshot = W14NativeReceiverSnapshot {
         running: true,
         status: "starting".to_string(),
         host: Some(request.host.clone()),
         port: Some(request.port),
+        native_video_running: video_snapshot.running,
+        native_video_renderer_mode: video_snapshot.renderer_mode,
+        native_video_queue_ms: video_snapshot.queue.queue_ms,
         started_at_ms: now_ms(),
         updated_at_ms: now_ms(),
         ..W14NativeReceiverSnapshot::default()
@@ -165,7 +200,8 @@ pub fn start_w14_native_receiver_session(
     }
 
     let inner = Arc::clone(&state.inner);
-    thread::spawn(move || run_receiver_thread(inner, stop, request));
+    let video_bridge = W14W8NativeVideoBridge::new(video_state_handle);
+    thread::spawn(move || run_receiver_thread(inner, stop, request, video_bridge));
     Ok(snapshot)
 }
 
@@ -201,8 +237,9 @@ fn run_receiver_thread(
     inner: Arc<Mutex<W14NativeReceiverInner>>,
     stop: Arc<AtomicBool>,
     request: W14NativeReceiverStartRequest,
+    video_bridge: W14W8NativeVideoBridge,
 ) {
-    let result = run_receiver_loop(&inner, &stop, &request);
+    let result = run_receiver_loop(&inner, &stop, &request, video_bridge);
     if let Err(error) = result {
         update_snapshot(&inner, |snapshot| {
             snapshot.running = false;
@@ -216,6 +253,7 @@ fn run_receiver_loop(
     inner: &Arc<Mutex<W14NativeReceiverInner>>,
     stop: &Arc<AtomicBool>,
     request: &W14NativeReceiverStartRequest,
+    mut video_bridge: W14W8NativeVideoBridge,
 ) -> Result<(), String> {
     let mut audio_playback = W14NativeAudioPlayback::default();
 
@@ -305,7 +343,12 @@ fn run_receiver_loop(
         match socket.read() {
             Ok(message) => {
                 if let Some(value) = parse_message(message)? {
-                    handle_stream_message(inner, &mut audio_playback, &value)?;
+                    handle_stream_message(
+                        inner,
+                        &mut audio_playback,
+                        Some(&mut video_bridge),
+                        &value,
+                    )?;
                 }
             }
             Err(tungstenite::Error::Io(error))
@@ -326,6 +369,20 @@ fn run_receiver_loop(
         snapshot.status = "stopped".to_string();
     });
     Ok(())
+}
+
+fn build_w8_native_video_start_request(
+    request: &W14NativeReceiverStartRequest,
+) -> W8NativeVideoStartRequest {
+    W8NativeVideoStartRequest {
+        host: Some(request.host.trim().to_string()),
+        port: Some(request.port),
+        requested_fps: request.max_fps,
+        renderer_mode: Some("w14-native-receiver-w8-mf-d3d11".to_string()),
+        target_queue_ms: Some(80),
+        hard_max_queue_ms: Some(180),
+        max_frames: Some(8),
+    }
 }
 
 fn build_session_offer(request: &W14NativeReceiverStartRequest) -> Value {
@@ -419,6 +476,171 @@ fn parse_message(message: Message) -> Result<Option<Value>, String> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct W14DecodedH264Frame {
+    id: u64,
+    received_at_ms: u64,
+    bytes: Vec<u8>,
+    codec: String,
+    encoding: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct W14NativeVideoPushStats {
+    accepted: bool,
+    dropped_frames: u64,
+    queue_ms: u64,
+    decoded_frames: u64,
+    present_frames: u64,
+    presenting: bool,
+    last_status: String,
+    last_reason: String,
+}
+
+trait W14NativeVideoSink {
+    fn push_h264_annexb_frame(
+        &mut self,
+        frame: W14DecodedH264Frame,
+    ) -> Result<W14NativeVideoPushStats, String>;
+}
+
+struct W14W8NativeVideoBridge {
+    state: W8NativeVideoState,
+}
+
+impl W14W8NativeVideoBridge {
+    fn new(state: W8NativeVideoState) -> Self {
+        Self { state }
+    }
+}
+
+impl W14NativeVideoSink for W14W8NativeVideoBridge {
+    fn push_h264_annexb_frame(
+        &mut self,
+        frame: W14DecodedH264Frame,
+    ) -> Result<W14NativeVideoPushStats, String> {
+        let result =
+            self.state
+                .push_h264_annexb_bytes(frame.id, frame.received_at_ms, frame.bytes)?;
+        Ok(W14NativeVideoPushStats::from_w8_result(&result))
+    }
+}
+
+impl W14NativeVideoPushStats {
+    fn from_w8_result(result: &NativeH264AnnexBPushResult) -> Self {
+        let decoder = result.decoder_session.as_ref();
+        let decoded_frames = decoder.map(|summary| summary.decoded_frames).unwrap_or(0);
+        let present_frames = decoder
+            .map(|summary| summary.native_present_frames)
+            .unwrap_or(0);
+        let native_present_status = decoder
+            .map(|summary| summary.native_present_status.clone())
+            .unwrap_or_default();
+        let decoder_status = decoder
+            .map(|summary| summary.last_status.clone())
+            .unwrap_or_default();
+        let last_status = if !native_present_status.is_empty()
+            && native_present_status != "waiting-latest-frame"
+        {
+            native_present_status.clone()
+        } else if !decoder_status.is_empty() {
+            decoder_status
+        } else {
+            result.video.reason.clone()
+        };
+        let last_reason = decoder
+            .map(|summary| summary.reason.clone())
+            .unwrap_or_else(|| result.video.reason.clone());
+        let presenting = present_frames > 0 || native_present_status.contains("presented");
+
+        Self {
+            accepted: result.video.accepted,
+            dropped_frames: result.video.dropped_frames as u64,
+            queue_ms: result.video.queue_ms,
+            decoded_frames,
+            present_frames,
+            presenting,
+            last_status,
+            last_reason,
+        }
+    }
+}
+
+fn decode_h264_annexb_video_frame(message: &Value) -> Result<Option<W14DecodedH264Frame>, String> {
+    if message.get("type").and_then(Value::as_str) != Some("video_frame") {
+        return Ok(None);
+    }
+
+    let codec = message
+        .get("codec")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let encoding = message
+        .get("encoding")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let codec_lc = codec.to_ascii_lowercase();
+    let encoding_lc = encoding.to_ascii_lowercase();
+    if !codec_lc.contains("h264") {
+        return Ok(None);
+    }
+    if !encoding_lc.contains("annexb") {
+        return Ok(None);
+    }
+
+    let payload = video_payload(message)
+        .ok_or_else(|| "W14 H.264 video frame missing base64 payload".to_string())?;
+    let bytes = general_purpose::STANDARD
+        .decode(payload.as_bytes())
+        .map_err(|error| format!("W14 H.264 base64 decode failed: {error}"))?;
+    if bytes.is_empty() {
+        return Err("W14 H.264 payload is empty".to_string());
+    }
+
+    let id =
+        number_field(message, &["frameId", "frame_id", "id", "sequence"]).unwrap_or_else(now_ms);
+    let received_at_ms = number_field(
+        message,
+        &["receivedAtMs", "received_at_ms", "timestampMs", "timestamp"],
+    )
+    .unwrap_or_else(now_ms);
+
+    Ok(Some(W14DecodedH264Frame {
+        id,
+        received_at_ms,
+        bytes,
+        codec,
+        encoding,
+    }))
+}
+
+fn video_payload(message: &Value) -> Option<String> {
+    for key in [
+        "payload",
+        "data",
+        "videoData",
+        "dataBase64",
+        "videoBase64",
+        "h264Base64",
+        "frameBase64",
+    ] {
+        let Some(value) = message.get(key).and_then(Value::as_str) else {
+            continue;
+        };
+        let payload = value
+            .split_once(',')
+            .map(|(_, payload)| payload)
+            .unwrap_or(value)
+            .trim();
+        if !payload.is_empty() {
+            return Some(payload.to_string());
+        }
+    }
+    None
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct W14DecodedAudioFrame {
     sample_rate: u32,
@@ -478,9 +700,27 @@ impl W14NativeAudioPlayback {
 fn handle_stream_message(
     inner: &Arc<Mutex<W14NativeReceiverInner>>,
     audio_playback: &mut W14NativeAudioPlayback,
+    mut video_sink: Option<&mut dyn W14NativeVideoSink>,
     message: &Value,
 ) -> Result<(), String> {
     update_snapshot(inner, |snapshot| apply_incoming_message(snapshot, message));
+    if let Some(frame) = decode_h264_annexb_video_frame(message)? {
+        if let Some(sink) = video_sink.as_deref_mut() {
+            match sink.push_h264_annexb_frame(frame) {
+                Ok(stats) => {
+                    update_snapshot(inner, |snapshot| {
+                        apply_native_video_push_stats(snapshot, stats)
+                    });
+                }
+                Err(error) => {
+                    update_snapshot(inner, |snapshot| {
+                        snapshot.native_video_last_error = error.clone();
+                    });
+                    return Err(error);
+                }
+            }
+        }
+    }
     let Some(frame) = decode_pcm_f32le_audio_frame(message)? else {
         return Ok(());
     };
@@ -580,8 +820,35 @@ fn audio_payload(message: &Value) -> Option<String> {
 }
 
 fn number_field(message: &Value, keys: &[&str]) -> Option<u64> {
-    keys.iter()
-        .find_map(|key| message.get(*key).and_then(Value::as_u64))
+    keys.iter().find_map(|key| {
+        let value = message.get(*key)?;
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|text| text.parse::<u64>().ok()))
+    })
+}
+
+fn apply_native_video_push_stats(
+    snapshot: &mut W14NativeReceiverSnapshot,
+    stats: W14NativeVideoPushStats,
+) {
+    snapshot.media_owner = "native-receiver".to_string();
+    snapshot.native_video_running = true;
+    snapshot.native_video_pushed_frames = snapshot.native_video_pushed_frames.saturating_add(1);
+    if stats.accepted {
+        snapshot.native_video_accepted_frames =
+            snapshot.native_video_accepted_frames.saturating_add(1);
+    }
+    snapshot.native_video_dropped_frames = snapshot
+        .native_video_dropped_frames
+        .saturating_add(stats.dropped_frames);
+    snapshot.native_video_queue_ms = stats.queue_ms;
+    snapshot.native_video_decoded_frames = stats.decoded_frames;
+    snapshot.native_video_present_frames = stats.present_frames;
+    snapshot.native_video_presenting = stats.presenting;
+    snapshot.native_video_last_status = stats.last_status;
+    snapshot.native_video_last_reason = stats.last_reason;
+    snapshot.native_video_last_error.clear();
 }
 
 fn apply_audio_playback_stats(
@@ -699,6 +966,69 @@ mod tests {
         assert_eq!(snapshot.audio_frames, 1);
         assert_eq!(snapshot.last_video_codec, "h264");
         assert_eq!(snapshot.last_video_encoding, "annexb-base64");
+    }
+
+    #[derive(Default)]
+    struct FakeNativeVideoSink {
+        frames: Vec<W14DecodedH264Frame>,
+    }
+
+    impl W14NativeVideoSink for FakeNativeVideoSink {
+        fn push_h264_annexb_frame(
+            &mut self,
+            frame: W14DecodedH264Frame,
+        ) -> Result<W14NativeVideoPushStats, String> {
+            self.frames.push(frame);
+            Ok(W14NativeVideoPushStats {
+                accepted: true,
+                dropped_frames: 0,
+                queue_ms: 12,
+                decoded_frames: 3,
+                present_frames: 2,
+                presenting: true,
+                last_status: "latest-frame-swapchain-presented".to_string(),
+                last_reason: "presented through W8 native video".to_string(),
+            })
+        }
+    }
+
+    #[test]
+    fn h264_video_frame_feeds_native_video_sink_and_surfaces_presenting() {
+        let inner = Arc::new(Mutex::new(W14NativeReceiverInner::default()));
+        let mut audio_playback = W14NativeAudioPlayback::default();
+        let mut video_sink = FakeNativeVideoSink::default();
+        let payload = general_purpose::STANDARD.encode([0, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x65]);
+
+        handle_stream_message(
+            &inner,
+            &mut audio_playback,
+            Some(&mut video_sink),
+            &json!({
+                "type": "video_frame",
+                "codec": "h264",
+                "encoding": "annexb-base64",
+                "frameId": 7,
+                "payload": payload,
+            }),
+        )
+        .expect("video frame should feed native sink");
+
+        assert_eq!(video_sink.frames.len(), 1);
+        assert_eq!(video_sink.frames[0].id, 7);
+        assert_eq!(
+            video_sink.frames[0].bytes,
+            vec![0, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x65]
+        );
+
+        let snapshot = inner.lock().expect("snapshot lock").snapshot.clone();
+        assert_eq!(snapshot.native_video_pushed_frames, 1);
+        assert_eq!(snapshot.native_video_decoded_frames, 3);
+        assert_eq!(snapshot.native_video_present_frames, 2);
+        assert!(snapshot.native_video_presenting);
+        assert_eq!(
+            snapshot.native_video_last_status,
+            "latest-frame-swapchain-presented"
+        );
     }
 
     #[test]

@@ -35,6 +35,7 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 - W12/W13 MF sample timing 修正：Media Foundation sample time/duration 的单位是 100ns。原 worker 里使用的 `16_667` 只等于约 1.67ms，不是 60Hz 的 16.67ms；现在统一使用 `W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS = 16_666_667`，并按 frameId 生成单调 `sample_time`。下一次真实长跑必须用新构建验证 `mfOut` 是否从长期 need-more-input/no-output 进入 decoded-output 或明确 HRESULT。
 - W12/W13 MF `ProcessInput` 背压实修：真实日志显示 `ProcessInput` 接受约 41 帧后进入 blocked，旧 worker 直接返回 `process-input-blocked`，导致 `ProcessOutput` 长期 `not-attempted`。现在遇到 `MF_E_NOTACCEPTING` 会先调用 `ProcessOutput` drain decoder，再重试同一个 input sample；drain 产出 decoded output 时以 `drained-output-after-input-backpressure` 进入原生 surface/present 逻辑，重试输入成功时标记 `accepted-after-input-backpressure-drain`。该路径不计入 `processInputFailures`，方便区分“正常背压 drain”与真正输入错误。
 - W12/W13 MF H.264 sample 属性：送入 MFT 的 IDR sample 会设置 `MFSampleExtension_CleanPoint`，会话首帧设置 `MFSampleExtension_Discontinuity`；worker 初始化完成输入/输出类型后发送 `MFT_MESSAGE_NOTIFY_BEGIN_STREAMING` 和 `MFT_MESSAGE_NOTIFY_START_OF_STREAM`。下一轮如果仍 `process-input-blocked-after-drain`，优先查 MF input type / sequence header / access unit 边界；如果 `decoded>0` 但没有 `presenting=yes`，转查 D3D11/HWND Present。
+- W14 起，Windows 后端已有 native receiver 视频桥接层：`w14_native_receiver.rs` 的 Rust WebSocket loop 收到 Mac `video_frame` / H.264 / `annexb-base64` 后，会解析 base64 Annex B payload，并直接调用 W8 `push_h264_annexb_bytes`。W14 snapshot 输出 `nativeVideoPushedFrames/nativeVideoAcceptedFrames/nativeVideoDecodedFrames/nativeVideoPresentFrames/nativeVideoPresenting/nativeVideoLastStatus/nativeVideoLastReason/nativeVideoLastError`，用于判断 mediaOwner=native-receiver 的链路推进到哪一段。`W8NativeVideoState` 现在是可克隆共享状态，Tauri 命令和 W14 后台线程共用同一套 W8 MF/D3D11/HWND present 实现。当前前端连接入口还未切到 W14；下一步是让桌面 UI 启动 W14 native receiver，同时保持输入/剪贴板的安全控制路径。
 - W12 起，`W8NativeVideo=` 还会输出 `mediaSession=native-main|native-pending|web-diagnostic` 与 `nativeAck=received|submitted|decoded|surface|presented`。这两个字段把 W11 审计里的 native receiver -> realtime queue -> MF/D3D11 decoder -> D3D surface -> HWND present 阶段压成首屏可读状态：`nativeAck=surface` 表示已到 D3D latest-frame surface 但还没 HWND Present；`nativeAck=presented` 配合 `mediaSession=native-main` 表示主画面已经走原生 HWND。
 - W12 的 Windows client 侧还会用 `classifyW8NativeVideoSession` 输出 `nativeClass` 与 `nativeNext`。`present-ok` / `device-lost-recovered` 表示主路径可继续看 arrival/QoS；`present-gap` / `surface-ready` 指向 native present/HWND；`decoder-submitted` 指向 MF decoder 产帧；`decoder-error`、`device-lost-blocked` 和 `stream-change-pending` 则分别指向 error、device rebuild 或 output reconfigure。现场视频导出会显示中文 `原生分类` / `原生下一步`，通讯板 `W8NativeVideo=` 会显示英文短字段。
 - W8/W13 现在还会维护 5 秒滚动进展窗口，`W8NativeVideo=` 会输出 `progress/windowMs/presentDelta/presentFps/decodedDelta/decodedFps/webBypassDelta/webBypassFps/pushedDelta/submittedDelta/progressNext`。这用于判断真实桌面长跑中最近几秒是否仍有 native present 进展：`present-progress` 可以继续查体感和 arrival/QoS，`decode-progress` 指向 native present/HWND，`decoder-submit-progress` 或 `receive-progress` 指向后段等待，`stalled` 指向本地视频停滞。页面解码诊断和现场视频复制导出同步显示中文进展字段。
@@ -57,6 +58,9 @@ Tauri 原生命令：
 - `push_w8_native_h264_annexb_frame`
 - `get_w8_native_video_snapshot`
 - `stop_w8_native_video_session`
+- `start_w14_native_receiver_session`
+- `get_w14_native_receiver_snapshot`
+- `stop_w14_native_receiver_session`
 
 这些接口后续会被桌面控制端的媒体接收层调用。当前可以用 Rust 单元测试验证 Annex B NAL 识别、decoder config 提取、MF/D3D11 能力探测、decoder init preflight、sample decode step preflight、持续 decoder session 诊断计数、专用 decoder worker 线程和低延迟策略，不需要真实密码、不认证、不发 input/inject。
 
@@ -65,7 +69,7 @@ Tauri 原生命令：
 1. 对真实 Mac H.264 长时间运行做观感和诊断验证，确认 `nativePresentStatus` 持续为 `latest-frame-nv12-converted-presented` 或 `latest-frame-swapchain-presented`，且偶发 `stream-change-reconfigured` / `device-lost-rebuilt` 后能继续出帧。
 2. 让窗口最小化 / 后台 / 切 app 时的 native renderer 仍按实时队列丢旧保新，并把真实长跑中的 device-lost / swapchain lost 证据继续收敛到更细的重建策略。
 3. 根据真实长跑结果决定是否需要把 decoder MFT 本体也纳入更高层重建，而不只重建 D3D11 surface / present target。
-4. 把 Mac host H.264 WebSocket 接收路径继续收束到桌面原生侧，逐步降低 WebCodecs/canvas 在最终体验里的权重。
+4. 把 Windows 桌面 UI 的媒体连接入口接到 W14 native receiver，让 H.264 收包、jitter/丢旧保新、MF/D3D11 解码和 HWND Present 全部由 Rust 后端主导；JS/HTML 只保留控制、输入/剪贴板安全入口和诊断。
 5. 根据真实长跑决定是否需要协议级 `desiredFps/desiredBitrateKbps` 回传；在证据不足前继续保持 Mac 编码参数不自动调。
 6. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
 7. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。

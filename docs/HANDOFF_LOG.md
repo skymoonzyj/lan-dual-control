@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W14 native receiver 视频桥接
+开发端：Windows Codex
+本轮目标：按通讯板 W14 拆分，Windows 主线只做视频半边：native receiver 收 H.264 后直接进入 W8 MF/D3D11/HWND present 链路；不碰 W9 音频。
+完成内容：`w14_native_receiver.rs` 启动时会先启动 W8 原生视频会话；后台 Rust WebSocket receiver 收到 `video_frame` / H.264 / `annexb-base64` 后解析 payload，调用 W8 `push_h264_annexb_bytes`。W14 snapshot 新增 native video 证据字段：推入、接受、丢帧、队列、decoded、present frames、presenting、last status/reason/error。`W8NativeVideoState` 改为可克隆共享状态，并把 start/push/snapshot/stop 封成方法，Tauri 命令和 W14 后台线程共用同一套 W8 原生视频实现。
+修改文件：apps/windows-desktop/src-tauri/src/w14_native_receiver.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：基线 `cargo test w14_native_receiver` 4/4、`cargo test w8_native_video` 29/29 先通过；TDD 红灯 `cargo test h264_video_frame_feeds_native_video_sink_and_surfaces_presenting` 先因 `W14DecodedH264Frame/W14NativeVideoSink/W14NativeVideoPushStats` 缺失失败，实装后通过；随后 `cargo test w14_native_receiver` 5/5、`cargo test w8_native_video` 29/29、`cargo check` 通过。release build、diff check 和冲突扫描见本轮提交前验证记录。
+遗留问题：前端桌面连接入口尚未切到 W14；现有 JS/WebSocket 客户端仍负责旧媒体/输入/剪贴板路径。下一步需要做 UI/入口整合，且真实 Mac 现场还需要看到 `nativeVideoDecodedFrames>0` 和最好 `nativeVideoPresenting=true`。
+下一步建议：先把 Tauri 桌面端媒体入口接入 W14 native receiver，同时明确输入/剪贴板如何继续走安全路径；再做真实 Mac 短测，复制 W14/W8 snapshot，确认 native receiver 收包、W8 accepted、MF decoded、HWND present 的每段证据。
+是否改了协议：否。只消费现有 H.264 `video_frame` 字段和现有 W8 原生视频接口。
+是否需要另一端配合：不需要 Mac 改协议；Mac 只需保持 host 在线。W9 音频由音频任务继续处理；密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12/W13 MF ProcessInput 背压实修
 开发端：Windows Codex
 本轮目标：响应 Supervisor `W12/W13-USER-FEEDBACK-NO-VISIBLE-PROGRESS`：`2fed64e` 已证明只是诊断补强，真实体验无可见进展；下一步必须实际修复 MF `ProcessInput` blocked / `ProcessOutput` not attempted。
