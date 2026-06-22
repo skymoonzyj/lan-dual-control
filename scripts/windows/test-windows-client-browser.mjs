@@ -346,6 +346,18 @@ function positiveInteger(value) {
   return Math.max(0, Math.round(finiteNumber(value, 0)));
 }
 
+function nullableFrameId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.round(number);
+}
+
+function frameIdText(value) {
+  const id = nullableFrameId(value);
+  return id === null ? "none" : String(id);
+}
+
 function getAudioStabilityStatus(value = {}, args = {}) {
   if (!args.requireAudioStability) {
     return { ok: true, reason: "audio-stability-disabled" };
@@ -580,6 +592,14 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const lastProcessOutputStatus = String(value.w8NativeVideoLastProcessOutputStatus || "").trim();
   const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
+  const latestFrameId = nullableFrameId(value.w8NativeVideoLatestFrameId);
+  const surfaceFrameId = nullableFrameId(value.w8NativeVideoNativeSurfaceLastFrameId);
+  const presentFrameId = nullableFrameId(value.w8NativeVideoNativePresentLastFrameId);
+  const freshnessStatus = String(value.w8NativeVideoFreshnessStatus || "").trim();
+  const presentFrameLag =
+    nullableFrameId(value.w8NativeVideoPresentFrameLag) ??
+    (latestFrameId === null ? null : Math.max(0, latestFrameId - (presentFrameId ?? 0)));
+  const presentAgeMs = nullableFrameId(value.w8NativeVideoPresentAgeMs);
   const queueDrops = positiveInteger(value.w8NativeVideoDroppedFrames);
   const errors = positiveInteger(value.w8NativeVideoErrors);
   const webBypass = positiveInteger(value.h264WebDecodeBypassedForNativeSurface);
@@ -691,6 +711,14 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     parts.push(`presenting=${isWindowPresenting ? "yes" : "no"}`);
     parts.push(`presentGap=${presentGap}`);
   }
+  if (latestFrameId !== null || surfaceFrameId !== null || presentFrameId !== null) {
+    parts.push(
+      `ids=latest:${frameIdText(latestFrameId)}/surface:${frameIdText(surfaceFrameId)}/present:${frameIdText(presentFrameId)}`,
+    );
+  }
+  if (freshnessStatus) parts.push(`freshness=${compactBoardSummaryToken(freshnessStatus, 40)}`);
+  if (presentFrameLag !== null) parts.push(`idLag=${presentFrameLag}`);
+  if (presentAgeMs !== null && presentAgeMs > 0) parts.push(`presentAgeMs=${presentAgeMs}`);
   if (queueDrops > 0) {
     const queueDropScope = hasNativePipeline ? "predecode" : "queue";
     parts.push(`queueDrops=${queueDrops}`);
@@ -752,6 +780,22 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   const queueMs = positiveInteger(value.w14NativeVideoQueueMs ?? value.queueMs);
   const decoded = positiveInteger(value.w14NativeVideoDecodedFrames ?? value.decoded);
   const presentFrames = positiveInteger(value.w14NativeVideoPresentFrames ?? value.presentFrames);
+  const sourceFrameId = nullableFrameId(value.w14NativeVideoLastFrameId ?? value.lastVideoFrameId);
+  const pushedFrameId = nullableFrameId(
+    value.w14NativeVideoLastPushedFrameId ?? value.nativeVideoLastPushedFrameId,
+  );
+  const latestFrameId = nullableFrameId(value.w14NativeVideoLatestFrameId ?? value.nativeVideoLatestFrameId);
+  const surfaceFrameId = nullableFrameId(value.w14NativeVideoSurfaceFrameId ?? value.nativeVideoSurfaceFrameId);
+  const presentFrameId = nullableFrameId(value.w14NativeVideoPresentFrameId ?? value.nativeVideoPresentFrameId);
+  const freshnessStatus = String(
+    value.w14NativeVideoFreshnessStatus ?? value.nativeVideoFreshnessStatus ?? "",
+  ).trim();
+  const presentFrameLag =
+    nullableFrameId(value.w14NativeVideoPresentFrameLag ?? value.nativeVideoPresentFrameLag) ??
+    (latestFrameId === null ? null : Math.max(0, latestFrameId - (presentFrameId ?? 0)));
+  const presentAgeMs = nullableFrameId(
+    value.w14NativeVideoPresentAgeMs ?? value.nativeVideoPresentAgeMs,
+  );
   const presentingValue = value.w14NativeVideoPresenting ?? value.presenting;
   const presenting =
     typeof presentingValue === "boolean" ? (presentingValue ? "yes" : "no") : String(presentingValue ?? "").trim();
@@ -766,7 +810,11 @@ function makeW14NativeVideoRetestSummary(value = {}) {
     accepted > 0 ||
     dropped > 0 ||
     decoded > 0 ||
-    presentFrames > 0;
+    presentFrames > 0 ||
+    sourceFrameId !== null ||
+    latestFrameId !== null ||
+    surfaceFrameId !== null ||
+    presentFrameId !== null;
 
   if (!hasEvidence) return "";
 
@@ -782,6 +830,16 @@ function makeW14NativeVideoRetestSummary(value = {}) {
   if (queueMs > 0) parts.push(`queueMs=${queueMs}`);
   if (decoded > 0 || receiverStatus) parts.push(`decoded=${decoded}`);
   if (presentFrames > 0 || decoded > 0 || receiverStatus) parts.push(`presentFrames=${presentFrames}`);
+  if (sourceFrameId !== null) parts.push(`sourceId=${sourceFrameId}`);
+  if (pushedFrameId !== null) parts.push(`pushedId=${pushedFrameId}`);
+  if (latestFrameId !== null || surfaceFrameId !== null || presentFrameId !== null) {
+    parts.push(
+      `w8Ids=latest:${frameIdText(latestFrameId)}/surface:${frameIdText(surfaceFrameId)}/present:${frameIdText(presentFrameId)}`,
+    );
+  }
+  if (freshnessStatus) parts.push(`freshness=${compactBoardSummaryToken(freshnessStatus, 40)}`);
+  if (presentFrameLag !== null) parts.push(`idLag=${presentFrameLag}`);
+  if (presentAgeMs !== null && presentAgeMs > 0) parts.push(`presentAgeMs=${presentAgeMs}`);
   if (presenting) parts.push(`presenting=${compactBoardSummaryToken(presenting, 20)}`);
   if (lastStatus) parts.push(`lastStatus=${compactBoardSummaryToken(lastStatus, 80)}`);
   if (lastReason) parts.push(`lastReason=${compactBoardSummaryToken(lastReason.replace(/[;,|]+/g, ""), 100)}`);
@@ -923,6 +981,15 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
     w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
     w8NativeVideoNativePresentFrames: 188,
+    w8NativeVideoLatestFrameId: 188,
+    w8NativeVideoLatestFrameUpdatedAtMs: 123450,
+    w8NativeVideoNativeSurfaceLastFrameId: 188,
+    w8NativeVideoNativeSurfaceUpdatedAtMs: 123456,
+    w8NativeVideoNativePresentLastFrameId: 188,
+    w8NativeVideoNativePresentUpdatedAtMs: 123460,
+    w8NativeVideoFreshnessStatus: "present-fresh",
+    w8NativeVideoPresentFrameLag: 0,
+    w8NativeVideoPresentAgeMs: 40,
     w8NativeVideoDecoderSessionDecodedFrames: 188,
     w8NativeVideoDecoderSessionSubmittedFrames: 190,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 190,
@@ -973,6 +1040,15 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoDecoderSessionStatus: "active",
     w8NativeVideoNativePresentStatus: "waiting-nv12-renderer",
     w8NativeVideoNativePresentFrames: 0,
+    w8NativeVideoLatestFrameId: 12,
+    w8NativeVideoLatestFrameUpdatedAtMs: 223450,
+    w8NativeVideoNativeSurfaceLastFrameId: 12,
+    w8NativeVideoNativeSurfaceUpdatedAtMs: 223456,
+    w8NativeVideoNativePresentLastFrameId: null,
+    w8NativeVideoNativePresentUpdatedAtMs: 0,
+    w8NativeVideoFreshnessStatus: "surface-only",
+    w8NativeVideoPresentFrameLag: 12,
+    w8NativeVideoPresentAgeMs: 0,
     w8NativeVideoDecoderSessionDecodedFrames: 12,
     w8NativeVideoDecoderSessionSubmittedFrames: 14,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 14,
@@ -988,6 +1064,15 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoDecoderSessionStatus: "latest-frame-presented",
     w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
     w8NativeVideoNativePresentFrames: 3722,
+    w8NativeVideoLatestFrameId: 3722,
+    w8NativeVideoLatestFrameUpdatedAtMs: 323450,
+    w8NativeVideoNativeSurfaceLastFrameId: 3722,
+    w8NativeVideoNativeSurfaceUpdatedAtMs: 323456,
+    w8NativeVideoNativePresentLastFrameId: 1,
+    w8NativeVideoNativePresentUpdatedAtMs: 318656,
+    w8NativeVideoFreshnessStatus: "present-stale",
+    w8NativeVideoPresentFrameLag: 3721,
+    w8NativeVideoPresentAgeMs: 4800,
     w8NativeVideoDecoderSessionDecodedFrames: 3722,
     w8NativeVideoDecoderSessionSubmittedFrames: 3722,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 3722,
@@ -1015,6 +1100,10 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("status=device-lost-rebuilt") &&
     text.includes("present=latest-frame-nv12-converted-presented") &&
     text.includes("presentFrames=188") &&
+    text.includes("ids=latest:188/surface:188/present:188") &&
+    text.includes("freshness=present-fresh") &&
+    text.includes("idLag=0") &&
+    text.includes("presentAgeMs=40") &&
     text.includes("decoded=188") &&
     text.includes("ui=html-shell") &&
     text.includes("mediaSession=native-main") &&
@@ -1060,6 +1149,9 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoBehind.includes("nativeNext=inspect-native-present") &&
     w8NativeVideoBehind.includes("presenting=no") &&
     w8NativeVideoBehind.includes("presentGap=12") &&
+    w8NativeVideoBehind.includes("ids=latest:12/surface:12/present:none") &&
+    w8NativeVideoBehind.includes("freshness=surface-only") &&
+    w8NativeVideoBehind.includes("idLag=12") &&
     w8NativeVideoBehind.includes("submitted=14") &&
     w8NativeVideoBehind.includes("decoderGap=2") &&
     w8NativeVideoPredecodeDrops.includes("queueDrops=3722") &&
@@ -1069,6 +1161,10 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoPredecodeDrops.includes("mediaSession=native-main") &&
     w8NativeVideoPredecodeDrops.includes("nativeAck=presented") &&
     w8NativeVideoPredecodeDrops.includes("presenting=yes") &&
+    w8NativeVideoPredecodeDrops.includes("ids=latest:3722/surface:3722/present:1") &&
+    w8NativeVideoPredecodeDrops.includes("freshness=present-stale") &&
+    w8NativeVideoPredecodeDrops.includes("idLag=3721") &&
+    w8NativeVideoPredecodeDrops.includes("presentAgeMs=4800") &&
     text.includes("output=NV12") &&
     text.includes("codec=avc1.420029") &&
     text.includes("streamChange=yes") &&
@@ -1091,6 +1187,18 @@ function verifyW14NativeVideoRetestSummary() {
     w14NativeVideoDecodedFrames: 3,
     w14NativeVideoPresentFrames: 2,
     w14NativeVideoPresenting: true,
+    w14NativeVideoLastFrameId: 5,
+    w14NativeVideoLastFrameReceivedAtMs: 123000,
+    w14NativeVideoLastPushedFrameId: 5,
+    w14NativeVideoLatestFrameId: 3,
+    w14NativeVideoSurfaceFrameId: 3,
+    w14NativeVideoPresentFrameId: 1,
+    w14NativeVideoLatestFrameUpdatedAtMs: 123200,
+    w14NativeVideoSurfaceUpdatedAtMs: 123210,
+    w14NativeVideoPresentUpdatedAtMs: 118410,
+    w14NativeVideoFreshnessStatus: "present-stale",
+    w14NativeVideoPresentFrameLag: 2,
+    w14NativeVideoPresentAgeMs: 4800,
     w14NativeVideoLastStatus: "latest-frame-nv12-converted-presented",
     w14NativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
     w14NativeVideoLastError: "",
@@ -1117,6 +1225,11 @@ function verifyW14NativeVideoRetestSummary() {
     text.includes("queueMs=12") &&
     text.includes("decoded=3") &&
     text.includes("presentFrames=2") &&
+    text.includes("sourceId=5") &&
+    text.includes("w8Ids=latest:3/surface:3/present:1") &&
+    text.includes("freshness=present-stale") &&
+    text.includes("idLag=2") &&
+    text.includes("presentAgeMs=4800") &&
     text.includes("presenting=yes") &&
     text.includes("lastStatus=latest-frame-nv12-converted-presented") &&
     text.includes("lastReason=ready_latest_NV12_frame_converted_and_presented_to_HWND");
@@ -1242,13 +1355,22 @@ function windowsClientSnapshotExpression() {
       w8NativeVideoDecoderSessionDecodedFrames: window.state?.w8NativeVideoDecoderSessionDecodedFrames ?? 0,
       w8NativeVideoFrameHandoffStatus: window.state?.w8NativeVideoFrameHandoffStatus ?? "",
       w8NativeVideoLatestFrameFormat: window.state?.w8NativeVideoLatestFrameFormat ?? "",
+      w8NativeVideoLatestFrameId: window.state?.w8NativeVideoLatestFrameId ?? null,
+      w8NativeVideoLatestFrameUpdatedAtMs: window.state?.w8NativeVideoLatestFrameUpdatedAtMs ?? 0,
       w8NativeVideoNativeSurfaceStatus: window.state?.w8NativeVideoNativeSurfaceStatus ?? "",
       w8NativeVideoNativeSurfaceReason: window.state?.w8NativeVideoNativeSurfaceReason ?? "",
       w8NativeVideoNativeSurfaceCopyStatus: window.state?.w8NativeVideoNativeSurfaceCopyStatus ?? "",
       w8NativeVideoNativeSurfacePresentedFrames: window.state?.w8NativeVideoNativeSurfacePresentedFrames ?? 0,
+      w8NativeVideoNativeSurfaceLastFrameId: window.state?.w8NativeVideoNativeSurfaceLastFrameId ?? null,
+      w8NativeVideoNativeSurfaceUpdatedAtMs: window.state?.w8NativeVideoNativeSurfaceUpdatedAtMs ?? 0,
       w8NativeVideoNativePresentMode: window.state?.w8NativeVideoNativePresentMode ?? "",
       w8NativeVideoNativePresentStatus: window.state?.w8NativeVideoNativePresentStatus ?? "",
       w8NativeVideoNativePresentFrames: window.state?.w8NativeVideoNativePresentFrames ?? 0,
+      w8NativeVideoNativePresentLastFrameId: window.state?.w8NativeVideoNativePresentLastFrameId ?? null,
+      w8NativeVideoNativePresentUpdatedAtMs: window.state?.w8NativeVideoNativePresentUpdatedAtMs ?? 0,
+      w8NativeVideoFreshnessStatus: window.state?.w8NativeVideoFreshnessStatus ?? "",
+      w8NativeVideoPresentFrameLag: window.state?.w8NativeVideoPresentFrameLag ?? 0,
+      w8NativeVideoPresentAgeMs: window.state?.w8NativeVideoPresentAgeMs ?? 0,
       w8NativeVideoNativePresentReason: window.state?.w8NativeVideoNativePresentReason ?? "",
       w8NativeVideoWindowSwapchainStatus: window.state?.w8NativeVideoWindowSwapchainStatus ?? "",
       w8NativeVideoWindowSwapchainReason: window.state?.w8NativeVideoWindowSwapchainReason ?? "",
@@ -5933,6 +6055,8 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         videoFrames: 5,
         h264Frames: 5,
         audioFrames: 0,
+        lastVideoFrameId: 5,
+        lastVideoReceivedAtMs: 123000,
         lastVideoCodec: "h264",
         lastVideoEncoding: "annexb-base64",
         nativeVideoRunning: true,
@@ -5944,6 +6068,16 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
         nativeVideoDecodedFrames: 3,
         nativeVideoPresentFrames: 2,
         nativeVideoPresenting: true,
+        nativeVideoLastPushedFrameId: 5,
+        nativeVideoLatestFrameId: 3,
+        nativeVideoSurfaceFrameId: 3,
+        nativeVideoPresentFrameId: 1,
+        nativeVideoLatestFrameUpdatedAtMs: 123200,
+        nativeVideoSurfaceUpdatedAtMs: 123210,
+        nativeVideoPresentUpdatedAtMs: 118410,
+        nativeVideoFreshnessStatus: "present-stale",
+        nativeVideoPresentFrameLag: 2,
+        nativeVideoPresentAgeMs: 4800,
         nativeVideoLastStatus: "latest-frame-nv12-converted-presented",
         nativeVideoLastReason: "ready; latest NV12 frame converted and presented to HWND",
         nativeVideoLastError: "",
@@ -6029,11 +6163,22 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           diagnosticsBeforeStop.w14NativeVideoDecodedFrames === 3 &&
           diagnosticsBeforeStop.w14NativeVideoPresentFrames === 2 &&
           diagnosticsBeforeStop.w14NativeVideoPresenting === true &&
+          diagnosticsBeforeStop.w14NativeVideoLastFrameId === 5 &&
+          diagnosticsBeforeStop.w14NativeVideoLatestFrameId === 3 &&
+          diagnosticsBeforeStop.w14NativeVideoSurfaceFrameId === 3 &&
+          diagnosticsBeforeStop.w14NativeVideoPresentFrameId === 1 &&
+          diagnosticsBeforeStop.w14NativeVideoFreshnessStatus === "present-stale" &&
+          diagnosticsBeforeStop.w14NativeVideoPresentFrameLag === 2 &&
+          diagnosticsBeforeStop.w14NativeVideoPresentAgeMs === 4800 &&
           diagnosticsBeforeStop.w14NativeVideoLastStatus === "latest-frame-nv12-converted-presented" &&
           diagnosticsBeforeStop.w8NativeVideoDecoderSessionDecodedFrames === 3 &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentFrames === 2 &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentStatus ===
             "latest-frame-nv12-converted-presented" &&
+          diagnosticsBeforeStop.w8NativeVideoLatestFrameId === 3 &&
+          diagnosticsBeforeStop.w8NativeVideoNativeSurfaceLastFrameId === 3 &&
+          diagnosticsBeforeStop.w8NativeVideoNativePresentLastFrameId === 1 &&
+          diagnosticsBeforeStop.w8NativeVideoFreshnessStatus === "present-stale" &&
           diagnosticsBeforeStop.w8NativeVideoNativePresentReady === true &&
           exportText.includes("视频主画面 原生 MF/D3D11/HWND") &&
           exportText.includes("W14原生接收 streaming") &&
@@ -6044,6 +6189,12 @@ async function verifyW14NativeReceiverDesktopEntry(session) {
           exportText.includes("W14原生解码 3") &&
           exportText.includes("W14原生呈现 2") &&
           exportText.includes("W14原生画面 yes") &&
+          exportText.includes("W14帧链 source:5/latest:3/surface:3/present:1") &&
+          exportText.includes("W14新鲜度 present-stale") &&
+          exportText.includes("W14呈现滞后 2") &&
+          exportText.includes("W14呈现年龄 4800 ms") &&
+          exportText.includes("原生帧链 latest:3/surface:3/present:1") &&
+          exportText.includes("原生新鲜度 present-stale") &&
           exportText.includes("W14原生状态 latest-frame-nv12-converted-presented");
 
         return {
@@ -6215,6 +6366,7 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoLatestFrameFormat: state.w8NativeVideoLatestFrameFormat,
         w8NativeVideoLatestFrameBytes: state.w8NativeVideoLatestFrameBytes,
         w8NativeVideoLatestFrameId: state.w8NativeVideoLatestFrameId,
+        w8NativeVideoLatestFrameUpdatedAtMs: state.w8NativeVideoLatestFrameUpdatedAtMs,
         w8NativeVideoNativeSurfaceReady: state.w8NativeVideoNativeSurfaceReady,
         w8NativeVideoNativeSurfaceMode: state.w8NativeVideoNativeSurfaceMode,
         w8NativeVideoNativeSurfaceStatus: state.w8NativeVideoNativeSurfaceStatus,
@@ -6222,6 +6374,8 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoNativeSurfaceWidth: state.w8NativeVideoNativeSurfaceWidth,
         w8NativeVideoNativeSurfaceHeight: state.w8NativeVideoNativeSurfaceHeight,
         w8NativeVideoNativeSurfaceReason: state.w8NativeVideoNativeSurfaceReason,
+        w8NativeVideoNativeSurfaceLastFrameId: state.w8NativeVideoNativeSurfaceLastFrameId,
+        w8NativeVideoNativeSurfaceUpdatedAtMs: state.w8NativeVideoNativeSurfaceUpdatedAtMs,
         w8NativeVideoNativePresentReady: state.w8NativeVideoNativePresentReady,
         w8NativeVideoNativePresentMode: state.w8NativeVideoNativePresentMode,
         w8NativeVideoNativePresentStatus: state.w8NativeVideoNativePresentStatus,
@@ -6230,6 +6384,10 @@ async function verifyH264KeyFrameDetection(session) {
         w8NativeVideoNativePresentHeight: state.w8NativeVideoNativePresentHeight,
         w8NativeVideoNativePresentFrames: state.w8NativeVideoNativePresentFrames,
         w8NativeVideoNativePresentLastFrameId: state.w8NativeVideoNativePresentLastFrameId,
+        w8NativeVideoNativePresentUpdatedAtMs: state.w8NativeVideoNativePresentUpdatedAtMs,
+        w8NativeVideoFreshnessStatus: state.w8NativeVideoFreshnessStatus,
+        w8NativeVideoPresentFrameLag: state.w8NativeVideoPresentFrameLag,
+        w8NativeVideoPresentAgeMs: state.w8NativeVideoPresentAgeMs,
         w8NativeVideoNativePresentReason: state.w8NativeVideoNativePresentReason,
         w8NativeVideoWindowSwapchainProbePromise: state.w8NativeVideoWindowSwapchainProbePromise,
         w8NativeVideoWindowSwapchainReady: state.w8NativeVideoWindowSwapchainReady,
@@ -6561,6 +6719,7 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoLatestFrameFormat = "";
         state.w8NativeVideoLatestFrameBytes = 0;
         state.w8NativeVideoLatestFrameId = null;
+        state.w8NativeVideoLatestFrameUpdatedAtMs = 0;
         state.w8NativeVideoNativeSurfaceReady = false;
         state.w8NativeVideoNativeSurfaceMode = "";
         state.w8NativeVideoNativeSurfaceStatus = "";
@@ -6572,6 +6731,7 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativeSurfaceCopyBytes = 0;
         state.w8NativeVideoNativeSurfacePresentedFrames = 0;
         state.w8NativeVideoNativeSurfaceLastFrameId = null;
+        state.w8NativeVideoNativeSurfaceUpdatedAtMs = 0;
         state.w8NativeVideoNativePresentReady = false;
         state.w8NativeVideoNativePresentMode = "";
         state.w8NativeVideoNativePresentStatus = "";
@@ -6580,6 +6740,10 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativePresentHeight = 0;
         state.w8NativeVideoNativePresentFrames = 0;
         state.w8NativeVideoNativePresentLastFrameId = null;
+        state.w8NativeVideoNativePresentUpdatedAtMs = 0;
+        state.w8NativeVideoFreshnessStatus = "";
+        state.w8NativeVideoPresentFrameLag = 0;
+        state.w8NativeVideoPresentAgeMs = 0;
         state.w8NativeVideoNativePresentReason = "";
         state.w8NativeVideoWindowSwapchainProbePromise = null;
         state.w8NativeVideoWindowSwapchainReady = false;
@@ -7164,6 +7328,7 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoLatestFrameFormat = original.w8NativeVideoLatestFrameFormat;
         state.w8NativeVideoLatestFrameBytes = original.w8NativeVideoLatestFrameBytes;
         state.w8NativeVideoLatestFrameId = original.w8NativeVideoLatestFrameId;
+        state.w8NativeVideoLatestFrameUpdatedAtMs = original.w8NativeVideoLatestFrameUpdatedAtMs;
         state.w8NativeVideoNativeSurfaceReady = original.w8NativeVideoNativeSurfaceReady;
         state.w8NativeVideoNativeSurfaceMode = original.w8NativeVideoNativeSurfaceMode;
         state.w8NativeVideoNativeSurfaceStatus = original.w8NativeVideoNativeSurfaceStatus;
@@ -7171,6 +7336,8 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativeSurfaceWidth = original.w8NativeVideoNativeSurfaceWidth;
         state.w8NativeVideoNativeSurfaceHeight = original.w8NativeVideoNativeSurfaceHeight;
         state.w8NativeVideoNativeSurfaceReason = original.w8NativeVideoNativeSurfaceReason;
+        state.w8NativeVideoNativeSurfaceLastFrameId = original.w8NativeVideoNativeSurfaceLastFrameId;
+        state.w8NativeVideoNativeSurfaceUpdatedAtMs = original.w8NativeVideoNativeSurfaceUpdatedAtMs;
         state.w8NativeVideoNativePresentReady = original.w8NativeVideoNativePresentReady;
         state.w8NativeVideoNativePresentMode = original.w8NativeVideoNativePresentMode;
         state.w8NativeVideoNativePresentStatus = original.w8NativeVideoNativePresentStatus;
@@ -7179,6 +7346,10 @@ async function verifyH264KeyFrameDetection(session) {
         state.w8NativeVideoNativePresentHeight = original.w8NativeVideoNativePresentHeight;
         state.w8NativeVideoNativePresentFrames = original.w8NativeVideoNativePresentFrames;
         state.w8NativeVideoNativePresentLastFrameId = original.w8NativeVideoNativePresentLastFrameId;
+        state.w8NativeVideoNativePresentUpdatedAtMs = original.w8NativeVideoNativePresentUpdatedAtMs;
+        state.w8NativeVideoFreshnessStatus = original.w8NativeVideoFreshnessStatus;
+        state.w8NativeVideoPresentFrameLag = original.w8NativeVideoPresentFrameLag;
+        state.w8NativeVideoPresentAgeMs = original.w8NativeVideoPresentAgeMs;
         state.w8NativeVideoNativePresentReason = original.w8NativeVideoNativePresentReason;
         state.w8NativeVideoWindowSwapchainProbePromise = original.w8NativeVideoWindowSwapchainProbePromise;
         state.w8NativeVideoWindowSwapchainReady = original.w8NativeVideoWindowSwapchainReady;

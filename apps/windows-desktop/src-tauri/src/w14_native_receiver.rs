@@ -67,6 +67,8 @@ pub struct W14NativeReceiverSnapshot {
     pub video_frames: u64,
     pub h264_frames: u64,
     pub audio_frames: u64,
+    pub last_video_frame_id: Option<u64>,
+    pub last_video_received_at_ms: u64,
     pub last_video_codec: String,
     pub last_video_encoding: String,
     pub native_video_running: bool,
@@ -78,6 +80,16 @@ pub struct W14NativeReceiverSnapshot {
     pub native_video_decoded_frames: u64,
     pub native_video_present_frames: u64,
     pub native_video_presenting: bool,
+    pub native_video_last_pushed_frame_id: Option<u64>,
+    pub native_video_latest_frame_id: Option<u64>,
+    pub native_video_surface_frame_id: Option<u64>,
+    pub native_video_present_frame_id: Option<u64>,
+    pub native_video_latest_frame_updated_at_ms: u64,
+    pub native_video_surface_updated_at_ms: u64,
+    pub native_video_present_updated_at_ms: u64,
+    pub native_video_freshness_status: String,
+    pub native_video_present_frame_lag: u64,
+    pub native_video_present_age_ms: u64,
     pub native_video_last_status: String,
     pub native_video_last_reason: String,
     pub native_video_last_error: String,
@@ -118,6 +130,8 @@ impl Default for W14NativeReceiverSnapshot {
             video_frames: 0,
             h264_frames: 0,
             audio_frames: 0,
+            last_video_frame_id: None,
+            last_video_received_at_ms: 0,
             last_video_codec: String::new(),
             last_video_encoding: String::new(),
             native_video_running: false,
@@ -129,6 +143,16 @@ impl Default for W14NativeReceiverSnapshot {
             native_video_decoded_frames: 0,
             native_video_present_frames: 0,
             native_video_presenting: false,
+            native_video_last_pushed_frame_id: None,
+            native_video_latest_frame_id: None,
+            native_video_surface_frame_id: None,
+            native_video_present_frame_id: None,
+            native_video_latest_frame_updated_at_ms: 0,
+            native_video_surface_updated_at_ms: 0,
+            native_video_present_updated_at_ms: 0,
+            native_video_freshness_status: String::new(),
+            native_video_present_frame_lag: 0,
+            native_video_present_age_ms: 0,
             native_video_last_status: String::new(),
             native_video_last_reason: String::new(),
             native_video_last_error: String::new(),
@@ -493,6 +517,17 @@ struct W14NativeVideoPushStats {
     decoded_frames: u64,
     present_frames: u64,
     presenting: bool,
+    source_frame_id: u64,
+    source_received_at_ms: u64,
+    latest_frame_id: Option<u64>,
+    surface_frame_id: Option<u64>,
+    present_frame_id: Option<u64>,
+    latest_frame_updated_at_ms: u64,
+    surface_updated_at_ms: u64,
+    present_updated_at_ms: u64,
+    freshness_status: String,
+    present_frame_lag: u64,
+    present_age_ms: u64,
     last_status: String,
     last_reason: String,
 }
@@ -519,20 +554,58 @@ impl W14NativeVideoSink for W14W8NativeVideoBridge {
         &mut self,
         frame: W14DecodedH264Frame,
     ) -> Result<W14NativeVideoPushStats, String> {
-        let result =
-            self.state
-                .push_h264_annexb_bytes(frame.id, frame.received_at_ms, frame.bytes)?;
-        Ok(W14NativeVideoPushStats::from_w8_result(&result))
+        let frame_id = frame.id;
+        let received_at_ms = frame.received_at_ms;
+        let result = self
+            .state
+            .push_h264_annexb_bytes(frame_id, received_at_ms, frame.bytes)?;
+        Ok(W14NativeVideoPushStats::from_w8_result(
+            &result,
+            frame_id,
+            received_at_ms,
+        ))
     }
 }
 
 impl W14NativeVideoPushStats {
-    fn from_w8_result(result: &NativeH264AnnexBPushResult) -> Self {
+    fn from_w8_result(
+        result: &NativeH264AnnexBPushResult,
+        source_frame_id: u64,
+        source_received_at_ms: u64,
+    ) -> Self {
         let decoder = result.decoder_session.as_ref();
         let decoded_frames = decoder.map(|summary| summary.decoded_frames).unwrap_or(0);
         let present_frames = decoder
             .map(|summary| summary.native_present_frames)
             .unwrap_or(0);
+        let latest_frame_id = decoder.and_then(|summary| summary.latest_frame_id);
+        let surface_frame_id = decoder.and_then(|summary| summary.native_surface_last_frame_id);
+        let present_frame_id = decoder.and_then(|summary| summary.native_present_last_frame_id);
+        let latest_frame_updated_at_ms = decoder
+            .map(|summary| summary.latest_frame_updated_at_ms)
+            .unwrap_or(0);
+        let surface_updated_at_ms = decoder
+            .map(|summary| summary.native_surface_updated_at_ms)
+            .unwrap_or(0);
+        let present_updated_at_ms = decoder
+            .map(|summary| summary.native_present_updated_at_ms)
+            .unwrap_or(0);
+        let present_frame_lag = latest_frame_id
+            .map(|latest| latest.saturating_sub(present_frame_id.unwrap_or(0)))
+            .unwrap_or(0);
+        let present_age_ms = if present_updated_at_ms > 0 {
+            now_ms().saturating_sub(present_updated_at_ms)
+        } else {
+            0
+        };
+        let freshness_status = classify_native_video_freshness(
+            result.video.accepted,
+            latest_frame_id,
+            surface_frame_id,
+            present_frame_id,
+            present_updated_at_ms,
+            present_age_ms,
+        );
         let native_present_status = decoder
             .map(|summary| summary.native_present_status.clone())
             .unwrap_or_default();
@@ -560,9 +633,45 @@ impl W14NativeVideoPushStats {
             decoded_frames,
             present_frames,
             presenting,
+            source_frame_id,
+            source_received_at_ms,
+            latest_frame_id,
+            surface_frame_id,
+            present_frame_id,
+            latest_frame_updated_at_ms,
+            surface_updated_at_ms,
+            present_updated_at_ms,
+            freshness_status,
+            present_frame_lag,
+            present_age_ms,
             last_status,
             last_reason,
         }
+    }
+}
+
+fn classify_native_video_freshness(
+    accepted: bool,
+    latest_frame_id: Option<u64>,
+    surface_frame_id: Option<u64>,
+    present_frame_id: Option<u64>,
+    present_updated_at_ms: u64,
+    present_age_ms: u64,
+) -> String {
+    match (latest_frame_id, surface_frame_id, present_frame_id) {
+        (Some(latest), _, Some(present)) if latest == present && present_updated_at_ms > 0 => {
+            if present_age_ms <= 1000 {
+                "present-fresh".to_string()
+            } else {
+                "present-stale".to_string()
+            }
+        }
+        (Some(_), _, Some(_)) => "present-stale".to_string(),
+        (None, _, Some(_)) => "present-only".to_string(),
+        (_, Some(_), None) => "surface-only".to_string(),
+        (Some(_), None, None) => "decode-only".to_string(),
+        _ if accepted => "accepted-only".to_string(),
+        _ => "not-accepted".to_string(),
     }
 }
 
@@ -705,6 +814,9 @@ fn handle_stream_message(
 ) -> Result<(), String> {
     update_snapshot(inner, |snapshot| apply_incoming_message(snapshot, message));
     if let Some(frame) = decode_h264_annexb_video_frame(message)? {
+        update_snapshot(inner, |snapshot| {
+            apply_decoded_video_frame_snapshot(snapshot, &frame)
+        });
         if let Some(sink) = video_sink.as_deref_mut() {
             match sink.push_h264_annexb_frame(frame) {
                 Ok(stats) => {
@@ -846,9 +958,30 @@ fn apply_native_video_push_stats(
     snapshot.native_video_decoded_frames = stats.decoded_frames;
     snapshot.native_video_present_frames = stats.present_frames;
     snapshot.native_video_presenting = stats.presenting;
+    snapshot.native_video_last_pushed_frame_id = Some(stats.source_frame_id);
+    snapshot.last_video_frame_id = Some(stats.source_frame_id);
+    snapshot.last_video_received_at_ms = stats.source_received_at_ms;
+    snapshot.native_video_latest_frame_id = stats.latest_frame_id;
+    snapshot.native_video_surface_frame_id = stats.surface_frame_id;
+    snapshot.native_video_present_frame_id = stats.present_frame_id;
+    snapshot.native_video_latest_frame_updated_at_ms = stats.latest_frame_updated_at_ms;
+    snapshot.native_video_surface_updated_at_ms = stats.surface_updated_at_ms;
+    snapshot.native_video_present_updated_at_ms = stats.present_updated_at_ms;
+    snapshot.native_video_freshness_status = stats.freshness_status;
+    snapshot.native_video_present_frame_lag = stats.present_frame_lag;
+    snapshot.native_video_present_age_ms = stats.present_age_ms;
     snapshot.native_video_last_status = stats.last_status;
     snapshot.native_video_last_reason = stats.last_reason;
     snapshot.native_video_last_error.clear();
+}
+
+fn apply_decoded_video_frame_snapshot(
+    snapshot: &mut W14NativeReceiverSnapshot,
+    frame: &W14DecodedH264Frame,
+) {
+    snapshot.media_owner = "native-receiver".to_string();
+    snapshot.last_video_frame_id = Some(frame.id);
+    snapshot.last_video_received_at_ms = frame.received_at_ms;
 }
 
 fn apply_audio_playback_stats(
@@ -986,6 +1119,17 @@ mod tests {
                 decoded_frames: 3,
                 present_frames: 2,
                 presenting: true,
+                source_frame_id: 7,
+                source_received_at_ms: 7000,
+                latest_frame_id: Some(7),
+                surface_frame_id: Some(7),
+                present_frame_id: Some(7),
+                latest_frame_updated_at_ms: 7100,
+                surface_updated_at_ms: 7110,
+                present_updated_at_ms: 7120,
+                freshness_status: "present-fresh".to_string(),
+                present_frame_lag: 0,
+                present_age_ms: 15,
                 last_status: "latest-frame-swapchain-presented".to_string(),
                 last_reason: "presented through W8 native video".to_string(),
             })
@@ -1008,6 +1152,7 @@ mod tests {
                 "codec": "h264",
                 "encoding": "annexb-base64",
                 "frameId": 7,
+                "receivedAtMs": 7000,
                 "payload": payload,
             }),
         )
@@ -1025,6 +1170,18 @@ mod tests {
         assert_eq!(snapshot.native_video_decoded_frames, 3);
         assert_eq!(snapshot.native_video_present_frames, 2);
         assert!(snapshot.native_video_presenting);
+        assert_eq!(snapshot.last_video_frame_id, Some(7));
+        assert_eq!(snapshot.last_video_received_at_ms, 7000);
+        assert_eq!(snapshot.native_video_last_pushed_frame_id, Some(7));
+        assert_eq!(snapshot.native_video_latest_frame_id, Some(7));
+        assert_eq!(snapshot.native_video_surface_frame_id, Some(7));
+        assert_eq!(snapshot.native_video_present_frame_id, Some(7));
+        assert_eq!(snapshot.native_video_latest_frame_updated_at_ms, 7100);
+        assert_eq!(snapshot.native_video_surface_updated_at_ms, 7110);
+        assert_eq!(snapshot.native_video_present_updated_at_ms, 7120);
+        assert_eq!(snapshot.native_video_freshness_status, "present-fresh");
+        assert_eq!(snapshot.native_video_present_frame_lag, 0);
+        assert_eq!(snapshot.native_video_present_age_ms, 15);
         assert_eq!(
             snapshot.native_video_last_status,
             "latest-frame-swapchain-presented"

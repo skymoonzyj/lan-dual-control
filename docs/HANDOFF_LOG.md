@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W14 first-frame freeze 视频 freshness 证据链
+开发端：Windows Codex
+本轮目标：按通讯板 `W14-FAIL-SHAPE-UPDATE` 和用户要求，主要完成视频侧修改：为“首帧出来后卡住”补 W14 native receiver -> W8 MF/D3D11/HWND 的持续帧序号、时间戳和 freshness 证据；不改 Mac、不改协议/认证、不请求密码、不发 input/inject。
+完成内容：W8 decoder session 新增 `latestFrameUpdatedAtMs/nativeSurfaceUpdatedAtMs/nativePresentUpdatedAtMs`，并把 `latestFrameId` 改成真实外部帧 id；D3D11 latest-frame copy、native present texture staging、NV12->BGRA8 present 和 HWND swapchain Present 都会写入对应更新时间。W14 snapshot 新增 source/latest/surface/present 帧链、更新时间、`nativeVideoFreshnessStatus`、`nativeVideoPresentFrameLag` 和 `nativeVideoPresentAgeMs`。Windows client 消费这些字段，现场视频导出显示 `W14帧链` / `原生帧链`、`W14新鲜度` / `原生新鲜度`；`test-windows-client-browser --boardSummary` 的 `W8NativeVideo=` / `W14NativeVideo=` 输出 `ids/w8Ids/freshness/idLag/presentAgeMs`。
+修改文件：apps/windows-desktop/src-tauri/src/w14_native_receiver.rs；apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --boardSummary` 先失败于 W8/W14 摘要缺 `ids/freshness/idLag/presentAgeMs`；实现后通过并输出 `freshness=present-fresh` 与 `freshness=present-stale` 样例。随后 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml` 均通过；提交前还需再跑完整验证。
+遗留问题：这轮没有也不能替用户做真实观感验证；若下一次复制诊断显示 `latest` 增长但 `present` 不增长或 `presentAgeMs` 很大，继续查 D3D11/HWND/swapchain 可见刷新边界。用户反馈无声仍未修，本轮只把音频列为后续，不混入视频提交。
+下一步建议：白天重新连接真实 Mac 后复制诊断并上板，先读 `W8NativeVideo=` / `W14NativeVideo=` 的 `ids/w8Ids/freshness/idLag/presentAgeMs`，不要回到认证、Mac 首帧、keyframe 或入口启动排查。
+是否改了协议：否。
+是否需要另一端配合：Mac 端只需保持 host 在线并配合下一轮真实诊断；不需要改协议。密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W14/W8 NativeVideoPost 首屏提示
 开发端：Windows Codex
 本轮目标：在不改真实媒体链路的前提下，减少真实 W14 长测后复制诊断上板入口歧义；保留旧 `W8Post=` 兼容，同时给出更准确的 `NativeVideoPost=`。

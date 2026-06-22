@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 #[cfg(windows)]
 use std::{ffi::c_void, mem::ManuallyDrop, ptr, slice, sync::mpsc, thread, time::Duration};
@@ -63,6 +64,13 @@ const DEFAULT_MAX_FRAMES: usize = 96;
 const DEFAULT_NATIVE_SURFACE_WIDTH: u32 = 1920;
 const DEFAULT_NATIVE_SURFACE_HEIGHT: u32 = 1080;
 const W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS: i64 = 16_666_667;
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
+}
 
 fn w8_native_h264_sample_time_100ns(frame_id: u64) -> i64 {
     let zero_based_frame = frame_id.saturating_sub(1);
@@ -220,6 +228,7 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub latest_frame_format: String,
     pub latest_frame_bytes: u64,
     pub latest_frame_id: Option<u64>,
+    pub latest_frame_updated_at_ms: u64,
     pub native_surface_ready: bool,
     pub native_surface_mode: String,
     pub native_surface_status: String,
@@ -231,6 +240,7 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub native_surface_copy_bytes: u64,
     pub native_surface_presented_frames: u64,
     pub native_surface_last_frame_id: Option<u64>,
+    pub native_surface_updated_at_ms: u64,
     pub native_present_ready: bool,
     pub native_present_mode: String,
     pub native_present_status: String,
@@ -239,6 +249,7 @@ pub struct W8NativeVideoDecoderSessionSummary {
     pub native_present_height: u32,
     pub native_present_frames: u64,
     pub native_present_last_frame_id: Option<u64>,
+    pub native_present_updated_at_ms: u64,
     pub native_present_reason: String,
     pub reason: String,
 }
@@ -724,6 +735,7 @@ impl W8NativeVideoDecoderSessionState {
     fn push_h264_access_unit(
         &mut self,
         summary: &NativeH264AnnexBSummary,
+        frame_id: u64,
         #[cfg(windows)] window_present_target: Option<W8NativeWindowPresentTargetConfig>,
     ) -> Option<W8NativeVideoDecoderSessionSummary> {
         if self.summary.is_none() && !summary.has_decoder_config {
@@ -743,19 +755,14 @@ impl W8NativeVideoDecoderSessionState {
             .as_ref()
             .map(|current| current.active)
             .unwrap_or(false);
-        let next_submitted_frame = self
-            .summary
-            .as_ref()
-            .map(|current| current.submitted_frames + 1)
-            .unwrap_or(1);
         let process_result = if should_process {
-            Some(self.process(summary, next_submitted_frame))
+            Some(self.process(summary, frame_id))
         } else {
             None
         };
 
         if let Some(process_result) = process_result {
-            return self.apply_decoder_process_result(process_result, next_submitted_frame);
+            return self.apply_decoder_process_result(process_result, frame_id);
         }
 
         if let Some(current) = self.summary.as_mut() {
@@ -804,6 +811,7 @@ impl W8NativeVideoDecoderSessionState {
             latest_frame_format: "pending".to_string(),
             latest_frame_bytes: 0,
             latest_frame_id: None,
+            latest_frame_updated_at_ms: 0,
             native_surface_ready: false,
             native_surface_mode: "none".to_string(),
             native_surface_status: "starting".to_string(),
@@ -815,6 +823,7 @@ impl W8NativeVideoDecoderSessionState {
             native_surface_copy_bytes: 0,
             native_surface_presented_frames: 0,
             native_surface_last_frame_id: None,
+            native_surface_updated_at_ms: 0,
             native_present_ready: false,
             native_present_mode: "none".to_string(),
             native_present_status: "starting".to_string(),
@@ -823,6 +832,7 @@ impl W8NativeVideoDecoderSessionState {
             native_present_height: 0,
             native_present_frames: 0,
             native_present_last_frame_id: None,
+            native_present_updated_at_ms: 0,
             native_present_reason: "starting native present target preflight".to_string(),
             reason: "starting persistent decoder session".to_string(),
         };
@@ -855,6 +865,7 @@ impl W8NativeVideoDecoderSessionState {
                     started.native_surface_copy_bytes = surface_target.copy_bytes;
                     started.native_surface_presented_frames = surface_target.presented_frames;
                     started.native_surface_last_frame_id = surface_target.last_frame_id;
+                    started.native_surface_updated_at_ms = surface_target.updated_at_ms;
                     started.native_present_ready = surface_target.native_present_ready;
                     started.native_present_mode = surface_target.native_present_mode;
                     started.native_present_status = surface_target.native_present_status;
@@ -864,6 +875,8 @@ impl W8NativeVideoDecoderSessionState {
                     started.native_present_frames = surface_target.native_present_frames;
                     started.native_present_last_frame_id =
                         surface_target.native_present_last_frame_id;
+                    started.native_present_updated_at_ms =
+                        surface_target.native_present_updated_at_ms;
                     started.native_present_reason = surface_target.native_present_reason;
                     started.reason = "ready; dedicated native decoder worker active".to_string();
                     self.worker = Some(worker);
@@ -949,7 +962,7 @@ impl W8NativeVideoDecoderSessionState {
     fn apply_decoder_process_result(
         &mut self,
         process_result: W8NativeVideoDecoderSessionProcess,
-        _frame_id: u64,
+        frame_id: u64,
     ) -> Option<W8NativeVideoDecoderSessionSummary> {
         let current = self.summary.as_mut()?;
         current.submitted_frames += 1;
@@ -997,7 +1010,8 @@ impl W8NativeVideoDecoderSessionState {
 
         if process_result.output_produced {
             current.decoded_frames += 1;
-            current.latest_frame_id = Some(current.submitted_frames);
+            current.latest_frame_id = Some(frame_id);
+            current.latest_frame_updated_at_ms = now_ms();
             current.latest_frame_bytes = process_output_byte_len;
             current.latest_frame_format = current.output_subtype.clone();
             current.frame_handoff_status = "latest-frame-ready".to_string();
@@ -1007,10 +1021,12 @@ impl W8NativeVideoDecoderSessionState {
                 current.native_surface_copy_bytes = surface_copy.bytes_copied;
                 current.native_surface_presented_frames = surface_copy.presented_frames;
                 current.native_surface_last_frame_id = surface_copy.last_frame_id;
+                current.native_surface_updated_at_ms = surface_copy.updated_at_ms;
                 current.native_surface_reason = surface_copy.reason.clone();
                 current.native_present_status = surface_copy.native_present_status.clone();
                 current.native_present_frames = surface_copy.native_present_frames;
                 current.native_present_last_frame_id = surface_copy.native_present_last_frame_id;
+                current.native_present_updated_at_ms = surface_copy.native_present_updated_at_ms;
                 current.native_present_reason = surface_copy.native_present_reason.clone();
                 if surface_copy.status == "latest-frame-presented" {
                     current.last_status = surface_copy.status.clone();
@@ -1074,6 +1090,7 @@ fn apply_surface_target_summary_to_decoder_session(
     current.native_surface_copy_bytes = surface.copy_bytes;
     current.native_surface_presented_frames = surface.presented_frames;
     current.native_surface_last_frame_id = surface.last_frame_id;
+    current.native_surface_updated_at_ms = surface.updated_at_ms;
     current.native_present_ready = surface.native_present_ready;
     current.native_present_mode = surface.native_present_mode.clone();
     current.native_present_status = surface.native_present_status.clone();
@@ -1082,6 +1099,7 @@ fn apply_surface_target_summary_to_decoder_session(
     current.native_present_height = surface.native_present_height;
     current.native_present_frames = surface.native_present_frames;
     current.native_present_last_frame_id = surface.native_present_last_frame_id;
+    current.native_present_updated_at_ms = surface.native_present_updated_at_ms;
     current.native_present_reason = surface.native_present_reason.clone();
 }
 
@@ -1112,9 +1130,11 @@ struct W8NativeSurfaceCopyResult {
     bytes_copied: u64,
     presented_frames: u64,
     last_frame_id: Option<u64>,
+    updated_at_ms: u64,
     native_present_status: String,
     native_present_frames: u64,
     native_present_last_frame_id: Option<u64>,
+    native_present_updated_at_ms: u64,
     native_present_reason: String,
     reason: String,
 }
@@ -1304,6 +1324,7 @@ struct W8NativeSurfaceTargetSummary {
     copy_bytes: u64,
     presented_frames: u64,
     last_frame_id: Option<u64>,
+    updated_at_ms: u64,
     native_present_ready: bool,
     native_present_mode: String,
     native_present_status: String,
@@ -1312,6 +1333,7 @@ struct W8NativeSurfaceTargetSummary {
     native_present_height: u32,
     native_present_frames: u64,
     native_present_last_frame_id: Option<u64>,
+    native_present_updated_at_ms: u64,
     native_present_reason: String,
 }
 
@@ -1860,6 +1882,7 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
             copy_bytes: 0,
             presented_frames: 0,
             last_frame_id: None,
+            updated_at_ms: 0,
             native_present_ready: true,
             native_present_mode: native_present_mode.to_string(),
             native_present_status: "waiting-latest-frame".to_string(),
@@ -1868,6 +1891,7 @@ unsafe fn create_d3d11_latest_frame_texture_target_for_window(
             native_present_height: present_dimensions.1,
             native_present_frames: 0,
             native_present_last_frame_id: None,
+            native_present_updated_at_ms: 0,
             native_present_reason,
         },
     })
@@ -1938,11 +1962,13 @@ unsafe fn copy_decoded_sample_to_native_surface(
     }
 
     let presented_frames = target.summary.presented_frames.saturating_add(1);
+    let copy_updated_at_ms = now_ms();
     target.summary.status = "latest-frame-presented".to_string();
     target.summary.copy_status = "latest-frame-presented".to_string();
     target.summary.copy_bytes = u64::from(expected_bytes);
     target.summary.presented_frames = presented_frames;
     target.summary.last_frame_id = Some(frame_id);
+    target.summary.updated_at_ms = copy_updated_at_ms;
     target.summary.reason = format!(
         "ready; copied {} bytes into D3D11 {} latest-frame texture",
         expected_bytes, target.summary.format
@@ -1953,9 +1979,11 @@ unsafe fn copy_decoded_sample_to_native_surface(
         bytes_copied: target.summary.copy_bytes,
         presented_frames,
         last_frame_id: target.summary.last_frame_id,
+        updated_at_ms: target.summary.updated_at_ms,
         native_present_status: target.summary.native_present_status.clone(),
         native_present_frames: target.summary.native_present_frames,
         native_present_last_frame_id: target.summary.native_present_last_frame_id,
+        native_present_updated_at_ms: target.summary.native_present_updated_at_ms,
         native_present_reason: target.summary.native_present_reason.clone(),
         reason: target.summary.reason.clone(),
     })
@@ -1998,9 +2026,11 @@ unsafe fn stage_latest_frame_for_native_present(
     }
 
     let present_frames = target.summary.native_present_frames.saturating_add(1);
+    let present_updated_at_ms = now_ms();
     target.summary.native_present_status = "latest-frame-present-staged".to_string();
     target.summary.native_present_frames = present_frames;
     target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_updated_at_ms = present_updated_at_ms;
     target.summary.native_present_reason = format!(
         "ready; copied BGRA8 latest-frame texture into BGRA8 present texture target; frames={present_frames}"
     );
@@ -2033,9 +2063,11 @@ unsafe fn convert_nv12_latest_frame_for_native_present(
     }
 
     let present_frames = target.summary.native_present_frames.saturating_add(1);
+    let present_updated_at_ms = now_ms();
     target.summary.native_present_status = "latest-frame-nv12-converted-staged".to_string();
     target.summary.native_present_frames = present_frames;
     target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_updated_at_ms = present_updated_at_ms;
     target.summary.native_present_reason = format!(
         "ready; VideoProcessorBlt converted NV12 latest-frame into BGRA8 present texture target; frames={present_frames}"
     );
@@ -2231,9 +2263,11 @@ unsafe fn present_bgra_texture_to_hwnd_swapchain(
         .map_err(|error| format!("IDXGISwapChain1::Present failed: {error}"))?;
 
     let present_frames = target.summary.native_present_frames.saturating_add(1);
+    let present_updated_at_ms = now_ms();
     target.summary.native_present_status = "latest-frame-swapchain-presented".to_string();
     target.summary.native_present_frames = present_frames;
     target.summary.native_present_last_frame_id = Some(frame_id);
+    target.summary.native_present_updated_at_ms = present_updated_at_ms;
     target.summary.native_present_reason = format!(
         "ready; Present copied BGRA8 present texture into HWND swapchain; frames={present_frames}"
     );
@@ -3310,6 +3344,7 @@ impl W8NativeVideoSession {
         }
         result.decoder_session = self.decoder_session.push_h264_access_unit(
             &result.summary,
+            id,
             #[cfg(windows)]
             self.window_present_target,
         );
@@ -4015,6 +4050,7 @@ mod tests {
             latest_frame_format: output_subtype.to_string(),
             latest_frame_bytes: 0,
             latest_frame_id: None,
+            latest_frame_updated_at_ms: 0,
             native_surface_ready: true,
             native_surface_mode: "d3d11-latest-frame-texture-target".to_string(),
             native_surface_status: "ready".to_string(),
@@ -4026,6 +4062,7 @@ mod tests {
             native_surface_copy_bytes: 0,
             native_surface_presented_frames: 0,
             native_surface_last_frame_id: None,
+            native_surface_updated_at_ms: 0,
             native_present_ready: true,
             native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
             native_present_status: "waiting-latest-frame".to_string(),
@@ -4034,6 +4071,7 @@ mod tests {
             native_present_height: 1080,
             native_present_frames: 0,
             native_present_last_frame_id: None,
+            native_present_updated_at_ms: 0,
             native_present_reason: "ready; original native present target".to_string(),
             reason: "ready; dedicated native decoder worker active".to_string(),
         }
@@ -4057,6 +4095,7 @@ mod tests {
             copy_bytes: 0,
             presented_frames: 0,
             last_frame_id: None,
+            updated_at_ms: 0,
             native_present_ready: true,
             native_present_mode: "d3d11-bgra8-present-texture-target".to_string(),
             native_present_status: "waiting-latest-frame".to_string(),
@@ -4065,6 +4104,7 @@ mod tests {
             native_present_height: height,
             native_present_frames: 0,
             native_present_last_frame_id: None,
+            native_present_updated_at_ms: 0,
             native_present_reason: "ready; native present target rebuilt after stream change"
                 .to_string(),
         }

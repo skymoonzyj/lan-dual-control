@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W14 first-frame freeze 视频 freshness 证据链
+- 用户现场确认问题形态改为 `first-frame-acquired-then-freeze`：不是认证、Mac H.264、首帧/keyframe 或入口启动问题，而是首帧后 W14 native receiver -> W8 MF/D3D11/HWND 持续推进需要定位。本轮 Windows 侧只做视频证据链：W8 decoder session 现在记录 `latestFrameId/latestFrameUpdatedAtMs`、`nativeSurfaceLastFrameId/nativeSurfaceUpdatedAtMs`、`nativePresentLastFrameId/nativePresentUpdatedAtMs`，并且 `latestFrameId` 改用真实传入的源帧 id，而不是内部 submitted 计数。W14 snapshot 同步输出 `lastVideoFrameId/lastVideoReceivedAtMs/nativeVideoLastPushedFrameId/nativeVideoLatestFrameId/nativeVideoSurfaceFrameId/nativeVideoPresentFrameId/nativeVideoFreshnessStatus/nativeVideoPresentFrameLag/nativeVideoPresentAgeMs`。Windows client、现场视频导出和 `W8NativeVideo=` / `W14NativeVideo=` 摘要现在会显示 `ids=latest:<n>/surface:<n>/present:<n>`、`w8Ids=...`、`freshness=present-fresh|present-stale|surface-only|decode-only`、`idLag=<n>`、`presentAgeMs=<ms>`；导出文本也会显示 `W14帧链` / `原生帧链`、`W14新鲜度` / `原生新鲜度`。这一步不改 Mac、不改协议/认证、不请求密码、不发 input/inject，也不宣称真实体感已通过；下一次用户复制诊断后，若 decoded/accepted 继续增长但 `present` id 不动或 `presentAgeMs` 持续变大，优先查 D3D11/HWND/swapchain 可见刷新边界。
+
 ## 2026-06-22 W14/W8 NativeVideoPost 首屏提示
 - Windows 桌面入口和恢复总览现在会在保留旧 `W8Post=` 兼容字段的同时，额外输出 `NativeVideoPost=node scripts/windows/post-w8-desktop-video-board.mjs --stdin --send --boardSummary`。这个命令实际支持 `W8NativeVideo=` 和/或 `W14NativeVideo=`，用于真实 W14 长测后把复制诊断安全上板并生成 `W14NativeGate=`。`start-windows-desktop-control-mac --dryRun --json|--boardSummary` 也会输出 `nativeVideoPostCommand` / `NativeVideoPost=`；`check-windows-resume-status` JSON 的 `commands.windowsDesktopEntry` 同步新增 `nativeVideoPostCommand`。旧字段不删除，避免旧脚本断链；不认证、不请求密码、不发 input/inject。
 
