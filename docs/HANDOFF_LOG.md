@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12/W13 native keyframe gate 修复
+开发端：Windows Codex
+本轮目标：处理 Supervisor 上板的 W12/W13 桌面长测不通过：Windows Web 已识别 H.264 keyframe/SPS/PPS/IDR，但 W8 native queue 仍 `waiting-keyframe` 并全丢。
+完成内容：定位根因为 Windows client 向 `push_w8_native_h264_annexb_frame` 送入原生侧前没有统一 H.264 payload 格式。Web 侧 NAL 统计支持 Annex B 和 length-prefixed/AVC；原生 Tauri 命令只按 Annex B 解析。现在 `apps/windows-client/app.js` 在送 W8 原生命令前检测 payload，Annex B 原样保留，length-prefixed access unit 会重打包成 Annex B base64，再进入 native queue / MF decoder。新增回归验证 Web 识别的 AVC keyframe 不会再以原始 length-prefixed payload 送入 native。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `avcNativeAnnexBBridge=false`，实际 native 请求 `dataBase64=AAAAB...`，期望 Annex B `AAAAAW...`；实现后同命令通过。
+遗留问题：仍需要用户后续用更新后的 Windows 桌面端重跑同一 2-5 分钟真实长测，验证 `W8NativeVideo=` 不再持续 `queueReason=waiting-keyframe`，并观察 `submitted/decoded/presentFrames/progress` 是否增长。不要在未更新客户端前要求用户重复同一长测。
+下一步建议：推送后让 Windows 桌面端更新到新提交再重测；若仍失败，优先看 native summary 是否仍缺 SPS/PPS/IDR 或 decoder/present 具体错误，再决定是否进 Rust 原生解析器或 MF decoder。
+是否改了协议：否。只在 Windows client 本地把 H.264 payload 归一化为原生命令既有 Annex B 输入。
+是否需要另一端配合：不需要 Mac 改协议；后续需要用户用新版 Windows 桌面端重测。不请求或上板密码，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8/W13 native 视频连续进展诊断
 开发端：Windows Codex
 本轮目标：按用户要求主要完成视频侧修改，让桌面长跑诊断不只看单点累计快照，而能判断最近几秒 native present/decoded/Web bypass 是否仍在前进。

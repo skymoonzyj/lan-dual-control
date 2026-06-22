@@ -5714,6 +5714,11 @@ async function verifyH264KeyFrameDetection(session) {
       ]);
       const annexbDelta = new Uint8Array([0, 0, 0, 1, 0x41, 0x9a, 0x22]);
       const avcKey = new Uint8Array([0, 0, 0, 3, 0x65, 0x88, 0x84]);
+      const avcKeyWithConfig = new Uint8Array([
+        0, 0, 0, 4, 0x67, 0x42, 0xe0, 0x1f,
+        0, 0, 0, 4, 0x68, 0xce, 0x06, 0xe2,
+        0, 0, 0, 3, 0x65, 0x88, 0x84,
+      ]);
       const makeBase64 = (bytes) => {
         let binary = "";
         for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -6423,11 +6428,32 @@ async function verifyH264KeyFrameDetection(session) {
           progressExportText.includes("原生提交增长 121") &&
           progressExportText.includes("原生进展下一步 continue-long-run-observation");
 
+        await renderH264VideoFrame({
+          payload: makeBase64(avcKeyWithConfig),
+          encoding: "avc",
+          codecString: "avc1.420029",
+          width: 1920,
+          height: 1080,
+          frameId: 44,
+          keyFrame: false,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const nativePushCallsAfterAvc = nativeCalls.filter(
+          (call) => call.command === "push_w8_native_h264_annexb_frame",
+        );
+        const avcNativeAnnexBBridge =
+          isH264KeyFramePayload(avcKeyWithConfig, "avc") &&
+          nativePushCallsAfterAvc.at(-1)?.payload?.request?.id === 44 &&
+          nativePushCallsAfterAvc.at(-1)?.payload?.request?.dataBase64 === makeBase64(annexbKey) &&
+          nativePushCallsAfterAvc.at(-1)?.payload?.request?.dataBase64 !== makeBase64(avcKeyWithConfig);
+
         return {
           ok:
             isH264KeyFramePayload(annexbKey, "annexb-base64") &&
             !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
             isH264KeyFramePayload(avcKey, "avc") &&
+            avcNativeAnnexBBridge &&
             h264EvidenceRecorded &&
             nativeQueueRecorded &&
             nativeBypassRecorded &&
@@ -6435,6 +6461,10 @@ async function verifyH264KeyFrameDetection(session) {
           annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
           annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
           avcKey: isH264KeyFramePayload(avcKey, "avc"),
+          avcNativeAnnexBBridge,
+          avcNativeLastRequest: nativePushCallsAfterAvc.at(-1)?.payload?.request,
+          expectedAnnexBBase64: makeBase64(annexbKey),
+          originalAvcBase64: makeBase64(avcKeyWithConfig),
           h264EvidenceRecorded,
           nativeQueueRecorded,
           nativeBypassRecorded,

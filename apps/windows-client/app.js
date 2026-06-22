@@ -11956,8 +11956,22 @@ function getAnnexBNalTypes(bytes) {
   return nalTypes;
 }
 
-function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
-  const nalTypes = [];
+function isAnnexBPayload(bytes, encoding = "") {
+  return String(encoding ?? "").toLowerCase().includes("annexb") ||
+    Boolean(findAnnexBStartCode(bytes, 0));
+}
+
+function uint8ArrayToBase64(bytes) {
+  let binary = "";
+  const step = 0x8000;
+  for (let index = 0; index < bytes.length; index += step) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + step));
+  }
+  return window.btoa(binary);
+}
+
+function getLengthPrefixedNalUnits(bytes, lengthSize = 4) {
+  const units = [];
   let index = 0;
   while (index + lengthSize <= bytes.length) {
     let nalLength = 0;
@@ -11966,17 +11980,42 @@ function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
     }
     index += lengthSize;
     if (nalLength <= 0 || index + nalLength > bytes.length) {
-      break;
+      return [];
     }
-    nalTypes.push(bytes[index] & 0x1f);
+    units.push(bytes.subarray(index, index + nalLength));
     index += nalLength;
   }
-  return nalTypes;
+  return units;
+}
+
+function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
+  return getLengthPrefixedNalUnits(bytes, lengthSize).map((nal) => nal[0] & 0x1f);
+}
+
+function toAnnexBBytesFromLengthPrefixed(bytes, lengthSize = 4) {
+  const units = getLengthPrefixedNalUnits(bytes, lengthSize);
+  if (!units.length) return bytes;
+  const totalLength = units.reduce((total, unit) => total + 4 + unit.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const unit of units) {
+    output.set([0, 0, 0, 1], offset);
+    offset += 4;
+    output.set(unit, offset);
+    offset += unit.length;
+  }
+  return output;
+}
+
+function getNativeH264AnnexBPayloadBase64(frame, payloadBytes) {
+  if (isAnnexBPayload(payloadBytes, frame.encoding)) {
+    return frame.payload;
+  }
+  return uint8ArrayToBase64(toAnnexBBytesFromLengthPrefixed(payloadBytes));
 }
 
 function getH264PayloadNalTypes(bytes, encoding) {
-  const normalizedEncoding = String(encoding ?? "").toLowerCase();
-  return normalizedEncoding.includes("annexb")
+  return isAnnexBPayload(bytes, encoding)
     ? getAnnexBNalTypes(bytes)
     : getLengthPrefixedNalTypes(bytes);
 }
@@ -12110,7 +12149,7 @@ async function renderH264VideoFrame(frame) {
     const nalTypes = getH264PayloadNalTypes(payloadBytes, frame.encoding);
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFrameNalTypes(nalTypes);
     recordH264ReceiveEvidence({ frame, nalTypes, isKeyFrame });
-    void pushW8NativeH264AnnexBFrame(frame, frame.payload);
+    void pushW8NativeH264AnnexBFrame(frame, getNativeH264AnnexBPayloadBase64(frame, payloadBytes));
     if (isW8NativeVideoMainSurfacePresenting()) {
       bypassWebH264DecodeForNativeMainSurface(frame);
       return;

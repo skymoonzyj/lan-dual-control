@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12/W13 native keyframe gate 修复
+- Supervisor 上板的真实 Windows 桌面端长测 `2026-06-22T11:14:02` 判定不通过：连接、H.264 和音频链路有效，H.264 实收约 76.2 FPS / 协商 60 Hz、帧 9490、关键帧 200、SPS/PPS/IDR=200/200/200，但 W8 原生侧仍显示 `原生队列 9490`、`原生丢旧帧 9490`、`原生原因 waiting-keyframe`，说明 Web/browser 已识别关键帧而 W8 native queue 的 Annex B 入站没有同口径识别。根因定位到 Windows client 无条件把当前 H.264 payload 交给 `push_w8_native_h264_annexb_frame`，而 Web 侧 NAL 统计支持 length-prefixed/AVC 与 Annex B 两种输入；非 Annex B payload 会让原生 Annex B 解析器看不到 SPS/PPS/IDR 并持续 `waiting-keyframe`。本轮在 `apps/windows-client/app.js` 送 W8 原生命令前统一把 length-prefixed H.264 access unit 重打包成 Annex B，Annex B 原样保留；`test-windows-client-browser --onlyH264LatencyQueueGuard` 新增红绿回归，验证 Web 识别的 AVC keyframe 会以 Annex B base64 进入 native。只改 Windows 视频侧，不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W8/W13 native 视频连续进展诊断
 - Windows 视频侧新增 W8 原生链路 5 秒滚动进展窗口：`apps/windows-client/app.js` 会记录 `presentFrames`、`decodedFrames`、WebCodecs bypass、推入原生队列和提交 MF/D3D11 decoder 的增量与估算 FPS。现场视频导出和页面解码诊断会显示 `原生进展 <status>`、`原生窗口 <ms>`、`原生呈现增长/FPS`、`原生解码增长/FPS`、`Web旁路增长/FPS`、`原生入站增长` 和 `原生提交增长`；`test-windows-client-browser` 的 `W8NativeVideo=` 摘要同步输出 `progress/windowMs/presentDelta/presentFps/decodedDelta/decodedFps/webBypassDelta/webBypassFps/pushedDelta/submittedDelta/progressNext`。这样下一次桌面长跑不只看累计快照，还能判断最近几秒 native present、decoder 或 Web bypass 是否仍在前进。只改 Windows 视频诊断和测试，不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 
