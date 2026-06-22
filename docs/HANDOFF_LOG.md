@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W11 RustDesk 视频路线审计
+开发端：Windows Codex
+本轮目标：按通讯板 W11 开工令输出 `W8-RUSTDESK-AUDIT`，回答“RustDesk 怎么做 / 我们怎么自己实现 / 改哪些文件 / 怎么测”，并明确 AGPL 边界。
+完成内容：新增 `docs/w8-rustdesk-audit.md`，把 RustDesk `video_service` 常驻 capturer/encoder loop、`VideoQoS` delay/RTT/FPS/ratio、硬编解码失败 fallback、`VideoReceived`/present ack、音频 10ms/Opus/device restart 模型映射到本项目 W12/W13/W9。新增 `scripts/windows/test-w8-rustdesk-audit-doc.mjs`，确保文档包含必需栏目、本项目文件、真实验收字段和 AGPL 不复制边界。
+修改文件：docs/w8-rustdesk-audit.md；scripts/windows/test-w8-rustdesk-audit-doc.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `docs/w8-rustdesk-audit.md is missing`；补文档后 `node scripts/windows/test-w8-rustdesk-audit-doc.mjs` 转绿。
+遗留问题：本轮是 W11 审计/路线交付，未实现 W12/W13 代码，也未跑真实 15 分钟 C5 长测。
+下一步建议：Windows 主线进入 W12，先把已有 `w8_native_video.rs` / Tauri 命令 / `app.js` H.264 入站正式收束成常驻 native media session 主路径；随后做 W13 本地实时 QoS 控制器。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 继续 M3 在线与只读证据。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W8 短摘要显示 decoder 差值
 开发端：Windows Codex
 本轮目标：继续按用户要求主做视频侧，把 `W8NativeGate=` 里的 decoder 提交差值提升到一行 `--boardSummary`，方便通讯板首屏判读。
