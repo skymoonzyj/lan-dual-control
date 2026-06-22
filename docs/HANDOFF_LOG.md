@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12/W13 MF ProcessInput 背压实修
+开发端：Windows Codex
+本轮目标：响应 Supervisor `W12/W13-USER-FEEDBACK-NO-VISIBLE-PROGRESS`：`2fed64e` 已证明只是诊断补强，真实体验无可见进展；下一步必须实际修复 MF `ProcessInput` blocked / `ProcessOutput` not attempted。
+完成内容：`w8_native_video.rs` 的持久 MF worker 在 `ProcessInput` 返回 `MF_E_NOTACCEPTING` 时不再直接返回 `process-input-blocked`，而是先 `ProcessOutput` drain decoder，再重试同一个 input sample；如果 drain 已产出 decoded output，会记录 `drained-output-after-input-backpressure`，并在重试输入成功时标记 `accepted-after-input-backpressure-drain`，避免丢当前帧。摘要层新增背压 drain 口径，不把该路径计入 `processInputFailures`。MF H.264 sample 现在给 IDR 设置 `MFSampleExtension_CleanPoint`，首帧设置 `MFSampleExtension_Discontinuity`；worker 初始化后发送 `MFT_MESSAGE_NOTIFY_BEGIN_STREAMING` / `MFT_MESSAGE_NOTIFY_START_OF_STREAM`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯：`cargo test decoder_session_tracks_drain_after_mf_input_backpressure` 先失败，摘要把背压 drain 计成 input failure；实现后通过。随后 `cargo test w8_native_video` 通过，29/29。后续还需要 `cargo check`、H.264 专项、桌面 release build 和真实新构建复验。
+遗留问题：本轮在本机无法无密连接 Mac 真机验证可见画面；下一次复验必须看 `decoded>0` 和 `presenting=yes`，否则按新状态继续查 `process-input-blocked-after-drain` 或 D3D11/HWND Present。
+下一步建议：若新构建仍没有 decoded，优先查 MF input type / sequence header / sample attributes；若 decoded 增长但 present 不增长，转查 native surface / HWND swapchain；不要再回到 payload/keyframe gate。
+是否改了协议：否。只改 Windows 原生视频侧。
+是否需要另一端配合：Mac 只需保持 host 在线；不需要 Mac 改协议。密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12/W13 MF decoder 边界与 sample timing
 开发端：Windows Codex
 本轮目标：按通讯板 W12/W13-LONGRUN-NOT-PASS-3 聚焦视频侧：native parser 已证明收到关键帧/SPS/PPS/IDR，下一步转查 MF decoder `ProcessInput` / `ProcessOutput` 边界。

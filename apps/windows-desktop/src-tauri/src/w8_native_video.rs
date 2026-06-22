@@ -38,15 +38,16 @@ use windows::Win32::Graphics::Dxgi::{
 #[cfg(windows)]
 use windows::Win32::Media::MediaFoundation::{
     IMFMediaType, IMFSample, IMFTransform, MFCreateMediaType, MFCreateMemoryBuffer, MFCreateSample,
-    MFMediaType_Video, MFShutdown, MFStartup, MFTEnumEx, MFVideoFormat_ARGB32, MFVideoFormat_H264,
-    MFVideoFormat_IYUV, MFVideoFormat_NV12, MFVideoFormat_RGB32, MFVideoFormat_YUY2,
-    MFVideoInterlace_Progressive, MFSTARTUP_LITE, MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG,
-    MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_LOCALMFT, MFT_ENUM_FLAG_SORTANDFILTER,
-    MFT_ENUM_FLAG_SYNCMFT, MFT_OUTPUT_DATA_BUFFER, MFT_OUTPUT_STREAM_PROVIDES_SAMPLES,
-    MFT_REGISTER_TYPE_INFO, MF_E_TRANSFORM_NEED_MORE_INPUT, MF_E_TRANSFORM_STREAM_CHANGE,
-    MF_MT_ALL_SAMPLES_INDEPENDENT, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE,
-    MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG_SEQUENCE_HEADER, MF_MT_PIXEL_ASPECT_RATIO,
-    MF_MT_SUBTYPE, MF_VERSION,
+    MFMediaType_Video, MFSampleExtension_CleanPoint, MFSampleExtension_Discontinuity, MFShutdown,
+    MFStartup, MFTEnumEx, MFVideoFormat_ARGB32, MFVideoFormat_H264, MFVideoFormat_IYUV,
+    MFVideoFormat_NV12, MFVideoFormat_RGB32, MFVideoFormat_YUY2, MFVideoInterlace_Progressive,
+    MFSTARTUP_LITE, MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG, MFT_ENUM_FLAG_HARDWARE,
+    MFT_ENUM_FLAG_LOCALMFT, MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT,
+    MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_OUTPUT_DATA_BUFFER,
+    MFT_OUTPUT_STREAM_PROVIDES_SAMPLES, MFT_REGISTER_TYPE_INFO, MF_E_NOTACCEPTING,
+    MF_E_TRANSFORM_NEED_MORE_INPUT, MF_E_TRANSFORM_STREAM_CHANGE, MF_MT_ALL_SAMPLES_INDEPENDENT,
+    MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE,
+    MF_MT_MPEG_SEQUENCE_HEADER, MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE, MF_VERSION,
 };
 #[cfg(windows)]
 use windows::Win32::System::Com::CoTaskMemFree;
@@ -902,7 +903,11 @@ impl W8NativeVideoDecoderSessionState {
         #[cfg(windows)]
         {
             if let Some(worker) = self.worker.as_ref() {
-                return worker.process(summary.access_unit_bytes.clone(), frame_id);
+                return worker.process(
+                    summary.access_unit_bytes.clone(),
+                    summary.is_keyframe,
+                    frame_id,
+                );
             }
             W8NativeVideoDecoderSessionProcess {
                 process_input_attempted: false,
@@ -956,7 +961,7 @@ impl W8NativeVideoDecoderSessionState {
             current.last_process_input_status = process_result.process_input_status.clone();
             if process_result.input_accepted {
                 current.process_input_accepted_frames += 1;
-            } else {
+            } else if process_input_status_counts_as_failure(&process_result.process_input_status) {
                 current.process_input_failures += 1;
             }
         } else if !process_result.process_input_status.trim().is_empty() {
@@ -1024,6 +1029,13 @@ impl W8NativeVideoDecoderSessionState {
         current.ready = current.active && current.accepted_input_frames > 0;
         Some(current.clone())
     }
+}
+
+fn process_input_status_counts_as_failure(status: &str) -> bool {
+    !matches!(
+        status,
+        "drain-after-input-backpressure" | "accepted-after-input-backpressure-drain"
+    )
 }
 
 struct W8NativeVideoDecoderSessionProcess {
@@ -1108,6 +1120,7 @@ struct W8NativeSurfaceCopyResult {
 enum W8NativeVideoDecoderWorkerCommand {
     Decode {
         access_unit: Vec<u8>,
+        is_keyframe: bool,
         frame_id: u64,
         response: mpsc::Sender<W8NativeVideoDecoderSessionProcess>,
     },
@@ -1142,11 +1155,13 @@ impl W8NativeVideoDecoderWorker {
                             match command {
                                 W8NativeVideoDecoderWorkerCommand::Decode {
                                     access_unit,
+                                    is_keyframe,
                                     frame_id,
                                     response,
                                 } => {
-                                    let process =
-                                        unsafe { runtime.process(&access_unit, frame_id) };
+                                    let process = unsafe {
+                                        runtime.process(&access_unit, is_keyframe, frame_id)
+                                    };
                                     let _ = response.send(process);
                                 }
                                 W8NativeVideoDecoderWorkerCommand::Stop => break,
@@ -1180,10 +1195,16 @@ impl W8NativeVideoDecoderWorker {
         }
     }
 
-    fn process(&self, access_unit: Vec<u8>, frame_id: u64) -> W8NativeVideoDecoderSessionProcess {
+    fn process(
+        &self,
+        access_unit: Vec<u8>,
+        is_keyframe: bool,
+        frame_id: u64,
+    ) -> W8NativeVideoDecoderSessionProcess {
         let (response_sender, response_receiver) = mpsc::channel();
         if let Err(error) = self.sender.send(W8NativeVideoDecoderWorkerCommand::Decode {
             access_unit,
+            is_keyframe,
             frame_id,
             response: response_sender,
         }) {
@@ -2332,6 +2353,8 @@ unsafe fn preflight_media_foundation_h264_decode_step_inner(
         access_unit,
         0,
         W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+        true,
+        true,
     ) {
         Ok(sample) => sample,
         Err(error) => {
@@ -2438,6 +2461,12 @@ impl W8MfH264DecoderWorkerRuntime {
                 .map_err(|error| format!("SetInputType H.264 failed: {error}"))?;
             let (output_subtype, surface_target) =
                 configure_decoder_output_and_surface_target(&transform, window_present_target)?;
+            transform
+                .ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)
+                .map_err(|error| format!("ProcessMessage BEGIN_STREAMING failed: {error}"))?;
+            transform
+                .ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)
+                .map_err(|error| format!("ProcessMessage START_OF_STREAM failed: {error}"))?;
             Ok(Self {
                 transform,
                 output_subtype,
@@ -2541,59 +2570,19 @@ impl W8MfH264DecoderWorkerRuntime {
         }
     }
 
-    unsafe fn process(
+    unsafe fn process_output(
         &mut self,
-        access_unit: &[u8],
         frame_id: u64,
+        process_input_status: &str,
+        input_accepted: bool,
     ) -> W8NativeVideoDecoderSessionProcess {
-        let input_sample = match create_mf_sample_from_bytes(
-            access_unit,
-            w8_native_h264_sample_time_100ns(frame_id),
-            W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
-        ) {
-            Ok(sample) => sample,
-            Err(error) => {
-                return W8NativeVideoDecoderSessionProcess {
-                    process_input_attempted: false,
-                    process_input_status: "sample-create-blocked".to_string(),
-                    input_accepted: false,
-                    process_output_attempted: false,
-                    process_output_status: "not-attempted".to_string(),
-                    output_produced: false,
-                    output_byte_len: 0,
-                    status: "sample-create-blocked".to_string(),
-                    reason: format!("blocked: {error}"),
-                    surface_copy: None,
-                    reconfigured_output_subtype: None,
-                    reconfigured_surface: None,
-                };
-            }
-        };
-
-        if let Err(error) = self.transform.ProcessInput(0, &input_sample, 0) {
-            return W8NativeVideoDecoderSessionProcess {
-                process_input_attempted: true,
-                process_input_status: "process-input-blocked".to_string(),
-                input_accepted: false,
-                process_output_attempted: false,
-                process_output_status: "not-attempted".to_string(),
-                output_produced: false,
-                output_byte_len: 0,
-                status: "process-input-blocked".to_string(),
-                reason: format!("blocked: native worker ProcessInput failed: {error}"),
-                surface_copy: None,
-                reconfigured_output_subtype: None,
-                reconfigured_surface: None,
-            };
-        }
-
         let output_sample = match create_decoder_output_sample(&self.transform) {
             Ok(sample) => sample,
             Err(error) => {
                 return W8NativeVideoDecoderSessionProcess {
                     process_input_attempted: true,
-                    process_input_status: "accepted".to_string(),
-                    input_accepted: true,
+                    process_input_status: process_input_status.to_string(),
+                    input_accepted,
                     process_output_attempted: false,
                     process_output_status: "output-sample-blocked".to_string(),
                     output_produced: false,
@@ -2628,8 +2617,8 @@ impl W8MfH264DecoderWorkerRuntime {
                 return match self.reconfigure_output_after_stream_change() {
                     Ok((output_subtype, surface_target)) => W8NativeVideoDecoderSessionProcess {
                         process_input_attempted: true,
-                        process_input_status: "accepted".to_string(),
-                        input_accepted: true,
+                        process_input_status: process_input_status.to_string(),
+                        input_accepted,
                         process_output_attempted: true,
                         process_output_status: "stream-change".to_string(),
                         output_produced: false,
@@ -2644,8 +2633,8 @@ impl W8MfH264DecoderWorkerRuntime {
                     },
                     Err(error) => W8NativeVideoDecoderSessionProcess {
                         process_input_attempted: true,
-                        process_input_status: "accepted".to_string(),
-                        input_accepted: true,
+                        process_input_status: process_input_status.to_string(),
+                        input_accepted,
                         process_output_attempted: true,
                         process_output_status: "stream-change".to_string(),
                         output_produced: false,
@@ -2686,12 +2675,24 @@ impl W8MfH264DecoderWorkerRuntime {
         };
         let mut status = output_status.clone();
         let mut reason = match status.as_str() {
+            "decoded-output" if process_input_status == "drain-after-input-backpressure" => {
+                status = "drained-output-after-input-backpressure".to_string();
+                format!(
+                    "ready; native worker drained {} output after ProcessInput backpressure",
+                    self.output_subtype
+                )
+            }
             "decoded-output" => format!(
                 "ready; native worker produced {} frame",
                 self.output_subtype
             ),
             "need-more-input" => {
-                "ready; native worker accepted input and needs more data".to_string()
+                if process_input_status == "drain-after-input-backpressure" {
+                    "ready; native worker drained after ProcessInput backpressure and needs more input"
+                        .to_string()
+                } else {
+                    "ready; native worker accepted input and needs more data".to_string()
+                }
             }
             "stream-change" => {
                 "ready; native worker accepted input and requested stream change".to_string()
@@ -2734,8 +2735,8 @@ impl W8MfH264DecoderWorkerRuntime {
 
         W8NativeVideoDecoderSessionProcess {
             process_input_attempted: true,
-            process_input_status: "accepted".to_string(),
-            input_accepted: true,
+            process_input_status: process_input_status.to_string(),
+            input_accepted,
             process_output_attempted: true,
             process_output_status: output_status,
             output_produced,
@@ -2746,6 +2747,109 @@ impl W8MfH264DecoderWorkerRuntime {
             reconfigured_output_subtype: None,
             reconfigured_surface: None,
         }
+    }
+
+    unsafe fn process(
+        &mut self,
+        access_unit: &[u8],
+        is_keyframe: bool,
+        frame_id: u64,
+    ) -> W8NativeVideoDecoderSessionProcess {
+        let input_sample = match create_mf_sample_from_bytes(
+            access_unit,
+            w8_native_h264_sample_time_100ns(frame_id),
+            W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+            is_keyframe,
+            frame_id <= 1,
+        ) {
+            Ok(sample) => sample,
+            Err(error) => {
+                return W8NativeVideoDecoderSessionProcess {
+                    process_input_attempted: false,
+                    process_input_status: "sample-create-blocked".to_string(),
+                    input_accepted: false,
+                    process_output_attempted: false,
+                    process_output_status: "not-attempted".to_string(),
+                    output_produced: false,
+                    output_byte_len: 0,
+                    status: "sample-create-blocked".to_string(),
+                    reason: format!("blocked: {error}"),
+                    surface_copy: None,
+                    reconfigured_output_subtype: None,
+                    reconfigured_surface: None,
+                };
+            }
+        };
+
+        if let Err(error) = self.transform.ProcessInput(0, &input_sample, 0) {
+            if error.code() == MF_E_NOTACCEPTING {
+                let mut drained =
+                    self.process_output(frame_id, "drain-after-input-backpressure", false);
+                if drained.process_output_status.contains("blocked")
+                    || drained.process_output_status == "stream-change"
+                {
+                    return drained;
+                }
+                match self.transform.ProcessInput(0, &input_sample, 0) {
+                    Ok(()) => {
+                        if drained.output_produced {
+                            drained.process_input_status =
+                                "accepted-after-input-backpressure-drain".to_string();
+                            drained.input_accepted = true;
+                            drained.reason =
+                                format!("{}; retry ProcessInput accepted", drained.reason);
+                            return drained;
+                        }
+                        return self.process_output(
+                            frame_id,
+                            "accepted-after-input-backpressure-drain",
+                            true,
+                        );
+                    }
+                    Err(retry_error) => {
+                        if drained.output_produced {
+                            drained.reason = format!(
+                                "{}; retry ProcessInput failed: {retry_error}",
+                                drained.reason
+                            );
+                            return drained;
+                        }
+                        return W8NativeVideoDecoderSessionProcess {
+                            process_input_attempted: true,
+                            process_input_status: "process-input-blocked-after-drain".to_string(),
+                            input_accepted: false,
+                            process_output_attempted: drained.process_output_attempted,
+                            process_output_status: drained.process_output_status,
+                            output_produced: false,
+                            output_byte_len: 0,
+                            status: "process-input-blocked-after-drain".to_string(),
+                            reason: format!(
+                                "blocked: native worker drained after ProcessInput backpressure but retry ProcessInput failed: {retry_error}"
+                            ),
+                            surface_copy: None,
+                            reconfigured_output_subtype: None,
+                            reconfigured_surface: None,
+                        };
+                    }
+                }
+            }
+            return W8NativeVideoDecoderSessionProcess {
+                process_input_attempted: true,
+                process_input_status: "process-input-blocked".to_string(),
+                input_accepted: false,
+                process_output_attempted: false,
+                process_output_status: "not-attempted".to_string(),
+                output_produced: false,
+                output_byte_len: 0,
+                status: "process-input-blocked".to_string(),
+                reason: format!("blocked: native worker ProcessInput failed: {error}"),
+                surface_copy: None,
+                reconfigured_output_subtype: None,
+                reconfigured_surface: None,
+            };
+        }
+
+        self.process_output(frame_id, "accepted", true)
     }
 }
 
@@ -2914,6 +3018,8 @@ unsafe fn create_mf_sample_from_bytes(
     bytes: &[u8],
     sample_time: i64,
     sample_duration: i64,
+    clean_point: bool,
+    discontinuity: bool,
 ) -> Result<IMFSample, String> {
     let length = u32::try_from(bytes.len()).map_err(|_| "sample too large".to_string())?;
     let buffer = MFCreateMemoryBuffer(length)
@@ -2950,6 +3056,16 @@ unsafe fn create_mf_sample_from_bytes(
     sample
         .SetSampleDuration(sample_duration)
         .map_err(|error| format!("SetSampleDuration failed: {error}"))?;
+    if clean_point {
+        sample
+            .SetUINT32(&MFSampleExtension_CleanPoint, 1)
+            .map_err(|error| format!("Set CleanPoint failed: {error}"))?;
+    }
+    if discontinuity {
+        sample
+            .SetUINT32(&MFSampleExtension_Discontinuity, 1)
+            .map_err(|error| format!("Set Discontinuity failed: {error}"))?;
+    }
     Ok(sample)
 }
 
@@ -3642,6 +3758,50 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn decoder_session_tracks_drain_after_mf_input_backpressure() {
+        let mut state = W8NativeVideoDecoderSessionState::default();
+        state.summary = Some(test_decoder_session_summary("NV12"));
+        let process = W8NativeVideoDecoderSessionProcess {
+            process_input_attempted: true,
+            process_input_status: "drain-after-input-backpressure".to_string(),
+            input_accepted: false,
+            process_output_attempted: true,
+            process_output_status: "decoded-output".to_string(),
+            output_produced: true,
+            output_byte_len: 128,
+            status: "drained-output-after-input-backpressure".to_string(),
+            reason: "ready; native worker drained output after ProcessInput backpressure"
+                .to_string(),
+            surface_copy: None,
+            reconfigured_output_subtype: None,
+            reconfigured_surface: None,
+        };
+
+        let updated = state
+            .apply_decoder_process_result(process, 42)
+            .expect("decoder session summary should still be active");
+
+        assert_eq!(updated.process_input_attempts, 1);
+        assert_eq!(updated.process_input_accepted_frames, 0);
+        assert_eq!(updated.process_input_failures, 0);
+        assert_eq!(
+            updated.last_process_input_status,
+            "drain-after-input-backpressure"
+        );
+        assert_eq!(updated.process_output_attempts, 1);
+        assert_eq!(updated.process_output_produced_frames, 1);
+        assert_eq!(updated.process_output_failures, 0);
+        assert_eq!(updated.last_process_output_status, "decoded-output");
+        assert_eq!(updated.decoded_frames, 1);
+        assert_eq!(updated.latest_frame_bytes, 128);
+        assert_eq!(
+            updated.last_status,
+            "drained-output-after-input-backpressure"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn detects_d3d11_device_lost_errors_from_dxgi_strings() {
         assert!(is_d3d11_device_lost_error(
             "CopyResource failed: DXGI_ERROR_DEVICE_REMOVED"
@@ -3926,6 +4086,8 @@ mod tests {
                     &frame_bytes,
                     0,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+                    false,
+                    false,
                 )?;
 
                 let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 7)?;
@@ -3980,6 +4142,8 @@ mod tests {
                     &frame_bytes,
                     0,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+                    false,
+                    false,
                 )?;
 
                 copy_decoded_sample_to_native_surface(&mut target, &sample, 12)?;
@@ -3998,6 +4162,8 @@ mod tests {
                     &frame_bytes,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+                    false,
+                    false,
                 )?;
                 copy_decoded_sample_to_native_surface(&mut target, &resized_sample, 13)?;
 
@@ -4035,6 +4201,8 @@ mod tests {
                     &frame_bytes,
                     0,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+                    false,
+                    false,
                 )?;
 
                 let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 9)?;
@@ -4078,6 +4246,8 @@ mod tests {
                     &frame_bytes,
                     0,
                     W8_NATIVE_H264_60FPS_SAMPLE_DURATION_100NS,
+                    false,
+                    false,
                 )?;
 
                 let copy = copy_decoded_sample_to_native_surface(&mut target, &sample, 11)?;

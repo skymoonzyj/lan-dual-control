@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12/W13 MF ProcessInput 背压实修
+- Supervisor 已确认 `2fed64e` 只是增加边界诊断，真实日志仍无可见进展：native parser 已收到 H.264 关键帧/SPS/PPS/IDR，但 `native input=362 accepted=41 decoded=0`，`MF输入 process-input-blocked 41/362`，`MF输出 not-attempted 0/41`。本轮 Windows 视频侧停止要求用户重复长测，改为实际修复 MF decoder 背压路径：`w8_native_video.rs` 在 `ProcessInput` 返回 `MF_E_NOTACCEPTING` 时不再直接判定 `process-input-blocked`，而是先调用 `ProcessOutput` drain decoder，随后重试同一个 input sample；如果 drain 已产出 decoded output，则记录 `drained-output-after-input-backpressure` / `accepted-after-input-backpressure-drain`，避免丢当前帧。H.264 MF sample 现在会把 IDR 标为 `MFSampleExtension_CleanPoint`，首帧标为 `MFSampleExtension_Discontinuity`，worker 启动后向 MFT 发送 `BEGIN_STREAMING` / `START_OF_STREAM`。只改 Windows 原生视频侧；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W12/W13 MF decoder 边界与 sample timing
 - Supervisor 最新 W12/W13 长测结论已经把 payload/keyframe gate 排除：Web 与 native parser 都收到 H.264 关键帧/SPS/PPS/IDR，但主画面仍未 Present。本轮 Windows 视频侧转到 MF decoder `ProcessInput` / `ProcessOutput` 边界：`w8_native_video.rs` 的持续 decoder session 新增 `processInputAttempts/processInputAcceptedFrames/processInputFailures/lastProcessInputStatus` 与 `processOutputAttempts/processOutputProducedFrames/processOutputNeedMoreInputFrames/processOutputStreamChangeFrames/processOutputNoSampleFrames/processOutputFailures/lastProcessOutputStatus`，Windows client 会写入页面解码诊断、现场视频导出和上板摘要。`W8NativeVideo=` 现在输出 `mfIn=<last>:<accepted>/<attempts>`、`mfOut=<last>:<produced>/<attempts>`、`mfNeed`、`mfStream`、`mfNoSample`、`mfInFail`、`mfOutFail`，分类器也能区分 `mf-input-error`、`mf-output-error`、`mf-need-more-input`。同时修正 MF sample timing：Media Foundation sample time/duration 使用 100ns 单位，60Hz duration 从错误的 `16_667` 改为 `16_666_667`，worker 按 frameId 写入单调 sample time。只改 Windows 视频侧和文档；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 
