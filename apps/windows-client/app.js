@@ -180,6 +180,8 @@ const h264MaximumQueueAgeMs = 450;
 const h264LiveBacklogMinimumAgeMs = 90;
 const h264LiveBacklogFrameWindow = 6;
 const h264LiveBacklogKeyFrameRequestCooldownMs = 700;
+const h264W13LocalQosTargetQueueMs = 120;
+const h264W13LocalQosMaxQueueMs = 180;
 const h264FirstSurfaceQueueGraceMs = 2200;
 const h264VisibilityRecoveryMinimumHiddenMs = 250;
 const h264KeyFrameWaitFallbackSkippedDeltas = 90;
@@ -11119,6 +11121,153 @@ function getH264LiveBacklogStatus(now = performance.now()) {
   return { metrics, targetAgeMs, liveBacklog };
 }
 
+function getW13LocalVideoQosDecision({ now = performance.now() } = {}) {
+  const timestamp = Number(now);
+  const metrics = getH264DecoderQueueMetrics(Number.isFinite(timestamp) ? timestamp : performance.now());
+  const queueMs = Math.max(0, Math.round(Number(metrics.oldestAgeMs) || 0));
+  const nativeClassifier = classifyW8NativeVideoSession(state);
+  const nativeClass = String(nativeClassifier.nativeClass || "unknown").trim() || "unknown";
+  const nativeNext = String(nativeClassifier.nativeNext || "unknown").trim() || "unknown";
+  const remoteMediaGapStats = getVideoRemoteMediaGapStats();
+  const remoteMediaMaxMs = Math.max(0, Math.round(Number(remoteMediaGapStats.maxGapMs) || 0));
+  const decoderStatus = String(state.h264DecoderStatus || "").toLowerCase();
+  const decodedFrames = Number(state.h264DecodedFrames) || 0;
+  const canApplyLocalQos =
+    decodedFrames > 0 &&
+    !state.h264FallbackActive &&
+    !state.h264DecoderNeedsKeyFrame &&
+    decoderStatus !== "waiting-keyframe" &&
+    decoderStatus !== "recovering" &&
+    metrics.queueLength > 1;
+  const nativeAllowsLocalQos =
+    nativeNext === "watch-arrival-qos" ||
+    ["present-ok", "device-lost-recovered", "stream-change-recovered", "web-diagnostic"].includes(nativeClass);
+  let status = "observe";
+  let next = "continue-long-run-observation";
+  let dropPolicy = "observe";
+  let keyframeRequest = "no";
+
+  if (["decoder-error", "device-lost-blocked", "stream-change-pending"].includes(nativeClass)) {
+    status = "native-error";
+    next = "inspect-native-video-error";
+    dropPolicy = "hold-qos";
+  } else if (["present-gap", "surface-ready", "decoder-submitted", "present-pending"].includes(nativeClass)) {
+    status = "native-present";
+    next = "inspect-native-present";
+    dropPolicy = "hold-qos";
+  } else if (remoteMediaMaxMs >= 1000) {
+    status = "remote-cadence";
+    next = "ask-mac-readonly-media-cadence";
+    dropPolicy = "hold-local";
+  } else if (canApplyLocalQos && nativeAllowsLocalQos && queueMs >= h264W13LocalQosTargetQueueMs) {
+    status = "local-backlog";
+    next = "local-qos-trim-request-keyframe";
+    dropPolicy = queueMs >= h264W13LocalQosMaxQueueMs ? "drop-old-keep-keyframe" : "request-keyframe";
+    keyframeRequest = "yes";
+  } else if (canApplyLocalQos && queueMs > 0) {
+    status = "stable-candidate";
+    next = "continue-long-run-observation";
+  }
+
+  return {
+    status,
+    nativeClass,
+    nativeNext,
+    arrivalSource: remoteMediaMaxMs >= 1000 ? "remote-media-gap" : queueMs >= h264W13LocalQosTargetQueueMs ? "windows-queue-backlog" : "stable",
+    queueMs,
+    remoteMediaMaxMs,
+    presentGap: Number(nativeClassifier.presentGap) || 0,
+    targetQueueMs: h264W13LocalQosTargetQueueMs,
+    maxQueueMs: h264W13LocalQosMaxQueueMs,
+    dropPolicy,
+    keyframeRequest,
+    fpsAction: "hold",
+    bandwidthAction: "hold",
+    next,
+  };
+}
+
+function requestW13LocalVideoQosKeyFrame(decision, now = performance.now(), frameId = "") {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) return false;
+  if (state.h264DecoderNeedsKeyFrame === true) return false;
+  const lastRequestedAt = Number(state.h264LiveBacklogRecoveryLastRequestedAt) || 0;
+  if (lastRequestedAt > 0 && timestamp - lastRequestedAt < h264LiveBacklogKeyFrameRequestCooldownMs) {
+    return false;
+  }
+  if (!state.connected || typeof state.client?.sendDisplaySettings !== "function") {
+    return false;
+  }
+
+  state.h264LiveBacklogRecoveryLastRequestedAt = timestamp;
+  state.h264LiveBacklogRecoveryCount = (Number(state.h264LiveBacklogRecoveryCount) || 0) + 1;
+  state.videoLastDropReason = "w13-local-qos-keyframe-request";
+  updateH264DecoderDiagnostics({
+    w13LocalVideoQosStatus: decision.status,
+    w13LocalVideoQosDropPolicy: decision.dropPolicy,
+    w13LocalVideoQosKeyframeRequest: decision.keyframeRequest,
+    w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,
+    w13LocalVideoQosMaxQueueMs: decision.maxQueueMs,
+    w13LocalVideoQosNext: decision.next,
+  });
+  state.client.sendDisplaySettings(buildDisplaySettingsMessage());
+  addLog(
+    "W13 本地视频 QoS",
+    `本机队列 ${decision.queueMs} ms 超过 ${decision.targetQueueMs} ms，已请求关键帧 #${frameId || "--"}`,
+  );
+  return true;
+}
+
+function maybeApplyW13LocalVideoQos({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
+  const timestamp = Number(now);
+  const decision = getW13LocalVideoQosDecision({ now: Number.isFinite(timestamp) ? timestamp : performance.now() });
+  if (decision.status !== "local-backlog") {
+    return { ...decision, dropFrame: false, requested: false, droppedFrames: 0 };
+  }
+
+  if (isKeyFrame && decision.queueMs >= decision.maxQueueMs) {
+    const resync = resyncH264DecoderQueueForLatency({
+      isKeyFrame: true,
+      frameId,
+      now: timestamp,
+      reason: "w13-local-qos-keyframe-jump-live",
+    });
+    updateH264DecoderDiagnostics({
+      w13LocalVideoQosStatus: decision.status,
+      w13LocalVideoQosDropPolicy: decision.dropPolicy,
+      w13LocalVideoQosKeyframeRequest: "no",
+      w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,
+      w13LocalVideoQosMaxQueueMs: decision.maxQueueMs,
+      w13LocalVideoQosNext: decision.next,
+    });
+    return { ...decision, ...resync, requested: false, keyframeRequest: "no" };
+  }
+
+  const requested = requestW13LocalVideoQosKeyFrame(decision, timestamp, frameId);
+  if (!requested) {
+    return { ...decision, dropFrame: false, requested: false, droppedFrames: 0 };
+  }
+  if (decision.queueMs < decision.maxQueueMs) {
+    return { ...decision, dropFrame: false, requested: true, droppedFrames: 0 };
+  }
+
+  const resync = resyncH264DecoderQueueForLatency({
+    isKeyFrame: false,
+    frameId,
+    now: timestamp,
+    reason: "w13-local-qos-drop-old-request-keyframe",
+  });
+  updateH264DecoderDiagnostics({
+    w13LocalVideoQosStatus: decision.status,
+    w13LocalVideoQosDropPolicy: decision.dropPolicy,
+    w13LocalVideoQosKeyframeRequest: decision.keyframeRequest,
+    w13LocalVideoQosTargetQueueMs: decision.targetQueueMs,
+    w13LocalVideoQosMaxQueueMs: decision.maxQueueMs,
+    w13LocalVideoQosNext: decision.next,
+  });
+  return { ...decision, ...resync, requested: true };
+}
+
 function maybeRequestH264LiveBacklogKeyFrame({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
   const timestamp = Number(now);
   const { metrics, targetAgeMs, liveBacklog } = getH264LiveBacklogStatus(timestamp);
@@ -11655,6 +11804,19 @@ async function renderH264VideoFrame(frame) {
     if (latencyResync.dropFrame) {
       elements.remoteStatusText.textContent = `H.264 本机队列过高，已丢旧帧并等待关键帧 #${frame.frameId ?? state.videoFrames}`;
       return;
+    }
+    const w13LocalQos = maybeApplyW13LocalVideoQos({
+      isKeyFrame,
+      frameId: frame.frameId ?? state.videoFrames,
+    });
+    if (w13LocalQos.dropFrame) {
+      elements.remoteStatusText.textContent =
+        `W13 本地 QoS：队列 ${w13LocalQos.queueMs} ms，已丢旧帧并请求关键帧`;
+      return;
+    }
+    if (w13LocalQos.requested) {
+      elements.remoteStatusText.textContent =
+        `W13 本地 QoS：队列 ${w13LocalQos.queueMs} ms，已请求关键帧`;
     }
     const liveBacklogRequest = maybeRequestH264LiveBacklogKeyFrame({
       isKeyFrame,

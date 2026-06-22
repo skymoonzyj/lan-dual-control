@@ -30,7 +30,7 @@ W8 主线把 Windows 桌面控制端作为最终体验入口。现有 Tauri WebV
 - Windows 复测摘要现在会把 W8 原生视频状态压成 `W8NativeVideo=`：`test-windows-client-browser --boardSummary` 读取页面 snapshot 里的 `decoderSession/nativePresent/nativeSurface/windowSwapchain` 字段，输出 `ui/mainSurface/canvasRole/status/present/presentFrames/decoded/presenting/presentGap/queueDrops/queueDropScope/queueReason/submitted/decoderGap/accepted/pushed/output/surface/copy/handoff/swapchain/streamChange/deviceLost/errors`；其中 `ui=html-shell` 表示 Tauri 控制面仍是 HTML/CSS/JS，`mainSurface=native-hwnd` 表示视频主面已有 MF/D3D11/HWND 原生 Present 证据，`canvasRole=diagnostic-fallback` 表示 Web canvas 只作诊断/备用；`presenting=yes|no` 和 `presentGap=<decoded-presentFrames>` 用来直接判断真实长跑时原生窗口 Present 是否跟上解码。`submitted=<decoderSessionSubmittedFrames>` 是真正送进持久 MF/D3D11 decoder worker 的帧数，`decoderGap=<pushed-submitted>` 是被低延迟队列预过滤挡在 decoder 前的差值。`queueDropScope=predecode` 表示旧 native queue 预过滤层在丢旧保实时，后续长期 native decoder/present 仍可继续处理同一批 access unit，不应误判为原生呈现全丢。`Run-WinClientRetest-And-Post.cmd` 会把这条 W8 摘要单独发布到 Agent Link Board，和旧 `W2W3Retest=` 分开，避免污染 W2 H.264 对照诊断。
 - W12 起，`W8NativeVideo=` 还会输出 `mediaSession=native-main|native-pending|web-diagnostic` 与 `nativeAck=received|submitted|decoded|surface|presented`。这两个字段把 W11 审计里的 native receiver -> realtime queue -> MF/D3D11 decoder -> D3D surface -> HWND present 阶段压成首屏可读状态：`nativeAck=surface` 表示已到 D3D latest-frame surface 但还没 HWND Present；`nativeAck=presented` 配合 `mediaSession=native-main` 表示主画面已经走原生 HWND。
 - W12 的 Windows client 侧还会用 `classifyW8NativeVideoSession` 输出 `nativeClass` 与 `nativeNext`。`present-ok` / `device-lost-recovered` 表示主路径可继续看 arrival/QoS；`present-gap` / `surface-ready` 指向 native present/HWND；`decoder-submitted` 指向 MF decoder 产帧；`decoder-error`、`device-lost-blocked` 和 `stream-change-pending` 则分别指向 error、device rebuild 或 output reconfigure。现场视频导出会显示中文 `原生分类` / `原生下一步`，通讯板 `W8NativeVideo=` 会显示英文短字段。
-- W13 起，两个上板 helper 会在 `W8ArrivalBacklog=` 可用时追加 `W13LocalQos=`。该摘要消费 `nativeClass/nativeNext`、`presentGap`、`decoderGap`、`arrivalSource`、本机队列、过期丢帧和 live backlog 请求，输出 `status=local-backlog|remote-cadence|native-present|native-error|stable-candidate|observe`、`dropPolicy`、`keyframeRequest`、`targetQueueMs=120`、`maxQueueMs=180` 与 `next`。当前它只是安全诊断和本地 QoS 建议，`fpsAction=hold bandwidthAction=hold`，还没有自动调 Mac 编码参数。
+- W13 起，两个上板 helper 会在 `W8ArrivalBacklog=` 可用时追加 `W13LocalQos=`。该摘要消费 `nativeClass/nativeNext`、`presentGap`、`decoderGap`、`arrivalSource`、本机队列、过期丢帧和 live backlog 请求，输出 `status=local-backlog|remote-cadence|native-present|native-error|stable-candidate|observe`、`dropPolicy`、`keyframeRequest`、`targetQueueMs=120`、`maxQueueMs=180` 与 `next`。Windows client 现在也有同口径的 `getW13LocalVideoQosDecision` / `maybeApplyW13LocalVideoQos`：本机 H.264 队列超过 120ms 时先请求关键帧，超过 180ms 且当前是 delta 时清旧队列并等待下一关键帧，记录 `w13-local-qos-drop-old-request-keyframe`。当前仍不自动调 Mac 编码参数，`fpsAction=hold bandwidthAction=hold`。
 - 原生队列默认目标约 80ms，硬上限约 180ms。
 - 队列积压且已有较新关键帧时，直接丢旧跳到最新关键帧。
 - 队列积压但没有可用新关键帧时，清掉 delta 积压并进入等待关键帧状态，避免继续攒旧帧。
@@ -58,9 +58,10 @@ Tauri 原生命令：
 2. 让窗口最小化 / 后台 / 切 app 时的 native renderer 仍按实时队列丢旧保新，并把真实长跑中的 device-lost / swapchain lost 证据继续收敛到更细的重建策略。
 3. 根据真实长跑结果决定是否需要把 decoder MFT 本体也纳入更高层重建，而不只重建 D3D11 surface / present target。
 4. 把 Mac host H.264 WebSocket 接收路径继续收束到桌面原生侧，逐步降低 WebCodecs/canvas 在最终体验里的权重。
-5. 把 `W13LocalQos dropPolicy/keyframeRequest/targetQueueMs/maxQueueMs` 接入 Windows client 本地实时 QoS 控制，先做本地丢旧和关键帧请求，再考虑协议级 fps/bitrate 回传。
-6. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
-7. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。
+5. 把 W13 本地 QoS 状态接到更清晰的 UI/复制诊断字段，让用户不用只看英文 reason 判断是否触发了 120/180ms 队列门槛。
+6. 根据真实长跑决定是否需要协议级 `desiredFps/desiredBitrateKbps` 回传；在证据不足前继续保持 Mac 编码参数不自动调。
+7. 与 W8 音频子任务对齐时间戳和低延迟策略，但视频侧不等待音频完成。
+8. 保留 Web 控制端作为诊断 / 备用路径，不再把 Web canvas 当最终体验主线。
 
 ## 验收口径
 
@@ -80,6 +81,7 @@ Tauri 原生命令：
 - Rust device-lost 恢复测试必须覆盖：识别 `DXGI_ERROR_DEVICE_REMOVED/RESET/HUNG` / HRESULT 字符串，device-lost 后能重建 D3D11 native surface / present target，并把 `decoderSession` 保持在 `device-lost-rebuilt` 或 `device-lost-rebuild-blocked`，不误报普通 `waiting-decoded-frame`。
 - Windows 复测摘要测试必须覆盖：真实复测输出里的 `W8NativeVideo=` 会被 `post-w2w3-retest-board` 安全提取、单独上板，并且不会把 W8 的 `decoded/present` 字段混进 `W2H264BoardDiagnosis=`；同一摘要必须包含 `ui=html-shell`、`mainSurface=native-hwnd|native-pending`、`canvasRole=diagnostic-fallback`、`presenting=yes|no`、`presentGap=<n>`、`queueDrops=<n>`、`queueDropScope=predecode|queue`、`queueReason=<reason>`、`submitted=<n>` 与 `decoderGap=<n>`，防止长跑时只看到静态 `presentFrames/decoded` 或旧 queue dropped 统计而无法快速判断原生呈现是否脱节。
 - W13 本地 QoS 上板测试必须覆盖：`W8NativeVideo=` 带 `nativeClass/nativeNext/presentGap/decoderGap`，同段 `W2W3Retest=` 生成 `W8ArrivalBacklog=... arrivalSource=windows-arrival-gap` 时，两个 helper 都要输出并上板 `W13LocalQos=status=local-backlog dropPolicy=drop-old-keep-keyframe keyframeRequest=yes next=local-qos-trim-request-keyframe`，且短摘要带 `w13LocalQos=local-backlog`。
+- W13 Windows client 本地 QoS 测试必须覆盖：native 分类为 `watch-arrival-qos`、远端 media cadence 未异常、本机 H.264 队列超过 180ms 时，`maybeApplyW13LocalVideoQos` 会发送一次 H.264/annexb 关键帧请求、清旧队列、丢当前 delta，并让视频专项输出 `w13Qos=yes`。
 - Rust HWND swapchain 预检测试必须覆盖：swapchain 描述使用 BGRA8、2 buffers、single-sample、flip-discard 和 client 尺寸兜底；Windows 控制端诊断/导出必须出现 `原生窗口交换链 ...`。
 - 桌面端 `cargo check` 必须通过。
 - 后续接入真实渲染后，真实最小化 / 切 app / 切回测试要看本机视频队列是否保持在 80-180ms 附近，而不是继续堆到 600ms+。

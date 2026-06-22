@@ -6793,6 +6793,7 @@ async function verifyH264LatencyQueueGuard(session) {
         typeof resyncH264DecoderQueueForLatency !== "function" ||
         typeof maybeResyncH264DecoderQueueForLatency !== "function" ||
         typeof maybeRequestH264LiveBacklogKeyFrame !== "function" ||
+        typeof maybeApplyW13LocalVideoQos !== "function" ||
         typeof getVideoPerformanceExportStatus !== "function" ||
         typeof classifyW8NativeVideoSession !== "function" ||
         typeof ensureH264Decoder !== "function" ||
@@ -6830,6 +6831,9 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalClient = state.client;
       const originalVideoFrames = state.videoFrames;
       const originalVideoFrameTimes = Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [];
+      const originalVideoFrameTimingSamples = Array.isArray(state.videoFrameTimingSamples)
+        ? state.videoFrameTimingSamples.map((sample) => ({ ...sample }))
+        : [];
       const originalRemoteFrameWidth = state.remoteFrameWidth;
       const originalRemoteFrameHeight = state.remoteFrameHeight;
       const originalDroppedStale = state.videoDroppedStaleFrames;
@@ -7124,6 +7128,86 @@ async function verifyH264LatencyQueueGuard(session) {
           !liveBacklogExportText.includes("跳过 delta 1") &&
           !liveBacklogExportText.includes("需要关键帧") &&
           liveBacklogExportText.includes("原因 live-backlog-keyframe-request");
+
+        const w13LocalQosSettings = [];
+        const w13LocalQosNow = performance.now();
+        state.connected = true;
+        state.client = {
+          sendDisplaySettings(message) {
+            w13LocalQosSettings.push(message);
+          },
+        };
+        Object.assign(state, {
+          w8NativeVideoFramesPushed: 192,
+          w8NativeVideoDecoderSessionSubmittedFrames: 190,
+          w8NativeVideoDecoderSessionDecodedFrames: 188,
+          w8NativeVideoNativeSurfacePresentedFrames: 188,
+          w8NativeVideoNativePresentFrames: 188,
+          w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
+          w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+          w8NativeVideoDecoderSessionReason: "stream-change reconfigured after long run",
+          w8NativeVideoNativePresentReason: "device-lost rebuilt; Present copied frames into HWND swapchain",
+          w8NativeVideoErrors: 0,
+          w8NativeVideoLastError: "",
+        });
+        state.h264FallbackActive = false;
+        state.h264Decoder = {
+          state: "configured",
+          decodeQueueSize: 4,
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 4 }, (_, index) => ({
+          frameId: index + 960,
+          queuedAt: w13LocalQosNow - 190 + index,
+          timestampUs: index * 16667,
+          keyFrame: false,
+        }));
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderNeedsKeyFrame = false;
+        state.h264SkippedDeltaFrames = 0;
+        state.h264DecodedFrames = 188;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+        state.h264LiveBacklogRecoveryLastRequestedAt = 0;
+        state.h264LiveBacklogRecoveryCount = 0;
+        state.videoFrameTimingSamples = [
+          { receivedAt: w13LocalQosNow - 34, remoteMediaAtMs: 1000 },
+          { receivedAt: w13LocalQosNow - 17, remoteMediaAtMs: 1017 },
+          { receivedAt: w13LocalQosNow, remoteMediaAtMs: 1034 },
+        ];
+        const closeCallsBeforeW13LocalQos = closeCalls;
+        const w13LocalQosDrop = maybeApplyW13LocalVideoQos({
+          isKeyFrame: false,
+          frameId: 964,
+          now: w13LocalQosNow,
+        });
+        const w13LocalQosExportText = getVideoPerformanceExportStatus(w13LocalQosNow);
+        const w13LocalQosApplied =
+          w13LocalQosDrop?.status === "local-backlog" &&
+          w13LocalQosDrop?.dropPolicy === "drop-old-keep-keyframe" &&
+          w13LocalQosDrop?.keyframeRequest === "yes" &&
+          w13LocalQosDrop?.targetQueueMs === 120 &&
+          w13LocalQosDrop?.maxQueueMs === 180 &&
+          w13LocalQosDrop?.requested === true &&
+          w13LocalQosDrop?.dropFrame === true &&
+          w13LocalQosDrop?.droppedFrames === 5 &&
+          closeCalls === closeCallsBeforeW13LocalQos + 1 &&
+          state.h264Decoder === null &&
+          state.h264DecoderQueue.length === 0 &&
+          state.h264DecoderNeedsKeyFrame === true &&
+          state.h264DecoderStatus === "waiting-keyframe" &&
+          state.h264SkippedDeltaFrames === 1 &&
+          state.h264LiveBacklogRecoveryCount === 1 &&
+          state.videoDroppedStaleFrames === 5 &&
+          state.videoLastDropReason === "w13-local-qos-drop-old-request-keyframe" &&
+          w13LocalQosSettings.length === 1 &&
+          w13LocalQosSettings[0]?.preferredVideoCodec === "h264" &&
+          w13LocalQosSettings[0]?.preferredVideoEncoding === "annexb" &&
+          w13LocalQosExportText.includes("原因 w13-local-qos-drop-old-request-keyframe");
 
         if (typeof maybeRecoverH264VideoFallback !== "function") {
           return { ok: false, reason: "missing H.264 fallback recovery helper" };
@@ -7633,7 +7717,7 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264DecoderStatus === "rendering";
 
         return {
-          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && nativeClassifier && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && w13LocalQosApplied && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && nativeClassifier && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
           deltaOk,
           firstSurfaceQueueGrace,
           firstSurfaceGraceResync,
@@ -7643,6 +7727,9 @@ async function verifyH264LatencyQueueGuard(session) {
           liveBacklogRequest,
           liveBacklogRepeat,
           liveBacklogExportText,
+          w13LocalQosApplied,
+          w13LocalQosDrop,
+          w13LocalQosExportText,
           liveBacklogKeyFrameJumpedLive,
           keyFrameWaitGrace,
           keyFrameWaitH264Recovery,
@@ -7720,6 +7807,7 @@ async function verifyH264LatencyQueueGuard(session) {
         state.client = originalClient;
         state.videoFrames = originalVideoFrames;
         state.videoFrameTimes = originalVideoFrameTimes;
+        state.videoFrameTimingSamples = originalVideoFrameTimingSamples;
         state.remoteFrameWidth = originalRemoteFrameWidth;
         state.remoteFrameHeight = originalRemoteFrameHeight;
         state.videoDroppedStaleFrames = originalDroppedStale;
@@ -9739,7 +9827,7 @@ async function run() {
       summary.checks.push("h264-latency-queue");
       print(
         "OK",
-        `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} postRecoveryGrace=${latencyQueueCheck.postRecoveryQueueGrace ? "yes" : "no"} liveBacklogReq=${latencyQueueCheck.liveBacklogKeyFrameRequest ? "yes" : "no"} liveBacklogJump=${latencyQueueCheck.liveBacklogKeyFrameJumpedLive ? "yes" : "no"} keyFrameProgress=${latencyQueueCheck.recoveryKeyFrameProgress ? "yes" : "no"} receivedKeyFrame=${latencyQueueCheck.receivedKeyFramePreserved ? "yes" : "no"} drawCleared=${latencyQueueCheck.recoveryDrawCleared ? "yes" : "no"} jumpLive=${latencyQueueCheck.recoveryKeyFrameJumpedLive ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
+        `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} postRecoveryGrace=${latencyQueueCheck.postRecoveryQueueGrace ? "yes" : "no"} liveBacklogReq=${latencyQueueCheck.liveBacklogKeyFrameRequest ? "yes" : "no"} w13Qos=${latencyQueueCheck.w13LocalQosApplied ? "yes" : "no"} liveBacklogJump=${latencyQueueCheck.liveBacklogKeyFrameJumpedLive ? "yes" : "no"} keyFrameProgress=${latencyQueueCheck.recoveryKeyFrameProgress ? "yes" : "no"} receivedKeyFrame=${latencyQueueCheck.receivedKeyFramePreserved ? "yes" : "no"} drawCleared=${latencyQueueCheck.recoveryDrawCleared ? "yes" : "no"} jumpLive=${latencyQueueCheck.recoveryKeyFrameJumpedLive ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
       );
       const h264SummaryCheck = verifyW2W3RetestH264Summary();
       if (!h264SummaryCheck.ok) {
@@ -9843,7 +9931,7 @@ async function run() {
     summary.checks.push("h264-latency-queue");
     print(
       "OK",
-      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} postRecoveryGrace=${latencyQueueCheck.postRecoveryQueueGrace ? "yes" : "no"} liveBacklogReq=${latencyQueueCheck.liveBacklogKeyFrameRequest ? "yes" : "no"} liveBacklogJump=${latencyQueueCheck.liveBacklogKeyFrameJumpedLive ? "yes" : "no"} keyFrameProgress=${latencyQueueCheck.recoveryKeyFrameProgress ? "yes" : "no"} receivedKeyFrame=${latencyQueueCheck.receivedKeyFramePreserved ? "yes" : "no"} drawCleared=${latencyQueueCheck.recoveryDrawCleared ? "yes" : "no"} jumpLive=${latencyQueueCheck.recoveryKeyFrameJumpedLive ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
+      `H.264 latency queue guard: dropped=${latencyQueueCheck.queueBackpressureDropped ?? latencyQueueCheck.droppedStale} firstSurfaceGrace=${latencyQueueCheck.firstSurfaceQueueGrace ? "yes" : "no"} keyGrace=${latencyQueueCheck.keyFrameWaitGrace ? "yes" : "no"} h264Recovery=${latencyQueueCheck.keyFrameWaitH264Recovery ? "yes" : "no"} postRecoveryGrace=${latencyQueueCheck.postRecoveryQueueGrace ? "yes" : "no"} liveBacklogReq=${latencyQueueCheck.liveBacklogKeyFrameRequest ? "yes" : "no"} w13Qos=${latencyQueueCheck.w13LocalQosApplied ? "yes" : "no"} liveBacklogJump=${latencyQueueCheck.liveBacklogKeyFrameJumpedLive ? "yes" : "no"} keyFrameProgress=${latencyQueueCheck.recoveryKeyFrameProgress ? "yes" : "no"} receivedKeyFrame=${latencyQueueCheck.receivedKeyFramePreserved ? "yes" : "no"} drawCleared=${latencyQueueCheck.recoveryDrawCleared ? "yes" : "no"} jumpLive=${latencyQueueCheck.recoveryKeyFrameJumpedLive ? "yes" : "no"} recovery=${latencyQueueCheck.fallbackRecovery ? "yes" : "no"} reason=${latencyQueueCheck.lastDropReason}`,
     );
     const h264SummaryCheck = verifyW2W3RetestH264Summary();
     if (!h264SummaryCheck.ok) {

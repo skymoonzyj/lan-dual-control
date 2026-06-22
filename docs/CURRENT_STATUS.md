@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W13 本地视频 QoS 接入 Windows client
+- Windows 视频侧把上一轮 `W13LocalQos=` 建议接进了控制端本地 H.264 队列路径。`apps/windows-client/app.js` 新增 `getW13LocalVideoQosDecision` / `maybeApplyW13LocalVideoQos`，在 native 分类允许继续看 arrival/QoS、远端 media cadence 未明显异常、本机队列超过 `targetQueueMs=120` 时请求关键帧；超过 `maxQueueMs=180` 且当前帧不是关键帧时，按 `dropPolicy=drop-old-keep-keyframe` 清旧队列、丢当前 delta、进入等待关键帧，并记录 `reason=w13-local-qos-drop-old-request-keyframe`。这一步只做 Windows 本地低延迟队列和关键帧请求，不改协议、不调 Mac fps/码率、不改音频或 input/inject。
+
 ## 2026-06-22 W13 本地视频 QoS 建议上板
 - Windows 视频侧从 W12 分类器继续推进到 W13 第一小步：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 现在会在 `W8NativeGate=status=arrival-backlog-next` 且同段输入能生成 `W8ArrivalBacklog=` 时，额外输出 `W13LocalQos=`。该行消费 `nativeClass/nativeNext`、`presentGap`、`decoderGap`、`queueMs`、`staleDrops`、`liveBacklogRequests`、`localMaxMs`、`remoteMediaMaxMs` 和 `arrivalSource`，把现场视频状态压成 `status=local-backlog|remote-cadence|native-present|native-error|stable-candidate|observe`、`dropPolicy`、`keyframeRequest` 和 `next`。当前仅作为本地 QoS 建议和上板诊断，不直接改协议、不调 Mac 编码参数、不触发真实 input/inject；`local-backlog` 会建议 `drop-old-keep-keyframe` 与 `local-qos-trim-request-keyframe`，`remote-media-gap` 会建议先让 Mac 补只读 media cadence。
 

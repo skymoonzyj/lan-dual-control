@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 本地视频 QoS 接入 Windows client
+开发端：Windows Codex
+本轮目标：继续按通讯板视频侧主线，把上一轮 `W13LocalQos=` 的本地建议接入 Windows client H.264 队列控制。
+完成内容：`apps/windows-client/app.js` 新增 `getW13LocalVideoQosDecision` / `maybeApplyW13LocalVideoQos`。当 native 分类允许继续看 arrival/QoS、远端 media cadence 未明显异常、本机 H.264 队列超过 `targetQueueMs=120` 时请求关键帧；超过 `maxQueueMs=180` 且当前是 delta 时，执行 `dropPolicy=drop-old-keep-keyframe`，清旧队列、丢当前 delta、等待下一关键帧，并记录 `w13-local-qos-drop-old-request-keyframe`。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于缺 `maybeApplyW13LocalVideoQos`；实现后 `node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 通过并输出 `w13Qos=yes`。
+遗留问题：本轮只接入 Windows 本地 H.264 队列 QoS；没有自动调 Mac fps/bitrate，没有做协议回传，也没有跑真实 C5 15 分钟长测。
+下一步建议：把 W13 状态接入更清晰的 UI/复制诊断字段；若真实长跑仍显示本地队列高，再评估协议级 `desiredFps/desiredBitrateKbps` 回传。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测仍需要 Mac host 在线并由用户本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 本地视频 QoS 建议上板
 开发端：Windows Codex
 本轮目标：按用户要求主要做视频侧，把 W12 `nativeClass/nativeNext` 和 W8 arrival/backlog 信号收敛成下一次真实长跑可直接读的 W13 本地 QoS 建议。
