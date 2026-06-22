@@ -1611,6 +1611,33 @@ function updateVideoFrameAgeMetric(ageDiagnostics) {
   elements.metricLatency.textContent = text;
 }
 
+function formatW13LocalVideoQosDiagnostics(diagnostics = state.hostDiagnostics) {
+  const status = String(diagnostics?.w13LocalVideoQosStatus || "").trim();
+  const dropPolicy = String(diagnostics?.w13LocalVideoQosDropPolicy || "").trim();
+  const keyframeRequest = String(diagnostics?.w13LocalVideoQosKeyframeRequest || "").trim();
+  const targetQueueMs = Number(diagnostics?.w13LocalVideoQosTargetQueueMs);
+  const maxQueueMs = Number(diagnostics?.w13LocalVideoQosMaxQueueMs);
+  const next = String(diagnostics?.w13LocalVideoQosNext || "").trim();
+  const hasQueueThreshold =
+    (Number.isFinite(targetQueueMs) && targetQueueMs > 0) ||
+    (Number.isFinite(maxQueueMs) && maxQueueMs > 0);
+  if (!status && !dropPolicy && !keyframeRequest && !hasQueueThreshold && !next) {
+    return [];
+  }
+
+  const parts = [];
+  if (status) parts.push(`W13本地QoS ${status}`);
+  if (dropPolicy) parts.push(`W13策略 ${dropPolicy}`);
+  if (keyframeRequest) parts.push(`W13关键帧请求 ${keyframeRequest}`);
+  if (hasQueueThreshold) {
+    const targetText = Number.isFinite(targetQueueMs) && targetQueueMs > 0 ? Math.round(targetQueueMs) : "--";
+    const maxText = Number.isFinite(maxQueueMs) && maxQueueMs > 0 ? Math.round(maxQueueMs) : "--";
+    parts.push(`W13门槛 ${targetText}/${maxText} ms`);
+  }
+  if (next) parts.push(`W13下一步 ${next}`);
+  return parts;
+}
+
 function formatVideoDecoderDiagnostics(diagnostics) {
   const status = diagnostics.videoDecoderStatus
     ? labelFromMap(diagnostics.videoDecoderStatus, videoDecoderStatusLabels)
@@ -1908,6 +1935,7 @@ function formatVideoDecoderDiagnostics(diagnostics) {
     parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
     parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
   }
+  parts.push(...formatW13LocalVideoQosDiagnostics(diagnostics));
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }
@@ -6429,6 +6457,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
   const nativeClassifier = classifyW8NativeVideoSession(state);
+  const w13LocalQosParts = formatW13LocalVideoQosDiagnostics(state.hostDiagnostics);
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const remoteMediaGapStats = getVideoRemoteMediaGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
@@ -6591,6 +6620,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
     parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
     parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
   }
+  parts.push(...w13LocalQosParts);
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
   }

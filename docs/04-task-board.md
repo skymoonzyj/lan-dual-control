@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W13 本地视频 QoS 进入页面诊断/复制导出：`apps/windows-client/app.js` 新增 `formatW13LocalVideoQosDiagnostics`，把 `W13本地QoS/status`、`W13策略/dropPolicy`、`W13关键帧请求`、`W13门槛 120/180 ms` 和 `W13下一步` 同步到页面解码诊断和现场视频复制导出。`test-windows-client-browser --onlyH264LatencyQueueGuard` 覆盖导出文本和解码诊断文本均包含 W13 字段。只改 Windows 视频诊断，不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。
 - [x] W13 本地视频 QoS 接入 Windows client：`apps/windows-client/app.js` 新增 `getW13LocalVideoQosDecision` / `maybeApplyW13LocalVideoQos`。当 native 分类允许继续看 arrival/QoS、远端 media cadence 未异常、本机 H.264 队列超过 `targetQueueMs=120` 时请求关键帧；超过 `maxQueueMs=180` 时按 `drop-old-keep-keyframe` 清旧队列并等待下一关键帧。`test-windows-client-browser --onlyH264LatencyQueueGuard` 覆盖 `w13Qos=yes`。不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。
 - [x] W13 本地视频 QoS 建议上板：`post-w8-desktop-video-board` 和 `post-w2w3-retest-board` 在 `W8ArrivalBacklog=` 可用时追加 `W13LocalQos=`，消费 `nativeClass/nativeNext/presentGap/decoderGap/arrivalSource/queueMs/staleDrops/liveBacklogRequests`，输出 `status/dropPolicy/keyframeRequest/targetQueueMs/maxQueueMs/next`。当前只做 Windows 视频侧诊断和本地 QoS 建议，不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。
 - [x] W12 native 视频故障分类器：Windows client 新增 `classifyW8NativeVideoSession`，现场视频导出显示 `原生分类` / `原生下一步`，`W8NativeVideo=` 同步输出 `nativeClass=<class>` / `nativeNext=<next>`。覆盖 `present-ok`、`present-gap`、`surface-ready`、`decoder-submitted`、`device-lost-recovered`、`device-lost-blocked`、`stream-change-pending`、`decoder-error` 等判读，视频专项验证 `device-lost-recovered -> watch-arrival-qos`。不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。

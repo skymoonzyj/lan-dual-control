@@ -7186,6 +7186,7 @@ async function verifyH264LatencyQueueGuard(session) {
           now: w13LocalQosNow,
         });
         const w13LocalQosExportText = getVideoPerformanceExportStatus(w13LocalQosNow);
+        const w13LocalQosDecoderText = formatVideoDecoderDiagnostics(state.hostDiagnostics);
         const w13LocalQosApplied =
           w13LocalQosDrop?.status === "local-backlog" &&
           w13LocalQosDrop?.dropPolicy === "drop-old-keep-keyframe" &&
@@ -7207,7 +7208,17 @@ async function verifyH264LatencyQueueGuard(session) {
           w13LocalQosSettings.length === 1 &&
           w13LocalQosSettings[0]?.preferredVideoCodec === "h264" &&
           w13LocalQosSettings[0]?.preferredVideoEncoding === "annexb" &&
-          w13LocalQosExportText.includes("原因 w13-local-qos-drop-old-request-keyframe");
+          w13LocalQosExportText.includes("原因 w13-local-qos-drop-old-request-keyframe") &&
+          w13LocalQosExportText.includes("W13本地QoS local-backlog") &&
+          w13LocalQosExportText.includes("W13策略 drop-old-keep-keyframe") &&
+          w13LocalQosExportText.includes("W13关键帧请求 yes") &&
+          w13LocalQosExportText.includes("W13门槛 120/180 ms") &&
+          w13LocalQosExportText.includes("W13下一步 local-qos-trim-request-keyframe") &&
+          w13LocalQosDecoderText.includes("W13本地QoS local-backlog") &&
+          w13LocalQosDecoderText.includes("W13策略 drop-old-keep-keyframe") &&
+          w13LocalQosDecoderText.includes("W13关键帧请求 yes") &&
+          w13LocalQosDecoderText.includes("W13门槛 120/180 ms") &&
+          w13LocalQosDecoderText.includes("W13下一步 local-qos-trim-request-keyframe");
 
         if (typeof maybeRecoverH264VideoFallback !== "function") {
           return { ok: false, reason: "missing H.264 fallback recovery helper" };
@@ -7730,6 +7741,7 @@ async function verifyH264LatencyQueueGuard(session) {
           w13LocalQosApplied,
           w13LocalQosDrop,
           w13LocalQosExportText,
+          w13LocalQosDecoderText,
           liveBacklogKeyFrameJumpedLive,
           keyFrameWaitGrace,
           keyFrameWaitH264Recovery,

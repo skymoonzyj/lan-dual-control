@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 本地视频 QoS 进入页面诊断/复制导出
+开发端：Windows Codex
+本轮目标：继续按通讯板视频侧主线，把 W13 本地 QoS 触发状态做成现场可读诊断字段。
+完成内容：`apps/windows-client/app.js` 新增 `formatW13LocalVideoQosDiagnostics`，页面解码诊断和 `getVideoPerformanceExportStatus` 现场视频导出都会显示 `W13本地QoS`、`W13策略`、`W13关键帧请求`、`W13门槛 120/180 ms` 和 `W13下一步`。真实长跑复制诊断时可直接看 120ms 请求关键帧、180ms 清旧队列是否触发，不再只看英文 reason。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：先让 `test-windows-client-browser --onlyH264LatencyQueueGuard` 因缺 W13 中文字段失败；实现后同专项通过，且覆盖导出文本和解码诊断文本均包含 W13 字段。
+遗留问题：未跑真实 15 分钟 Mac 长跑；本轮也没有协议级 fps/bitrate 回传。
+下一步建议：真实 Mac 长跑时复制 Windows 控制端诊断，先看 `W13本地QoS local-backlog` / `W13策略 drop-old-keep-keyframe` 是否出现；若仍卡顿再判断是 Mac cadence、native present 还是协议级码率/刷新率控制。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；真实复测仍需要 Mac host 在线并由用户本机输入临时密码。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 本地视频 QoS 接入 Windows client
 开发端：Windows Codex
 本轮目标：继续按通讯板视频侧主线，把上一轮 `W13LocalQos=` 的本地建议接入 Windows client H.264 队列控制。

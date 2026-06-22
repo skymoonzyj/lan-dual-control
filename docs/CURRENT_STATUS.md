@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W13 本地视频 QoS 进入页面诊断/复制导出
+- Windows 视频侧继续把 `W13LocalVideoQos` 从内部 reason 提升为现场可读字段。`apps/windows-client/app.js` 新增 `formatW13LocalVideoQosDiagnostics`，`hostDiagnosticsText` 的解码诊断和 `getVideoPerformanceExportStatus` 的现场视频导出都会显示 `W13本地QoS <status>`、`W13策略 <dropPolicy>`、`W13关键帧请求 <yes|no>`、`W13门槛 120/180 ms` 和 `W13下一步 <next>`。这样真实长跑复制诊断时，可以直接判断 120ms 请求关键帧和 180ms 清旧队列是否触发，不再只靠英文 `reason=w13-local-qos-*`。本轮不改协议、不调 Mac fps/码率、不改音频或 input/inject。
+
 ## 2026-06-22 W13 本地视频 QoS 接入 Windows client
 - Windows 视频侧把上一轮 `W13LocalQos=` 建议接进了控制端本地 H.264 队列路径。`apps/windows-client/app.js` 新增 `getW13LocalVideoQosDecision` / `maybeApplyW13LocalVideoQos`，在 native 分类允许继续看 arrival/QoS、远端 media cadence 未明显异常、本机队列超过 `targetQueueMs=120` 时请求关键帧；超过 `maxQueueMs=180` 且当前帧不是关键帧时，按 `dropPolicy=drop-old-keep-keyframe` 清旧队列、丢当前 delta、进入等待关键帧，并记录 `reason=w13-local-qos-drop-old-request-keyframe`。这一步只做 Windows 本地低延迟队列和关键帧请求，不改协议、不调 Mac fps/码率、不改音频或 input/inject。
 
