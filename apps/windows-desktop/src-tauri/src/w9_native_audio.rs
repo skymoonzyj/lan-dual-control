@@ -45,6 +45,10 @@ pub struct W9NativeAudioSnapshot {
     pub played_frames: u64,
     pub trimmed_frames: u64,
     pub underruns: u64,
+    pub source_frame_ms: u64,
+    pub source_frame_max_ms: u64,
+    pub source_frame_cadence_ms: u64,
+    pub source_cadence_frames: u64,
     pub last_reason: String,
 }
 
@@ -167,6 +171,10 @@ fn snapshot_from_stats(
         played_frames: stats.played_frames,
         trimmed_frames: stats.trimmed_frames,
         underruns: stats.underruns,
+        source_frame_ms: stats.source_frame_ms,
+        source_frame_max_ms: stats.source_frame_max_ms,
+        source_frame_cadence_ms: stats.source_frame_cadence_ms,
+        source_cadence_frames: stats.source_cadence_frames,
         last_reason: stats.last_reason.to_string(),
     }
 }
@@ -207,6 +215,10 @@ mod tests {
                 trimmed_frames: 0,
                 underruns: 1,
                 queue_ms: 10,
+                source_frame_ms: 20,
+                source_frame_max_ms: 40,
+                source_frame_cadence_ms: 20,
+                source_cadence_frames: 2,
                 last_reason: "native-playback-drain",
             },
         );
@@ -218,6 +230,10 @@ mod tests {
         assert_eq!(snapshot.played_frames, 480);
         assert_eq!(snapshot.queue_ms, 10);
         assert_eq!(snapshot.underruns, 1);
+        assert_eq!(snapshot.source_frame_ms, 20);
+        assert_eq!(snapshot.source_frame_max_ms, 40);
+        assert_eq!(snapshot.source_frame_cadence_ms, 20);
+        assert_eq!(snapshot.source_cadence_frames, 2);
         assert_eq!(snapshot.last_reason, "native-playback-drain");
     }
 }

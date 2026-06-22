@@ -6520,6 +6520,26 @@ function getAudioPerformanceExportStatus(now = performance.now()) {
   const remoteMediaGapStats = getAudioRemoteMediaGapStats();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)}/${Math.round(audioResyncBufferSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
+  if (state.nativeAudioRunning && canUseDesktopNativeAudioPlayback()) {
+    const nativeSourceFrameMs = Number(state.nativeAudioSnapshot?.sourceFrameMs);
+    const nativeSourceFrameMaxMs = Number(state.nativeAudioSnapshot?.sourceFrameMaxMs);
+    const nativeSourceFrameCadenceMs = Number(state.nativeAudioSnapshot?.sourceFrameCadenceMs);
+    const nativeSourceCadenceFrames = Number(state.nativeAudioSnapshot?.sourceCadenceFrames);
+    if (Number.isFinite(nativeSourceFrameMs) && nativeSourceFrameMs > 0) {
+      parts.push(`原生源帧 ${Math.round(nativeSourceFrameMs)} ms`);
+    }
+    if (Number.isFinite(nativeSourceFrameMaxMs) && nativeSourceFrameMaxMs > 0) {
+      parts.push(`原生最大源帧 ${Math.round(nativeSourceFrameMaxMs)} ms`);
+    }
+    if (
+      Number.isFinite(nativeSourceCadenceFrames) &&
+      nativeSourceCadenceFrames > 0 &&
+      Number.isFinite(nativeSourceFrameCadenceMs) &&
+      nativeSourceFrameCadenceMs > 0
+    ) {
+      parts.push(`原生节奏 ${Math.round(nativeSourceCadenceFrames)}x${Math.round(nativeSourceFrameCadenceMs)} ms`);
+    }
+  }
   const firstFrameWaitStatus = getAudioFirstFrameWaitStatus(now);
   if (firstFrameWaitStatus.waiting) {
     parts.push("等待音频首帧");

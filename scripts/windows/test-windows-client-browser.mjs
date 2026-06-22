@@ -8765,6 +8765,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   playedFrames: 0,
                   trimmedFrames: 0,
                   underruns: 0,
+                  sourceFrameMs: 0,
+                  sourceFrameMaxMs: 0,
+                  sourceFrameCadenceMs: 20,
+                  sourceCadenceFrames: 0,
                   lastReason: "native-playback-started",
                 };
               }
@@ -8778,6 +8782,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   playedFrames: 0,
                   trimmedFrames: 0,
                   underruns: 0,
+                  sourceFrameMs: 20,
+                  sourceFrameMaxMs: 100,
+                  sourceFrameCadenceMs: 20,
+                  sourceCadenceFrames: 5,
                   lastReason: "native-playback-queued",
                 };
               }
@@ -8791,6 +8799,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
                   playedFrames: 0,
                   trimmedFrames: 0,
                   underruns: 0,
+                  sourceFrameMs: 0,
+                  sourceFrameMaxMs: 0,
+                  sourceFrameCadenceMs: 20,
+                  sourceCadenceFrames: 0,
                   lastReason: "native-playback-stopped",
                 };
               }
@@ -8810,6 +8822,7 @@ async function verifyAudioPlaybackBufferGuards(session) {
         starts.length = 0;
         stops.length = 0;
         const nativeAudioPlayed = await playPcmAudioFrame(nativeFrame);
+        const nativeAudioExportText = getAudioPerformanceExportStatus();
         const nativeAudioBridgeUsed =
           nativeAudioPlayed &&
           starts.length === 0 &&
@@ -8824,7 +8837,10 @@ async function verifyAudioPlaybackBufferGuards(session) {
           nativeAudioInvokes[1].args.request.dataBase64.length > 0 &&
           state.audioPlayedFrames === 1 &&
           state.audioLastBufferReason === "native-playback-queued" &&
-          getAudioQueueMs() === 24;
+          getAudioQueueMs() === 24 &&
+          nativeAudioExportText.includes("原生源帧 20 ms") &&
+          nativeAudioExportText.includes("原生最大源帧 100 ms") &&
+          nativeAudioExportText.includes("原生节奏 5x20 ms");
 
         window.__TAURI__ = original.tauri;
 

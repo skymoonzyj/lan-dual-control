@@ -12,6 +12,8 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+const DEFAULT_SOURCE_CADENCE_MS: u64 = 20;
+
 #[derive(Debug, Clone, Copy)]
 pub struct NativeAudioPlaybackConfig {
     pub sample_rate: u32,
@@ -38,6 +40,10 @@ pub struct NativeAudioPlaybackStats {
     pub trimmed_frames: u64,
     pub underruns: u64,
     pub queue_ms: u64,
+    pub source_frame_ms: u64,
+    pub source_frame_max_ms: u64,
+    pub source_frame_cadence_ms: u64,
+    pub source_cadence_frames: u64,
     pub last_reason: &'static str,
 }
 
@@ -264,6 +270,7 @@ impl NativeAudioPlaybackBuffer {
         let pushed_frames = (samples.len() / channels) as u64;
         self.samples.extend(samples.iter().copied());
         self.stats.pushed_frames += pushed_frames;
+        self.record_source_cadence(pushed_frames);
 
         let trimmed_frames = self.trim_to_live_window();
         let reason = if trimmed_frames > 0 {
@@ -336,6 +343,21 @@ impl NativeAudioPlaybackBuffer {
         self.stats.trimmed_frames += trim_frames;
         trim_frames
     }
+
+    fn record_source_cadence(&mut self, pushed_frames: u64) {
+        let source_frame_ms = frames_to_ms(pushed_frames, self.config.sample_rate);
+        let cadence_ms = DEFAULT_SOURCE_CADENCE_MS;
+        let cadence_frames = if source_frame_ms == 0 {
+            0
+        } else {
+            source_frame_ms.saturating_add(cadence_ms - 1) / cadence_ms
+        };
+
+        self.stats.source_frame_ms = source_frame_ms;
+        self.stats.source_frame_max_ms = self.stats.source_frame_max_ms.max(source_frame_ms);
+        self.stats.source_frame_cadence_ms = cadence_ms;
+        self.stats.source_cadence_frames = cadence_frames.max(1);
+    }
 }
 
 fn frames_to_ms(frames: u64, sample_rate: u32) -> u64 {
@@ -390,6 +412,20 @@ mod tests {
         assert!(buffer.stats().trimmed_frames > 0);
         assert!(buffer.queue_ms() <= 100);
         assert_eq!(buffer.stats().last_reason, "native-playback-trim-live");
+    }
+
+    #[test]
+    fn large_pcm_push_reports_source_cadence_for_background_jitter_diagnosis() {
+        let mut buffer = NativeAudioPlaybackBuffer::new(NativeAudioPlaybackConfig::default());
+
+        let result = buffer.push_interleaved_f32(&stereo_frame(0.4, 4_800));
+        let stats = buffer.stats();
+
+        assert!(result.accepted);
+        assert_eq!(stats.source_frame_ms, 100);
+        assert_eq!(stats.source_frame_max_ms, 100);
+        assert_eq!(stats.source_frame_cadence_ms, 20);
+        assert_eq!(stats.source_cadence_frames, 5);
     }
 
     #[test]
