@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12 native 视频故障分类器
+- Windows 视频侧继续推进 W12，不再只停留在阶段摘要。`apps/windows-client/app.js` 新增 `classifyW8NativeVideoSession`，把 W8 原生链路的 present、surface、decoder、stream-change、device-lost、errors 合并成 `nativeClass` 和 `nativeNext`。复制/导出现场视频会显示 `原生分类 <class>` 和 `原生下一步 <next>`；`W8NativeVideo=` 同步输出 `nativeClass=<class> nativeNext=<next>`。当前覆盖的分类包括 `present-ok`、`present-gap`、`surface-ready`、`decoder-submitted`、`device-lost-recovered`、`device-lost-blocked`、`stream-change-pending`、`decoder-error` 等；视频专项已验证 device-lost 已恢复且 HWND Present 成立时输出 `nativeClass=device-lost-recovered nativeNext=watch-arrival-qos`。本轮只改 Windows 视频侧诊断/分类和测试，不改 Mac、协议、认证/密码、音频实现或 input/inject。
+
 ## 2026-06-22 W12 native media session 状态进入视频摘要
 - Windows 主线按 W11 审计继续推进 W12 第一小步：`W8NativeVideo=` 现在会输出 `mediaSession=native-main|native-pending|web-diagnostic` 和 `nativeAck=received|submitted|decoded|surface|presented`。这不是继续加普通说明文字，而是把已有 W8 原生链路的关键阶段压成可验收状态：收到 H.264、提交 MF/D3D11 decoder、decoded、写入 D3D latest-frame surface、最终 HWND Present。`--onlyH264LatencyQueueGuard` 专项已验证 `mediaSession=native-main nativeAck=presented mainSurface=native-hwnd presenting=yes presentGap=0 ... errors=0` 可以稳定出现在 W8 摘要中。本轮只改 Windows 视频侧诊断摘要和测试，不改 Mac、协议、认证/密码、音频实现或 input/inject。
 

@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12 native 视频故障分类器
+开发端：Windows Codex
+本轮目标：继续按通讯板 W12 方向推进视频侧，把上一轮 `mediaSession/nativeAck` 阶段摘要升级为可直接判读下一步的 native failure classifier。
+完成内容：`apps/windows-client/app.js` 新增 `classifyW8NativeVideoSession`，根据 W8 原生链路的 framesPushed、submitted、decoded、surfaceFrames、presentFrames、stream-change、device-lost、errors 和 lastError 输出 `nativeClass` / `nativeNext`。现场视频导出会显示 `原生分类 <class>` 与 `原生下一步 <next>`；`W8NativeVideo=` 也会输出 `nativeClass=<class> nativeNext=<next>`，方便通讯板第一屏直接判断继续查 arrival/QoS、native present、MF decoder、device rebuild 还是具体 error。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯先失败于缺 `classifyW8NativeVideoSession`；实现后 `node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 转绿，并输出 `W8NativeVideo=... nativeClass=device-lost-recovered nativeNext=watch-arrival-qos ... errors=0`。
+遗留问题：本轮是 Windows client 侧分类器和上板/导出诊断，不是 Rust decoder 重建逻辑的新实现；未跑 C5 15 分钟真实体验。
+下一步建议：继续 W12，把 `nativeClass/nativeNext` 接到桌面端 UI 状态和更细的 rebuild 门禁；再进入 W13，让 QoS 控制器消费 `nativeClass/presentGap/decoderGap/arrivalSource`。
+是否改了协议：否。
+是否需要另一端配合：不需要 Mac 改代码；Mac 继续保持 host 在线与只读证据。无密码/auth/input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12 native media session 状态进入视频摘要
 开发端：Windows Codex
 本轮目标：按用户要求主要推进视频侧，从 W11 RustDesk 审计进入 W12 第一小步，把 Windows 桌面端原生视频主路径的阶段状态压进 `W8NativeVideo=` 摘要。

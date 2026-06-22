@@ -391,6 +391,98 @@ function booleanText(value) {
   return value ? "true" : "false";
 }
 
+function classifyW8NativeVideoSummary(value = {}) {
+  const framesPushed = positiveInteger(value.w8NativeVideoFramesPushed);
+  const decoded = positiveInteger(value.w8NativeVideoDecoderSessionDecodedFrames);
+  const submitted = positiveInteger(value.w8NativeVideoDecoderSessionSubmittedFrames);
+  const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
+  const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
+  const errors = positiveInteger(value.w8NativeVideoErrors);
+  const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
+  const present = String(value.w8NativeVideoNativePresentStatus || "").trim();
+  const surface = String(value.w8NativeVideoNativeSurfaceStatus || "").trim();
+  const copy = String(value.w8NativeVideoNativeSurfaceCopyStatus || "").trim();
+  const handoff = String(value.w8NativeVideoFrameHandoffStatus || "").trim();
+  const swapchain = String(value.w8NativeVideoWindowSwapchainStatus || "").trim();
+  const lastError = String(value.w8NativeVideoLastError || "").trim();
+  const reasonText = [
+    status,
+    present,
+    surface,
+    copy,
+    handoff,
+    swapchain,
+    value.w8NativeVideoDecoderSessionReason,
+    value.w8NativeVideoNativePresentReason,
+    value.w8NativeVideoNativeSurfaceReason,
+    value.w8NativeVideoWindowSwapchainReason,
+    lastError,
+  ].join(" ").toLowerCase();
+  const presentLower = present.toLowerCase();
+  const surfaceLower = `${surface} ${copy}`.toLowerCase();
+  const isWindowPresenting = presentFrames > 0 && presentLower.includes("presented");
+  const hasNativePipeline =
+    decoded > 0 ||
+    submitted > 0 ||
+    presentFrames > 0 ||
+    surfaceFrames > 0 ||
+    Boolean(status || present || surface || copy || handoff || swapchain);
+  const nativeAck =
+    isWindowPresenting ? "presented" :
+      surfaceFrames > 0 || surfaceLower.includes("presented") ? "surface" :
+        decoded > 0 ? "decoded" :
+          submitted > 0 ? "submitted" :
+            framesPushed > 0 ? "received" : "none";
+  const mediaSession = isWindowPresenting ? "native-main" : hasNativePipeline ? "native-pending" : "web-diagnostic";
+  const presentGap = Math.max(0, decoded - presentFrames);
+  const presentGapLimit = Math.max(2, Math.ceil(Math.max(1, decoded) * 0.02));
+  const hasDeviceLost = reasonText.includes("device-lost");
+  const hasStreamChange = reasonText.includes("stream-change");
+  const hasStreamReconfigured = reasonText.includes("reconfigured");
+  let nativeClass = "web-diagnostic";
+  let nativeNext = "collect-native-video-evidence";
+
+  if (reasonText.includes("device-lost-rebuild-blocked")) {
+    nativeClass = "device-lost-blocked";
+    nativeNext = "recreate-native-session";
+  } else if (errors > 0 || lastError) {
+    nativeClass = "decoder-error";
+    nativeNext = "inspect-native-error";
+  } else if (hasDeviceLost && isWindowPresenting) {
+    nativeClass = "device-lost-recovered";
+    nativeNext = "watch-arrival-qos";
+  } else if (hasDeviceLost) {
+    nativeClass = "device-lost-rebuild-pending";
+    nativeNext = "inspect-device-rebuild";
+  } else if (hasStreamChange && !hasStreamReconfigured) {
+    nativeClass = "stream-change-pending";
+    nativeNext = "reconfigure-output";
+  } else if (hasStreamChange && isWindowPresenting) {
+    nativeClass = "stream-change-recovered";
+    nativeNext = "watch-arrival-qos";
+  } else if (isWindowPresenting && presentGap <= presentGapLimit) {
+    nativeClass = "present-ok";
+    nativeNext = "watch-arrival-qos";
+  } else if (decoded > 0 && presentGap > presentGapLimit) {
+    nativeClass = "present-gap";
+    nativeNext = "inspect-native-present";
+  } else if (decoded > 0) {
+    nativeClass = "present-pending";
+    nativeNext = "inspect-native-present";
+  } else if (nativeAck === "surface") {
+    nativeClass = "surface-ready";
+    nativeNext = "inspect-hwnd-present";
+  } else if (submitted > 0) {
+    nativeClass = "decoder-submitted";
+    nativeNext = "wait-decoded-or-classify-decoder";
+  } else if (framesPushed > 0) {
+    nativeClass = "receiving";
+    nativeNext = "wait-decoder-submit";
+  }
+
+  return { mediaSession, nativeAck, nativeClass, nativeNext };
+}
+
 function h264CanvasVisible(value = {}) {
   if (hasOwnValue(value, "canvas")) {
     return String(value.canvas).toLowerCase() === "true" || value.canvas === true;
@@ -505,14 +597,7 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     presentFrames > 0 ||
     surfaceFrames > 0 ||
     Boolean(status || present || surface || copy || handoff || swapchain);
-  const surfaceLower = `${surface} ${copy}`.toLowerCase();
-  const nativeAck =
-    isWindowPresenting ? "presented" :
-      surfaceFrames > 0 || surfaceLower.includes("presented") ? "surface" :
-        decoded > 0 ? "decoded" :
-          submitted > 0 ? "submitted" :
-            framesPushed > 0 ? "received" : "none";
-  const mediaSession = isWindowPresenting ? "native-main" : hasNativePipeline ? "native-pending" : "web-diagnostic";
+  const { mediaSession, nativeAck, nativeClass, nativeNext } = classifyW8NativeVideoSummary(value);
 
   if (!hasEvidence) return "";
 
@@ -522,6 +607,8 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   parts.push(`mainSurface=${isWindowPresenting ? "native-hwnd" : hasNativePipeline ? "native-pending" : "unknown"}`);
   parts.push("canvasRole=diagnostic-fallback");
   if (nativeAck !== "none") parts.push(`nativeAck=${nativeAck}`);
+  parts.push(`nativeClass=${nativeClass}`);
+  parts.push(`nativeNext=${nativeNext}`);
   if (webDecode) parts.push(`webDecode=${compactBoardSummaryToken(webDecode, 60)}`);
   if (webBypass > 0) {
     parts.push(`webBypass=${webBypass}`);
@@ -765,6 +852,8 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("mainSurface=native-hwnd") &&
     text.includes("canvasRole=diagnostic-fallback") &&
     text.includes("nativeAck=presented") &&
+    text.includes("nativeClass=device-lost-recovered") &&
+    text.includes("nativeNext=watch-arrival-qos") &&
     text.includes("webDecode=native-main-surface") &&
     text.includes("webBypass=24") &&
     text.includes("webBypassReason=native-main-surface-presenting") &&
@@ -776,6 +865,8 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoBehind.includes("mainSurface=native-pending") &&
     w8NativeVideoBehind.includes("mediaSession=native-pending") &&
     w8NativeVideoBehind.includes("nativeAck=surface") &&
+    w8NativeVideoBehind.includes("nativeClass=present-gap") &&
+    w8NativeVideoBehind.includes("nativeNext=inspect-native-present") &&
     w8NativeVideoBehind.includes("presenting=no") &&
     w8NativeVideoBehind.includes("presentGap=12") &&
     w8NativeVideoBehind.includes("submitted=14") &&
@@ -6703,6 +6794,7 @@ async function verifyH264LatencyQueueGuard(session) {
         typeof maybeResyncH264DecoderQueueForLatency !== "function" ||
         typeof maybeRequestH264LiveBacklogKeyFrame !== "function" ||
         typeof getVideoPerformanceExportStatus !== "function" ||
+        typeof classifyW8NativeVideoSession !== "function" ||
         typeof ensureH264Decoder !== "function" ||
         typeof recoverH264AfterVisibilityReturn !== "function" ||
         typeof state !== "object"
@@ -6755,6 +6847,22 @@ async function verifyH264LatencyQueueGuard(session) {
       const originalLiveBacklogRecoveryLastRequestedAt = state.h264LiveBacklogRecoveryLastRequestedAt;
       const originalLiveBacklogRecoveryCount = state.h264LiveBacklogRecoveryCount;
       const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
+      const w8StateKeys = [
+        "w8NativeVideoFramesPushed",
+        "w8NativeVideoDecoderSessionSubmittedFrames",
+        "w8NativeVideoDecoderSessionDecodedFrames",
+        "w8NativeVideoNativeSurfacePresentedFrames",
+        "w8NativeVideoNativePresentFrames",
+        "w8NativeVideoDecoderSessionStatus",
+        "w8NativeVideoNativePresentStatus",
+        "w8NativeVideoDecoderSessionReason",
+        "w8NativeVideoNativePresentReason",
+        "w8NativeVideoErrors",
+        "w8NativeVideoLastError",
+      ];
+      const originalW8NativeVideoState = Object.fromEntries(
+        w8StateKeys.map((key) => [key, state[key]]),
+      );
       const originalVideoDecoderDescriptor = Object.getOwnPropertyDescriptor(window, "VideoDecoder");
 
       let closeCalls = 0;
@@ -7457,6 +7565,54 @@ async function verifyH264LatencyQueueGuard(session) {
           state.videoLastDropReason === "keyframe-wait-h264-recovery" &&
           receivedKeyFrameExportText.includes("恢复关键帧已收到");
 
+        const nativeClassifierPresent = classifyW8NativeVideoSession({
+          w8NativeVideoFramesPushed: 192,
+          w8NativeVideoDecoderSessionSubmittedFrames: 190,
+          w8NativeVideoDecoderSessionDecodedFrames: 188,
+          w8NativeVideoNativeSurfacePresentedFrames: 188,
+          w8NativeVideoNativePresentFrames: 188,
+          w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
+          w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+          w8NativeVideoDecoderSessionReason: "stream-change reconfigured after long run",
+          w8NativeVideoNativePresentReason: "device-lost rebuilt; Present copied frames into HWND swapchain",
+          w8NativeVideoErrors: 0,
+        });
+        const nativeClassifierBlocked = classifyW8NativeVideoSession({
+          w8NativeVideoFramesPushed: 12,
+          w8NativeVideoDecoderSessionSubmittedFrames: 12,
+          w8NativeVideoDecoderSessionDecodedFrames: 0,
+          w8NativeVideoNativePresentFrames: 0,
+          w8NativeVideoDecoderSessionStatus: "blocked",
+          w8NativeVideoLastError: "MF_E_INVALIDMEDIATYPE",
+          w8NativeVideoErrors: 2,
+        });
+        state.hostDiagnostics = {
+          ...originalHostDiagnostics,
+        };
+        Object.assign(state, {
+          w8NativeVideoFramesPushed: 192,
+          w8NativeVideoDecoderSessionSubmittedFrames: 190,
+          w8NativeVideoDecoderSessionDecodedFrames: 188,
+          w8NativeVideoNativeSurfacePresentedFrames: 188,
+          w8NativeVideoNativePresentFrames: 188,
+          w8NativeVideoDecoderSessionStatus: "device-lost-rebuilt",
+          w8NativeVideoNativePresentStatus: "latest-frame-nv12-converted-presented",
+          w8NativeVideoDecoderSessionReason: "stream-change reconfigured after long run",
+          w8NativeVideoNativePresentReason: "device-lost rebuilt; Present copied frames into HWND swapchain",
+          w8NativeVideoErrors: 0,
+          w8NativeVideoLastError: "",
+        });
+        const nativeClassifierExportText = getVideoPerformanceExportStatus();
+        const nativeClassifier =
+          nativeClassifierPresent.mediaSession === "native-main" &&
+          nativeClassifierPresent.nativeAck === "presented" &&
+          nativeClassifierPresent.nativeClass === "device-lost-recovered" &&
+          nativeClassifierPresent.nativeNext === "watch-arrival-qos" &&
+          nativeClassifierBlocked.nativeClass === "decoder-error" &&
+          nativeClassifierBlocked.nativeNext === "inspect-native-error" &&
+          nativeClassifierExportText.includes("原生分类 device-lost-recovered") &&
+          nativeClassifierExportText.includes("原生下一步 watch-arrival-qos");
+
         state.h264DecoderQueue = [
           { frameId: 806, queuedAt: performance.now() - 20, timestampUs: 0, keyFrame: true },
         ];
@@ -7477,7 +7633,7 @@ async function verifyH264LatencyQueueGuard(session) {
           state.h264DecoderStatus === "rendering";
 
         return {
-          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
+          ok: deltaOk && firstSurfaceQueueGrace && keyPreserved && webCodecsQueueBackpressure && liveBacklogKeyFrameRequest && liveBacklogKeyFrameJumpedLive && keyFrameWaitGrace && keyFrameWaitH264Recovery && timedKeyFrameRecovery && postRecoveryQueueGrace && recoveryKeyFrameProgress && recoveryKeyFrameJumpedLive && receivedKeyFramePreserved && nativeClassifier && recoveryDrawCleared && fallbackRecovery && secondFallbackRecovery && fallbackRecoveryPause && visibilityRecovery,
           deltaOk,
           firstSurfaceQueueGrace,
           firstSurfaceGraceResync,
@@ -7497,6 +7653,10 @@ async function verifyH264LatencyQueueGuard(session) {
           recoveryKeyFrameProgress,
           recoveryKeyFrameJumpedLive,
           receivedKeyFramePreserved,
+          nativeClassifier,
+          nativeClassifierPresent,
+          nativeClassifierBlocked,
+          nativeClassifierExportText,
           receivedKeyFrameExportText,
           receivedKeyFrameResync,
           recoveryDrawCleared,
@@ -7577,6 +7737,7 @@ async function verifyH264LatencyQueueGuard(session) {
         state.h264LiveBacklogRecoveryLastRequestedAt = originalLiveBacklogRecoveryLastRequestedAt;
         state.h264LiveBacklogRecoveryCount = originalLiveBacklogRecoveryCount;
         state.hostDiagnostics = originalHostDiagnostics;
+        Object.assign(state, originalW8NativeVideoState);
         if (originalVideoDecoderDescriptor) {
           Object.defineProperty(window, "VideoDecoder", originalVideoDecoderDescriptor);
         }

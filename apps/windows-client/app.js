@@ -1469,6 +1469,114 @@ function getVideoRemoteMediaGapStats() {
 function getAudioRemoteMediaGapStats() {
   return getFrameTimingGapStats(state.audioFrameTimingSamples, "remoteMediaAtMs", audioStutterGapThresholdMs);
 }
+
+function classifyW8NativeVideoSession(diagnostics = state) {
+  const source = diagnostics || {};
+  const nested = source.hostDiagnostics || {};
+  const numberValue = (key) => {
+    const value = source[key] ?? nested[key];
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : 0;
+  };
+  const stringValue = (key) => String(source[key] ?? nested[key] ?? "").trim();
+  const framesPushed = numberValue("w8NativeVideoFramesPushed");
+  const submitted = numberValue("w8NativeVideoDecoderSessionSubmittedFrames");
+  const decoded = numberValue("w8NativeVideoDecoderSessionDecodedFrames");
+  const surfaceFrames = numberValue("w8NativeVideoNativeSurfacePresentedFrames");
+  const presentFrames = numberValue("w8NativeVideoNativePresentFrames");
+  const errors = numberValue("w8NativeVideoErrors");
+  const status = stringValue("w8NativeVideoDecoderSessionStatus");
+  const present = stringValue("w8NativeVideoNativePresentStatus");
+  const surface = stringValue("w8NativeVideoNativeSurfaceStatus");
+  const copy = stringValue("w8NativeVideoNativeSurfaceCopyStatus");
+  const handoff = stringValue("w8NativeVideoFrameHandoffStatus");
+  const swapchain = stringValue("w8NativeVideoWindowSwapchainStatus");
+  const lastError = stringValue("w8NativeVideoLastError");
+  const reasonText = [
+    status,
+    present,
+    surface,
+    copy,
+    handoff,
+    swapchain,
+    stringValue("w8NativeVideoDecoderSessionReason"),
+    stringValue("w8NativeVideoNativePresentReason"),
+    stringValue("w8NativeVideoNativeSurfaceReason"),
+    stringValue("w8NativeVideoWindowSwapchainReason"),
+    lastError,
+  ].join(" ").toLowerCase();
+  const presentLower = present.toLowerCase();
+  const surfaceLower = `${surface} ${copy}`.toLowerCase();
+  const isWindowPresenting = presentFrames > 0 && presentLower.includes("presented");
+  const hasNativePipeline =
+    decoded > 0 ||
+    submitted > 0 ||
+    presentFrames > 0 ||
+    surfaceFrames > 0 ||
+    Boolean(status || present || surface || copy || handoff || swapchain);
+  const nativeAck =
+    isWindowPresenting ? "presented" :
+      surfaceFrames > 0 || surfaceLower.includes("presented") ? "surface" :
+        decoded > 0 ? "decoded" :
+          submitted > 0 ? "submitted" :
+            framesPushed > 0 ? "received" : "none";
+  const mediaSession = isWindowPresenting ? "native-main" : hasNativePipeline ? "native-pending" : "web-diagnostic";
+  const presentGap = Math.max(0, decoded - presentFrames);
+  const presentGapLimit = Math.max(2, Math.ceil(Math.max(1, decoded) * 0.02));
+  const hasDeviceLost = reasonText.includes("device-lost");
+  const hasStreamChange = reasonText.includes("stream-change");
+  const hasStreamReconfigured = reasonText.includes("reconfigured");
+  let nativeClass = "web-diagnostic";
+  let nativeNext = "collect-native-video-evidence";
+
+  if (reasonText.includes("device-lost-rebuild-blocked")) {
+    nativeClass = "device-lost-blocked";
+    nativeNext = "recreate-native-session";
+  } else if (errors > 0 || lastError) {
+    nativeClass = "decoder-error";
+    nativeNext = "inspect-native-error";
+  } else if (hasDeviceLost && isWindowPresenting) {
+    nativeClass = "device-lost-recovered";
+    nativeNext = "watch-arrival-qos";
+  } else if (hasDeviceLost) {
+    nativeClass = "device-lost-rebuild-pending";
+    nativeNext = "inspect-device-rebuild";
+  } else if (hasStreamChange && !hasStreamReconfigured) {
+    nativeClass = "stream-change-pending";
+    nativeNext = "reconfigure-output";
+  } else if (hasStreamChange && isWindowPresenting) {
+    nativeClass = "stream-change-recovered";
+    nativeNext = "watch-arrival-qos";
+  } else if (isWindowPresenting && presentGap <= presentGapLimit) {
+    nativeClass = "present-ok";
+    nativeNext = "watch-arrival-qos";
+  } else if (decoded > 0 && presentGap > presentGapLimit) {
+    nativeClass = "present-gap";
+    nativeNext = "inspect-native-present";
+  } else if (decoded > 0) {
+    nativeClass = "present-pending";
+    nativeNext = "inspect-native-present";
+  } else if (nativeAck === "surface") {
+    nativeClass = "surface-ready";
+    nativeNext = "inspect-hwnd-present";
+  } else if (submitted > 0) {
+    nativeClass = "decoder-submitted";
+    nativeNext = "wait-decoded-or-classify-decoder";
+  } else if (framesPushed > 0) {
+    nativeClass = "receiving";
+    nativeNext = "wait-decoder-submit";
+  }
+
+  return {
+    mediaSession,
+    nativeAck,
+    nativeClass,
+    nativeNext,
+    presentGap,
+    presentGapLimit,
+  };
+}
+
 function getVideoFrameAgeDiagnostics(frame) {
   const rawTimestamp = frame?.timestamp ?? frame?.captureTimestamp ?? frame?.capturedAt ?? "";
   const parsedTimestampMs = parseFrameTimestampMs(rawTimestamp);
@@ -1603,6 +1711,15 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const nativeLastReason = String(diagnostics.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(diagnostics.w8NativeVideoErrors);
   const nativeLastError = String(diagnostics.w8NativeVideoLastError || "").trim();
+  const nativeClassifier = classifyW8NativeVideoSession(diagnostics);
+  const nativeDecoderProgress =
+    nativeDecoderSessionSubmittedFrames > 0 ||
+    nativeDecoderSessionAcceptedInputFrames > 0 ||
+    nativeDecoderSessionDecodedFrames > 0 ||
+    nativeSurfacePresentedFrames > 0 ||
+    nativePresentFrames > 0 ||
+    nativeDecoderSessionActive ||
+    Boolean(nativeSurfaceStatus || nativePresentStatus);
   const parts = [status, codec].filter(Boolean);
 
   if (Number.isFinite(decodedFrames) && decodedFrames > 0) {
@@ -1784,6 +1901,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   }
   if (nativeWindowSwapchainReason && !nativeWindowSwapchainReady) {
     parts.push(`原生窗口交换链原因 ${nativeWindowSwapchainReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
+    parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
+    parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
@@ -6305,6 +6426,7 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   const nativeLastReason = String(state.hostDiagnostics?.w8NativeVideoLastReason || "").trim();
   const nativeErrors = Number(state.w8NativeVideoErrors || state.hostDiagnostics?.w8NativeVideoErrors) || 0;
   const nativeLastError = String(state.w8NativeVideoLastError || state.hostDiagnostics?.w8NativeVideoLastError || "").trim();
+  const nativeClassifier = classifyW8NativeVideoSession(state);
   const { sampleCount, averageGapMs, maxGapMs, stutterCount, maxStutterGapMs } = getVideoFrameGapStats();
   const remoteMediaGapStats = getVideoRemoteMediaGapStats();
   const firstFrameWaitStatus = getVideoFirstFrameWaitStatus(now);
@@ -6462,6 +6584,10 @@ function getVideoPerformanceExportStatus(now = performance.now()) {
   }
   if (nativeWindowSwapchainReason && !nativeWindowSwapchainReady) {
     parts.push(`原生窗口交换链原因 ${nativeWindowSwapchainReason.replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  if (nativeDecoderProgress || nativePresentReady || nativeWindowSwapchainReady) {
+    parts.push(`原生分类 ${nativeClassifier.nativeClass}`);
+    parts.push(`原生下一步 ${nativeClassifier.nativeNext}`);
   }
   if (nativeDecoderSessionReason && !nativeDecoderSessionActive) {
     parts.push(`原生会话原因 ${nativeDecoderSessionReason.replace(/\s+/g, " ").slice(0, 80)}`);
