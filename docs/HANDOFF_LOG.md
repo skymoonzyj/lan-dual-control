@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W12/W13 MF decoder 边界与 sample timing
+开发端：Windows Codex
+本轮目标：按通讯板 W12/W13-LONGRUN-NOT-PASS-3 聚焦视频侧：native parser 已证明收到关键帧/SPS/PPS/IDR，下一步转查 MF decoder `ProcessInput` / `ProcessOutput` 边界。
+完成内容：`apps/windows-desktop/src-tauri/src/w8_native_video.rs` 的 decoder session summary 新增 MF 输入/输出边界计数和最后状态：`processInputAttempts/processInputAcceptedFrames/processInputFailures/lastProcessInputStatus`、`processOutputAttempts/processOutputProducedFrames/processOutputNeedMoreInputFrames/processOutputStreamChangeFrames/processOutputNoSampleFrames/processOutputFailures/lastProcessOutputStatus`。Windows client 消费这些字段，页面解码诊断和现场视频导出显示 `MF输入/MF输出/MF需更多输入/MF流变化/MF无样本/MF输入失败/MF输出失败`；`test-windows-client-browser` 的 `W8NativeVideo=` 输出 `mfIn/mfOut/mfNeed/mfStream/mfNoSample/mfInFail/mfOutFail`。分类器新增 `mf-input-error`、`mf-output-error`、`mf-need-more-input`。同时修正 MF sample timing：60Hz sample duration 使用 100ns 单位 `16_666_667`，worker 按 frameId 写单调 sample time，替换旧 `16_667`。
+修改文件：apps/windows-desktop/src-tauri/src/w8_native_video.rs；apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md；docs/w8-windows-desktop-video-plan.md。
+验证方式：TDD 红灯 1：`cargo test decoder_session_tracks_mf_process_input_output_boundary` 先因缺少 MF 边界字段编译失败；实现后通过。TDD 红灯 2：`cargo test mf_h264_sample_timing_uses_60hz_100ns_units` 先因缺少 100ns timing 常量/函数失败；实现后通过。TDD 红灯 3：`node scripts/windows/test-windows-client-browser.mjs --onlyH264LatencyQueueGuard --timeoutMs 45000` 先失败于 `W8NativeVideo=` 缺 `mfIn/mfOut`，实现后通过并输出 `mfIn=accepted:190/190 mfOut=decoded-output:188/190 mfNeed=1 mfStream=1`。
+遗留问题：仍需要用户用新构建 Windows 桌面端做真实长测，观察 `mfIn/mfOut` 是否显示长期 need-more-input/no-output、ProcessInput/ProcessOutput failure，还是已经 decoded-output 但 Present 未跟上。
+下一步建议：下一次真实长测若 `mfIn=accepted:<n>/<n>` 且 `mfOut=need-more-input:0/<n>` / `mfNeed` 高，查 MF 输入格式和 decoder drain；若 `mfOut=decoded-output` 但 `presenting=no`，查 D3D11 surface/HWND Present；若 `mfInFail` 或 `mfOutFail` 增长，直接按对应边界和 HRESULT 定位。
+是否改了协议：否。只改 Windows 视频侧原生解码、诊断和测试。
+是否需要另一端配合：不需要 Mac 改协议；需要后续用户用新版 Windows 桌面端复制真实诊断。密码不上板，不发 input/inject，不改系统声音输出。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W12/W13 W8 native H.264 解析证据
 开发端：Windows Codex
 本轮目标：按用户要求主要完成视频侧修改，处理 W12/W13 长测仍看不到主画面的证据缺口，避免继续让用户重复同一长测。

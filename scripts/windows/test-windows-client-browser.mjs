@@ -397,6 +397,10 @@ function classifyW8NativeVideoSummary(value = {}) {
   const submitted = positiveInteger(value.w8NativeVideoDecoderSessionSubmittedFrames);
   const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
+  const processInputFailures = positiveInteger(value.w8NativeVideoProcessInputFailures);
+  const processOutputNeedMoreInput = positiveInteger(value.w8NativeVideoProcessOutputNeedMoreInputFrames);
+  const processOutputFailures = positiveInteger(value.w8NativeVideoProcessOutputFailures);
+  const lastProcessOutputStatus = String(value.w8NativeVideoLastProcessOutputStatus || "").trim();
   const errors = positiveInteger(value.w8NativeVideoErrors);
   const status = String(value.w8NativeVideoDecoderSessionStatus || "").trim();
   const present = String(value.w8NativeVideoNativePresentStatus || "").trim();
@@ -416,6 +420,8 @@ function classifyW8NativeVideoSummary(value = {}) {
     value.w8NativeVideoNativePresentReason,
     value.w8NativeVideoNativeSurfaceReason,
     value.w8NativeVideoWindowSwapchainReason,
+    value.w8NativeVideoLastProcessInputStatus,
+    lastProcessOutputStatus,
     lastError,
   ].join(" ").toLowerCase();
   const presentLower = present.toLowerCase();
@@ -472,6 +478,15 @@ function classifyW8NativeVideoSummary(value = {}) {
   } else if (nativeAck === "surface") {
     nativeClass = "surface-ready";
     nativeNext = "inspect-hwnd-present";
+  } else if (submitted > 0 && processInputFailures > 0) {
+    nativeClass = "mf-input-error";
+    nativeNext = "inspect-mf-process-input";
+  } else if (submitted > 0 && processOutputFailures > 0) {
+    nativeClass = "mf-output-error";
+    nativeNext = "inspect-mf-process-output";
+  } else if (submitted > 0 && processOutputNeedMoreInput > 0) {
+    nativeClass = "mf-need-more-input";
+    nativeNext = "inspect-mf-input-format-or-drain";
   } else if (submitted > 0) {
     nativeClass = "decoder-submitted";
     nativeNext = "wait-decoded-or-classify-decoder";
@@ -548,6 +563,21 @@ function makeW8NativeVideoRetestSummary(value = {}) {
   const decoded = positiveInteger(value.w8NativeVideoDecoderSessionDecodedFrames);
   const submitted = positiveInteger(value.w8NativeVideoDecoderSessionSubmittedFrames);
   const accepted = positiveInteger(value.w8NativeVideoDecoderSessionAcceptedInputFrames);
+  const processInputAttempts = positiveInteger(value.w8NativeVideoProcessInputAttempts);
+  const processInputAccepted = positiveInteger(value.w8NativeVideoProcessInputAcceptedFrames);
+  const processInputFailures = positiveInteger(value.w8NativeVideoProcessInputFailures);
+  const lastProcessInputStatus = String(value.w8NativeVideoLastProcessInputStatus || "").trim();
+  const processOutputAttempts = positiveInteger(value.w8NativeVideoProcessOutputAttempts);
+  const processOutputProduced = positiveInteger(value.w8NativeVideoProcessOutputProducedFrames);
+  const processOutputNeedMoreInput = positiveInteger(
+    value.w8NativeVideoProcessOutputNeedMoreInputFrames,
+  );
+  const processOutputStreamChange = positiveInteger(
+    value.w8NativeVideoProcessOutputStreamChangeFrames,
+  );
+  const processOutputNoSample = positiveInteger(value.w8NativeVideoProcessOutputNoSampleFrames);
+  const processOutputFailures = positiveInteger(value.w8NativeVideoProcessOutputFailures);
+  const lastProcessOutputStatus = String(value.w8NativeVideoLastProcessOutputStatus || "").trim();
   const presentFrames = positiveInteger(value.w8NativeVideoNativePresentFrames);
   const surfaceFrames = positiveInteger(value.w8NativeVideoNativeSurfacePresentedFrames);
   const queueDrops = positiveInteger(value.w8NativeVideoDroppedFrames);
@@ -597,6 +627,8 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     value.w8NativeVideoDecoderSessionReason,
     value.w8NativeVideoNativePresentReason,
     value.w8NativeVideoNativeSurfaceReason,
+    lastProcessInputStatus,
+    lastProcessOutputStatus,
     lastError,
   ].join(" ").toLowerCase();
   const hasEvidence =
@@ -674,6 +706,17 @@ function makeW8NativeVideoRetestSummary(value = {}) {
     }
   }
   if (accepted > 0) parts.push(`accepted=${accepted}`);
+  if (processInputAttempts > 0) {
+    parts.push(`mfIn=${compactBoardSummaryToken(lastProcessInputStatus || "unknown", 40)}:${processInputAccepted}/${processInputAttempts}`);
+  }
+  if (processInputFailures > 0) parts.push(`mfInFail=${processInputFailures}`);
+  if (processOutputAttempts > 0) {
+    parts.push(`mfOut=${compactBoardSummaryToken(lastProcessOutputStatus || "unknown", 60)}:${processOutputProduced}/${processOutputAttempts}`);
+  }
+  if (processOutputNeedMoreInput > 0) parts.push(`mfNeed=${processOutputNeedMoreInput}`);
+  if (processOutputStreamChange > 0) parts.push(`mfStream=${processOutputStreamChange}`);
+  if (processOutputNoSample > 0) parts.push(`mfNoSample=${processOutputNoSample}`);
+  if (processOutputFailures > 0) parts.push(`mfOutFail=${processOutputFailures}`);
   if (framesPushed > 0) parts.push(`pushed=${framesPushed}`);
   if (nativeNal) parts.push(`nativeNal=${compactBoardSummaryToken(nativeNal, 60)}`);
   if (nativeIsKeyframe) parts.push("nativeKey=yes");
@@ -832,6 +875,17 @@ function verifyW8NativeVideoRetestSummary() {
     w8NativeVideoDecoderSessionSubmittedFrames: 190,
     w8NativeVideoDecoderSessionAcceptedInputFrames: 190,
     w8NativeVideoFramesPushed: 192,
+    w8NativeVideoProcessInputAttempts: 190,
+    w8NativeVideoProcessInputAcceptedFrames: 190,
+    w8NativeVideoProcessInputFailures: 0,
+    w8NativeVideoLastProcessInputStatus: "accepted",
+    w8NativeVideoProcessOutputAttempts: 190,
+    w8NativeVideoProcessOutputProducedFrames: 188,
+    w8NativeVideoProcessOutputNeedMoreInputFrames: 1,
+    w8NativeVideoProcessOutputStreamChangeFrames: 1,
+    w8NativeVideoProcessOutputNoSampleFrames: 0,
+    w8NativeVideoProcessOutputFailures: 0,
+    w8NativeVideoLastProcessOutputStatus: "decoded-output",
     w8NativeVideoProgressStatus: "present-progress",
     w8NativeVideoProgressWindowMs: 5000,
     w8NativeVideoPresentFrameDelta: 120,
@@ -936,6 +990,10 @@ function verifyW8NativeVideoRetestSummary() {
     text.includes("presentGap=0") &&
     text.includes("submitted=190") &&
     text.includes("decoderGap=2") &&
+    text.includes("mfIn=accepted:190/190") &&
+    text.includes("mfOut=decoded-output:188/190") &&
+    text.includes("mfNeed=1") &&
+    text.includes("mfStream=1") &&
     text.includes("nativeNal=7/8/5") &&
     text.includes("nativeKey=yes") &&
     text.includes("nativeKeys=1") &&

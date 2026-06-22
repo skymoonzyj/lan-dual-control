@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-22 W12/W13 MF decoder 边界与 sample timing
+- Supervisor 最新 W12/W13 长测结论已经把 payload/keyframe gate 排除：Web 与 native parser 都收到 H.264 关键帧/SPS/PPS/IDR，但主画面仍未 Present。本轮 Windows 视频侧转到 MF decoder `ProcessInput` / `ProcessOutput` 边界：`w8_native_video.rs` 的持续 decoder session 新增 `processInputAttempts/processInputAcceptedFrames/processInputFailures/lastProcessInputStatus` 与 `processOutputAttempts/processOutputProducedFrames/processOutputNeedMoreInputFrames/processOutputStreamChangeFrames/processOutputNoSampleFrames/processOutputFailures/lastProcessOutputStatus`，Windows client 会写入页面解码诊断、现场视频导出和上板摘要。`W8NativeVideo=` 现在输出 `mfIn=<last>:<accepted>/<attempts>`、`mfOut=<last>:<produced>/<attempts>`、`mfNeed`、`mfStream`、`mfNoSample`、`mfInFail`、`mfOutFail`，分类器也能区分 `mf-input-error`、`mf-output-error`、`mf-need-more-input`。同时修正 MF sample timing：Media Foundation sample time/duration 使用 100ns 单位，60Hz duration 从错误的 `16_667` 改为 `16_666_667`，worker 按 frameId 写入单调 sample time。只改 Windows 视频侧和文档；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
+
 ## 2026-06-22 W12/W13 W8 native H.264 解析证据
 - Windows 视频侧补齐 `W8NativeVideo=` 和现场视频导出的 native parser 证据：`apps/windows-client/app.js` 现在会消费 `push_w8_native_h264_annexb_frame` 返回的 `summary.nalTypes/hasSps/hasPps/hasIdr/isKeyframe/spsCount/ppsCount/byteLen`，记录 `原生NAL`、`原生SPS/PPS/IDR`、`原生关键帧`、`原生关键帧累计` 和 `原生字节`；`test-windows-client-browser` 的 `W8NativeVideo=` 同步输出 `nativeNal/nativeKey/nativeKeys/nativeSps/nativePps/nativeIdr/nativeBytes`，摘要上限放宽到 1200，避免新增字段挤掉 `streamChange/deviceLost/errors`。这轮不宣称真实长测已通过，目的是下一次诊断能直接区分 “Web 收到了关键帧/SPS/PPS/IDR 但 native parser 没吃到” 和 “native parser 已吃到但 decoder/present 仍没出画面”。只改 Windows 视频诊断和测试；不改协议、不改 Mac、不认证、不请求密码、不改音频或 input/inject。
 
