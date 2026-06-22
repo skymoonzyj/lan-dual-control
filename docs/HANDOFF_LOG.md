@@ -18,6 +18,18 @@
 ```
 
 ## 2026-06-22 Windows Codex
+日期：2026-06-22 W13 formal 探针 repeat-frame 观察证据
+开发端：Windows Codex
+本轮目标：继续完成视频侧修改，让正式 Plan 1 长测日志直接显示 Mac H.264 repeat-frame 补帧是否参与。
+完成内容：`probe-mac-host` 的视频观察统计现在会累计 `video_frame.repeatPreviousFrame=true`；长观察进度行显示 `repeat <n>`，最终 `Video observed:` 行显示 `repeat <n> (<pct>%)`。`apps/mock-mac-host/server.mjs` 新增测试用 `repeatPreviousFrameEvery`，用于模拟重复帧；正式协议仍只消费可选字段。
+修改文件：scripts/windows/probe-mac-host.mjs；scripts/windows/test-probe-mac-host-discover.mjs；apps/mock-mac-host/server.mjs；docs/CURRENT_STATUS.md；docs/NEXT_ACTIONS.md；docs/04-task-board.md；docs/HANDOFF_LOG.md；docs/ACTIVE_LOCKS.md。
+验证方式：TDD 红灯先失败于 `Video observed:` 缺 repeat 统计；实现后 `node scripts/windows/test-probe-mac-host-discover.mjs --timeoutMs 45000` 通过，覆盖 mock repeat 帧和探针输出。
+遗留问题：Windows 本机仍不能编译/运行 Mac ScreenCaptureKit；真实 repeat 比例需要 Mac 端拉取、`swift build`、重启 host 后复跑 W13 formal 或 Mac observe。
+下一步建议：Mac 端完成真机复验后，把正式 Plan 1 的 frames/fps/maxGap/repeat 比例上板；若 repeat=0，优先查 host build 或 VideoToolbox repeat encode。
+是否改了协议：否。只统计现有 `video_frame.repeatPreviousFrame` 可选字段。
+是否需要另一端配合：需要 Mac 端拉取并真机复验；不需要把密码发到通讯板，不发 input/inject。
+
+## 2026-06-22 Windows Codex
 日期：2026-06-22 W13 H.264 repeat-frame 观察证据
 开发端：Windows Codex
 本轮目标：补齐刚合入的 Mac H.264 repeat-frame pacing 的可观测性，让 Mac 端复验时能直接看到补帧数量和比例。

@@ -5,6 +5,7 @@
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
 ## 2026-06-22 W13 H.264 repeat-frame 观察证据
+- W13 正式长测入口 `scripts/windows/probe-mac-host.mjs` 现在会统计 `video_frame.repeatPreviousFrame=true`，长时间视频观察进度行显示 `repeat <n>`，最终 `Video observed:` 行显示 `repeat <n> (<pct>%)`。这样 `check-mac-formal-e2e` 的 Plan 1 复跑不必额外切到 Mac 侧 observe，也能直接看 Mac H.264 repeat-frame pacing 是否参与补帧。`apps/mock-mac-host/server.mjs` 只新增测试用 `repeatPreviousFrameEvery` 模拟开关；真实协议仍只消费可选字段，不改认证/密码/音频/input/inject。
 - 为了让 Mac 端复验刚合入的 H.264 repeat-frame pacing，`scripts/mac/observe-mac-video.mjs` 已统计 `repeatPreviousFrame=true`，JSON 的 `observation.h264` 现在带 `repeatPreviousFrames` 和 `repeatPreviousFramePercent`；`scripts/mac/observe-mac-media.mjs --boardSummary` 的 H.264 摘要现在带 `h264Repeat=<n>(<pct>%)`。下一次 Mac 拉取后跑媒体基线或 W13 长测时，可以直接从板面判断补帧是否发生。该轮只消费现有视频帧可选字段，不改协议握手、不改认证/密码/音频/input/inject。
 
 ## 2026-06-22 W13 Mac H.264 低变化桌面补帧

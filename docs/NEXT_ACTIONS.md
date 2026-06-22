@@ -3,6 +3,7 @@
 最后更新：2026-06-22
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
+- W13 formal 复验最新口径：`check-mac-formal-e2e` 的 Plan 1 仍直接调用 `probe-mac-host` 观察 WebSocket `video_frame`；现在该探针的长观察进度会显示 `repeat <n>`，最终 `Video observed:` 会显示 `repeat <n> (<pct>%)`。Mac 端拉取并重启 host 后，Windows 正式长测若 `frames/fps` 过门槛且 repeat 大于 0，可以直接判定低变化桌面补帧参与；若仍低 FPS 且 repeat=0，优先查 Mac host 是否未更新或 VideoToolbox repeat encode 没跑起来。
 - W13 repeat-frame 复验口径：Mac 端拉取最新后，`observe-mac-video --json` 可看 `observation.h264.repeatPreviousFrames` / `repeatPreviousFramePercent`；`observe-mac-media --boardSummary` 可看 `h264Repeat=<n>(<pct>%)`。低变化桌面长测若总 FPS 回升且 `h264Repeat` 明显大于 0，说明补帧 pacing 正在生效；若仍 4fps 且 `h264Repeat=0`，优先查 Mac host 是否已重启到最新 build 或 VideoToolbox repeat encode 是否被拒；若 `h264Repeat` 很高但 Windows 仍低 FPS，再查传输/Windows probe 观察。
 - W13 视频低 FPS 最新口径：正式长测 Plan 1 不经过 Windows client/browser/native QoS，失败点是协议探针直接观察 Mac H.264 `video_frame` 只有约 3.90 FPS。Mac H.264 源码现在新增 repeat-frame pacing，低变化桌面无新 ScreenCaptureKit sample 时会按目标 FPS 重新编码上一帧，并用 `repeatPreviousFrame=true` 标记。下一步 Mac 端拉取后先跑 `swift build` / Mac 视频自测，再重启 host 做同一 300s formal 长测；若 `frames/fps` 回到门槛以上，再继续音频/剪贴板/input-log 段。若仍低 FPS，优先看 Mac 本机 observe 的 `repeatPreviousFrame` 比例、`timestampUs/durationUs` 和是否有 VideoToolbox 丢帧，不回到 Windows 本地 QoS 误伤方向。
 - W13 诊断字段最新口径：Windows client 的页面诊断和复制导出现在会显示 `W13本地QoS`、`W13策略`、`W13关键帧请求`、`W13门槛 120/180 ms` 和 `W13下一步`。下一次真实 Mac 长跑复测时，优先复制 Windows 控制端诊断：如果看到 `W13本地QoS local-backlog` 且 `W13策略 drop-old-keep-keyframe`，说明本机队列追实时逻辑已触发；如果仍然卡顿但 W13 状态是 `remote-cadence` 或没有 W13 字段，再回到 Mac 发送 cadence / native present / 协议级 fps/bitrate 回传评估。

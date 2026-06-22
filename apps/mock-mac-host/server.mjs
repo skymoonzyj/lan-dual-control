@@ -158,7 +158,7 @@ function negotiateSession(message) {
   };
 }
 
-function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = "内建显示器") {
+function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = "内建显示器", options = {}) {
   const now = new Date();
   const hue = (frameId * 23) % 360;
   const svg = `
@@ -193,6 +193,7 @@ function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = 
     keyFrame: frameId === 1 || frameId % 30 === 0,
     source: "mock",
     capturePipeline: "mock-svg",
+    repeatPreviousFrame: Boolean(options.repeatPreviousFrame),
     droppedFrames: 0,
     dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`,
   };
@@ -532,9 +533,12 @@ function createClient(socket, options) {
   function startVideoFrames(session) {
     stopVideoFrames();
     const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(session.fps) || 5, 8)));
+    const repeatEvery = Math.max(0, Math.trunc(Number(options.repeatPreviousFrameEvery) || 0));
     frameTimer = setInterval(() => {
       frameCount += 1;
-      send(makeMockVideoFrame(frameCount, session.width, session.height, session.displayName));
+      send(makeMockVideoFrame(frameCount, session.width, session.height, session.displayName, {
+        repeatPreviousFrame: repeatEvery > 0 && frameCount % repeatEvery === 0,
+      }));
     }, intervalMs);
   }
 
@@ -607,6 +611,7 @@ export function createMockMacHostServer({
   host = "127.0.0.1",
   port = 43770,
   password = defaultPassword,
+  repeatPreviousFrameEvery = 0,
 } = {}) {
   const server = createServer((request, response) => {
     const corsHeaders = {
@@ -674,7 +679,7 @@ export function createMockMacHostServer({
       `Sec-WebSocket-Accept: ${makeAcceptKey(key)}`,
       "\r\n",
     ].join("\r\n"));
-    createClient(socket, { password });
+    createClient(socket, { password, repeatPreviousFrameEvery });
   });
 
   return {

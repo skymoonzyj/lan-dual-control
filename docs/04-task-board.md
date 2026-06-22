@@ -2,6 +2,7 @@
 
 ## 里程碑 M0：仓库和文档
 
+- [x] W13 formal 探针 repeat-frame 观察证据：`probe-mac-host` 现在统计 `video_frame.repeatPreviousFrame=true`，视频观察进度显示 `repeat <n>`，最终 `Video observed:` 输出 `repeat <n> (<pct>%)`。下一次 `check-mac-formal-e2e` Plan 1 复跑可直接从正式长测日志判断 Mac H.264 补帧 pacing 是否参与，而不是只看总 FPS。只消费现有可选字段，不改协议握手、认证/密码、音频或 input/inject。
 - [x] W13 H.264 repeat-frame 观察证据：`observe-mac-video` 现在统计 `repeatPreviousFrame=true` 的 H.264 帧，JSON 输出 `h264.repeatPreviousFrames` / `repeatPreviousFramePercent`；`observe-mac-media --boardSummary` 输出 `h264Repeat=<n>(<pct>%)`。这让 Mac 端拉取补帧代码后可直接上板确认低变化桌面补帧是否生效。只消费现有 `video_frame` 可选字段，不改认证/密码/音频/input/inject。
 - [x] W13 Mac H.264 低变化桌面补帧：正式长测 Plan 1 失败点在 `probe-mac-host` 直接观察 WebSocket `video_frame`，不经过 Windows client/native QoS；源码定位为 Mac H.264 只在 ScreenCaptureKit 产出新 sample 时编码，低变化桌面会源端低 FPS。本轮在 `ScreenCaptureCoordinator.swift` 给 H.264 流增加 repeat-frame pacing，缓存最近 `CVPixelBuffer`，按协商 FPS 补发重复编码帧，并用 `repeatPreviousFrame=true` 标记诊断；`test-mac-video-json-output` 新增源码防回归。只改视频侧，不改认证/密码/音频/input/inject。
 - [x] W13 本地视频 QoS 进入页面诊断/复制导出：`apps/windows-client/app.js` 新增 `formatW13LocalVideoQosDiagnostics`，把 `W13本地QoS/status`、`W13策略/dropPolicy`、`W13关键帧请求`、`W13门槛 120/180 ms` 和 `W13下一步` 同步到页面解码诊断和现场视频复制导出。`test-windows-client-browser --onlyH264LatencyQueueGuard` 覆盖导出文本和解码诊断文本均包含 W13 字段。只改 Windows 视频诊断，不改协议、不改 Mac、不认证、不请求密码、不改音频实现、不发 input/inject。

@@ -61,6 +61,10 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertMatches(text, pattern, label) {
+  assert(pattern.test(String(text)), `${label} did not match ${pattern}.\n${text}`);
+}
+
 function run(extraArgs, args) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [script, ...extraArgs], {
@@ -127,6 +131,17 @@ function reservePort() {
 async function withMockHost(callback) {
   const port = await reservePort();
   const service = createMockMacHostServer({ host: "127.0.0.1", port });
+  await service.listen();
+  try {
+    await callback(port);
+  } finally {
+    await service.close();
+  }
+}
+
+async function withMockHostOptions(options, callback) {
+  const port = await reservePort();
+  const service = createMockMacHostServer({ host: "127.0.0.1", port, ...options });
   await service.listen();
   try {
     await callback(port);
@@ -222,6 +237,29 @@ async function checkInputOptionValidation(args) {
   console.log("[OK] probe-mac-host rejects invalid input safety options");
 }
 
+async function checkVideoRepeatFrameObservation(args) {
+  await withMockHostOptions({ repeatPreviousFrameEvery: 2 }, async (port) => {
+    const result = await run([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--password", "demo-password",
+      "--timeoutMs", "8000",
+      "--width", "640",
+      "--height", "360",
+      "--fps", "8",
+      "--durationMs", "1600",
+      "--minVideoFrames", "4",
+      "--minVideoFps", "2",
+      "--progressIntervalMs", "0",
+    ], args);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert(result.exitCode === 0, `repeat-frame observation probe failed\n${output}`);
+    assertIncludes(output, "Video observed:", "repeat-frame observation");
+    assertMatches(output, /repeat [1-9]\d* \([0-9.]+%\)/, "repeat-frame observation");
+    console.log("[OK] probe-mac-host reports repeat-frame video observations");
+  });
+}
+
 async function checkDiscoverFailsBeforePassword(args) {
   const result = await run([
     "--discover",
@@ -249,6 +287,7 @@ async function main() {
   await checkDiscoverMockProbe(args);
   await checkInputInjectedExpectation(args);
   await checkInputOptionValidation(args);
+  await checkVideoRepeatFrameObservation(args);
   await checkDiscoverFailsBeforePassword(args);
   console.log("[OK] probe-mac-host discovery regression passed");
 }

@@ -912,6 +912,7 @@ function createMediaStats(kind, maxGapMs) {
     lastAt: 0,
     maxGapMs: 0,
     totalBytes: 0,
+    repeatPreviousFrames: 0,
     codecs: new Map(),
     pipelines: new Map(),
   };
@@ -937,6 +938,9 @@ function recordMediaFrame(stats, frame, answer) {
   stats.lastAt = now;
   stats.frames += 1;
   stats.totalBytes += estimateFrameBytes(frame);
+  if (frame.repeatPreviousFrame === true) {
+    stats.repeatPreviousFrames += 1;
+  }
   incrementCount(stats.codecs, frame.codec || answer?.videoCodec || answer?.audioCodec);
   incrementCount(stats.pipelines, frame.capturePipeline || frame.audioMode || answer?.capturePipeline || answer?.audioMode);
 }
@@ -956,6 +960,8 @@ function finishMediaStats(stats) {
     ...stats,
     elapsedMs,
     fps,
+    repeatPreviousFramePercent:
+      stats.frames > 0 ? Number(((stats.repeatPreviousFrames / stats.frames) * 100).toFixed(1)) : 0,
     averageBytes: stats.frames > 0 ? Math.round(stats.totalBytes / stats.frames) : 0,
   };
 }
@@ -979,9 +985,10 @@ function printMediaProgress(label, stats, deadline, now = performance.now()) {
   const remainingMs = Math.max(0, deadline - now);
   const percent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
   const fps = (stats.frames * 1000) / elapsedMs;
+  const repeatText = stats.kind === "video" ? ` / repeat ${stats.repeatPreviousFrames}` : "";
   print(
     "INFO",
-    `${label} progress: ${stats.frames} frames / ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}% / ${fps.toFixed(2)} FPS / max gap ${Math.round(stats.maxGapMs)} ms.`,
+    `${label} progress: ${stats.frames} frames / ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}% / ${fps.toFixed(2)} FPS / max gap ${Math.round(stats.maxGapMs)} ms${repeatText}.`,
   );
 }
 
@@ -1060,7 +1067,7 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
   });
   print(
     "OK",
-    `Video observed: ${summary.frames} frames / ${(summary.elapsedMs / 1000).toFixed(1)}s / ${summary.fps.toFixed(2)} FPS / max gap ${Math.round(summary.maxGapMs)} ms / avg ${summary.averageBytes} bytes / codecs ${summarizeCounts(summary.codecs)} / pipelines ${summarizeCounts(summary.pipelines)}`,
+    `Video observed: ${summary.frames} frames / ${(summary.elapsedMs / 1000).toFixed(1)}s / ${summary.fps.toFixed(2)} FPS / max gap ${Math.round(summary.maxGapMs)} ms / repeat ${summary.repeatPreviousFrames} (${summary.repeatPreviousFramePercent.toFixed(1)}%) / avg ${summary.averageBytes} bytes / codecs ${summarizeCounts(summary.codecs)} / pipelines ${summarizeCounts(summary.pipelines)}`,
   );
 }
 
