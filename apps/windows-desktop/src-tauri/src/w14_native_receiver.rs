@@ -1,3 +1,7 @@
+use base64::{engine::general_purpose, Engine as _};
+use lan_dual_control_windows_audio::native_audio_player::{
+    NativeAudioOutput, NativeAudioPlaybackConfig, NativeAudioPlaybackStats,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -62,6 +66,22 @@ pub struct W14NativeReceiverSnapshot {
     pub audio_frames: u64,
     pub last_video_codec: String,
     pub last_video_encoding: String,
+    pub last_audio_codec: String,
+    pub last_audio_encoding: String,
+    pub audio_sample_rate: u32,
+    pub audio_channels: u16,
+    pub audio_playback_running: bool,
+    pub audio_playback_queue_ms: u64,
+    pub audio_playback_pushed_frames: u64,
+    pub audio_playback_played_frames: u64,
+    pub audio_playback_trimmed_frames: u64,
+    pub audio_playback_underruns: u64,
+    pub audio_playback_dropped_frames: u64,
+    pub audio_playback_source_frame_ms: u64,
+    pub audio_playback_source_frame_max_ms: u64,
+    pub audio_playback_source_frame_cadence_ms: u64,
+    pub audio_playback_source_cadence_frames: u64,
+    pub audio_playback_last_reason: String,
     pub last_message_type: String,
     pub last_error: String,
     pub started_at_ms: u64,
@@ -85,6 +105,22 @@ impl Default for W14NativeReceiverSnapshot {
             audio_frames: 0,
             last_video_codec: String::new(),
             last_video_encoding: String::new(),
+            last_audio_codec: String::new(),
+            last_audio_encoding: String::new(),
+            audio_sample_rate: 0,
+            audio_channels: 0,
+            audio_playback_running: false,
+            audio_playback_queue_ms: 0,
+            audio_playback_pushed_frames: 0,
+            audio_playback_played_frames: 0,
+            audio_playback_trimmed_frames: 0,
+            audio_playback_underruns: 0,
+            audio_playback_dropped_frames: 0,
+            audio_playback_source_frame_ms: 0,
+            audio_playback_source_frame_max_ms: 0,
+            audio_playback_source_frame_cadence_ms: 0,
+            audio_playback_source_cadence_frames: 0,
+            audio_playback_last_reason: String::new(),
             last_message_type: String::new(),
             last_error: String::new(),
             started_at_ms: 0,
@@ -181,6 +217,8 @@ fn run_receiver_loop(
     stop: &Arc<AtomicBool>,
     request: &W14NativeReceiverStartRequest,
 ) -> Result<(), String> {
+    let mut audio_playback = W14NativeAudioPlayback::default();
+
     update_snapshot(inner, |snapshot| snapshot.status = "connecting".to_string());
     let url = format!("ws://{}:{}", request.host.trim(), request.port);
     let (mut socket, _) =
@@ -267,7 +305,7 @@ fn run_receiver_loop(
         match socket.read() {
             Ok(message) => {
                 if let Some(value) = parse_message(message)? {
-                    update_snapshot(inner, |snapshot| apply_incoming_message(snapshot, &value));
+                    handle_stream_message(inner, &mut audio_playback, &value)?;
                 }
             }
             Err(tungstenite::Error::Io(error))
@@ -381,6 +419,195 @@ fn parse_message(message: Message) -> Result<Option<Value>, String> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct W14DecodedAudioFrame {
+    sample_rate: u32,
+    channels: u16,
+    samples: Vec<f32>,
+    codec: String,
+    encoding: String,
+}
+
+#[derive(Default)]
+struct W14NativeAudioPlayback {
+    output: Option<NativeAudioOutput>,
+}
+
+impl W14NativeAudioPlayback {
+    fn push_frame(
+        &mut self,
+        frame: &W14DecodedAudioFrame,
+    ) -> Result<NativeAudioPlaybackStats, String> {
+        if self.needs_output_for(frame) {
+            let config = NativeAudioPlaybackConfig {
+                sample_rate: frame.sample_rate,
+                channels: frame.channels,
+                target_queue_ms: 80,
+                max_live_queue_ms: 120,
+            };
+            self.output = Some(NativeAudioOutput::start_default(config)?);
+        }
+
+        let output = self
+            .output
+            .as_ref()
+            .ok_or_else(|| "W14 native audio output not started".to_string())?;
+        let config = output.config();
+        if config.sample_rate != frame.sample_rate || config.channels != frame.channels {
+            return Err(format!(
+                "W14 native audio format mismatch: frame {} Hz/{}ch, output {} Hz/{}ch.",
+                frame.sample_rate, frame.channels, config.sample_rate, config.channels
+            ));
+        }
+
+        output.push_interleaved_f32(&frame.samples)?;
+        output.stats()
+    }
+
+    fn needs_output_for(&self, frame: &W14DecodedAudioFrame) -> bool {
+        self.output
+            .as_ref()
+            .map(|output| {
+                let config = output.config();
+                config.sample_rate != frame.sample_rate || config.channels != frame.channels
+            })
+            .unwrap_or(true)
+    }
+}
+
+fn handle_stream_message(
+    inner: &Arc<Mutex<W14NativeReceiverInner>>,
+    audio_playback: &mut W14NativeAudioPlayback,
+    message: &Value,
+) -> Result<(), String> {
+    update_snapshot(inner, |snapshot| apply_incoming_message(snapshot, message));
+    let Some(frame) = decode_pcm_f32le_audio_frame(message)? else {
+        return Ok(());
+    };
+    let stats = audio_playback.push_frame(&frame)?;
+    update_snapshot(inner, |snapshot| {
+        apply_audio_playback_stats(snapshot, &frame, stats)
+    });
+    Ok(())
+}
+
+fn decode_pcm_f32le_audio_frame(message: &Value) -> Result<Option<W14DecodedAudioFrame>, String> {
+    if message.get("type").and_then(Value::as_str) != Some("audio_frame") {
+        return Ok(None);
+    }
+
+    let codec = message
+        .get("codec")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let encoding = message
+        .get("encoding")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let codec_lc = codec.to_ascii_lowercase();
+    let encoding_lc = encoding.to_ascii_lowercase();
+    let is_pcm_f32le = codec_lc.contains("pcm-f32le")
+        || encoding_lc.contains("pcm-f32le")
+        || (codec_lc.contains("pcm") && codec_lc.contains("f32"))
+        || (encoding_lc.contains("pcm") && encoding_lc.contains("f32"));
+    if !is_pcm_f32le {
+        return Ok(None);
+    }
+
+    let payload = audio_payload(message)
+        .ok_or_else(|| "W14 PCM audio frame missing base64 payload".to_string())?;
+    let bytes = general_purpose::STANDARD
+        .decode(payload.as_bytes())
+        .map_err(|error| format!("W14 PCM base64 decode failed: {error}"))?;
+    if bytes.len() % 4 != 0 {
+        return Err(format!(
+            "W14 PCM f32le payload must be 4-byte aligned, got {} bytes.",
+            bytes.len()
+        ));
+    }
+
+    let channels = number_field(message, &["channels"])
+        .unwrap_or(2)
+        .clamp(1, 8) as u16;
+    let sample_rate = number_field(message, &["sampleRate", "sample_rate"])
+        .unwrap_or(48_000)
+        .clamp(8_000, 192_000) as u32;
+    let samples = bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect::<Vec<_>>();
+    if samples.is_empty() || samples.len() % usize::from(channels) != 0 {
+        return Err(format!(
+            "W14 PCM f32le samples do not align with {} channels.",
+            channels
+        ));
+    }
+
+    Ok(Some(W14DecodedAudioFrame {
+        sample_rate,
+        channels,
+        samples,
+        codec,
+        encoding,
+    }))
+}
+
+fn audio_payload(message: &Value) -> Option<String> {
+    for key in [
+        "payload",
+        "data",
+        "samples",
+        "audioData",
+        "dataBase64",
+        "audioBase64",
+        "pcmBase64",
+    ] {
+        let Some(value) = message.get(key).and_then(Value::as_str) else {
+            continue;
+        };
+        let payload = value
+            .split_once(',')
+            .map(|(_, payload)| payload)
+            .unwrap_or(value)
+            .trim();
+        if !payload.is_empty() {
+            return Some(payload.to_string());
+        }
+    }
+    None
+}
+
+fn number_field(message: &Value, keys: &[&str]) -> Option<u64> {
+    keys.iter()
+        .find_map(|key| message.get(*key).and_then(Value::as_u64))
+}
+
+fn apply_audio_playback_stats(
+    snapshot: &mut W14NativeReceiverSnapshot,
+    frame: &W14DecodedAudioFrame,
+    stats: NativeAudioPlaybackStats,
+) {
+    snapshot.media_owner = "native-receiver".to_string();
+    snapshot.last_audio_codec = frame.codec.clone();
+    snapshot.last_audio_encoding = frame.encoding.clone();
+    snapshot.audio_sample_rate = frame.sample_rate;
+    snapshot.audio_channels = frame.channels;
+    snapshot.audio_playback_running = true;
+    snapshot.audio_playback_queue_ms = stats.queue_ms;
+    snapshot.audio_playback_pushed_frames = stats.pushed_frames;
+    snapshot.audio_playback_played_frames = stats.played_frames;
+    snapshot.audio_playback_trimmed_frames = stats.trimmed_frames;
+    snapshot.audio_playback_underruns = stats.underruns;
+    snapshot.audio_playback_dropped_frames = 0;
+    snapshot.audio_playback_source_frame_ms = stats.source_frame_ms;
+    snapshot.audio_playback_source_frame_max_ms = stats.source_frame_max_ms;
+    snapshot.audio_playback_source_frame_cadence_ms = stats.source_frame_cadence_ms;
+    snapshot.audio_playback_source_cadence_frames = stats.source_cadence_frames;
+    snapshot.audio_playback_last_reason = stats.last_reason.to_string();
+}
+
 fn apply_incoming_message(snapshot: &mut W14NativeReceiverSnapshot, message: &Value) {
     let message_type = message.get("type").and_then(Value::as_str).unwrap_or("");
     snapshot.last_message_type = message_type.to_string();
@@ -398,6 +625,13 @@ fn apply_incoming_message(snapshot: &mut W14NativeReceiverSnapshot, message: &Va
         }
     } else if message_type == "audio_frame" {
         snapshot.audio_frames = snapshot.audio_frames.saturating_add(1);
+        let codec = message.get("codec").and_then(Value::as_str).unwrap_or("");
+        let encoding = message
+            .get("encoding")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        snapshot.last_audio_codec = codec.to_string();
+        snapshot.last_audio_encoding = encoding.to_string();
     }
 }
 
@@ -421,6 +655,7 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::engine::general_purpose;
 
     #[test]
     fn session_offer_declares_h264_pcm_native_media_request() {
@@ -464,5 +699,72 @@ mod tests {
         assert_eq!(snapshot.audio_frames, 1);
         assert_eq!(snapshot.last_video_codec, "h264");
         assert_eq!(snapshot.last_video_encoding, "annexb-base64");
+    }
+
+    #[test]
+    fn decodes_pcm_f32le_audio_payload_for_native_playback() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&0.25_f32.to_le_bytes());
+        bytes.extend_from_slice(&(-0.5_f32).to_le_bytes());
+        let encoded = general_purpose::STANDARD.encode(bytes);
+
+        let frame = decode_pcm_f32le_audio_frame(&json!({
+            "type": "audio_frame",
+            "codec": "pcm-f32le",
+            "encoding": "pcm-f32le-base64",
+            "sampleRate": 48_000,
+            "channels": 2,
+            "payload": encoded,
+        }))
+        .expect("decode should not fail")
+        .expect("pcm frame should be decoded");
+
+        assert_eq!(frame.sample_rate, 48_000);
+        assert_eq!(frame.channels, 2);
+        assert_eq!(frame.samples, vec![0.25, -0.5]);
+    }
+
+    #[test]
+    fn audio_playback_stats_surface_native_receiver_queue() {
+        let mut snapshot = W14NativeReceiverSnapshot::default();
+        let frame = W14DecodedAudioFrame {
+            sample_rate: 48_000,
+            channels: 2,
+            samples: vec![0.25, -0.5],
+            codec: "pcm-f32le".to_string(),
+            encoding: "pcm-f32le-base64".to_string(),
+        };
+
+        apply_audio_playback_stats(
+            &mut snapshot,
+            &frame,
+            NativeAudioPlaybackStats {
+                pushed_frames: 960,
+                played_frames: 480,
+                trimmed_frames: 0,
+                underruns: 0,
+                queue_ms: 10,
+                source_frame_ms: 20,
+                source_frame_max_ms: 20,
+                source_frame_cadence_ms: 20,
+                source_cadence_frames: 1,
+                last_reason: "native-playback-queued",
+            },
+        );
+
+        assert_eq!(snapshot.media_owner, "native-receiver");
+        assert!(snapshot.audio_playback_running);
+        assert_eq!(snapshot.last_audio_codec, "pcm-f32le");
+        assert_eq!(snapshot.last_audio_encoding, "pcm-f32le-base64");
+        assert_eq!(snapshot.audio_sample_rate, 48_000);
+        assert_eq!(snapshot.audio_channels, 2);
+        assert_eq!(snapshot.audio_playback_queue_ms, 10);
+        assert_eq!(snapshot.audio_playback_pushed_frames, 960);
+        assert_eq!(snapshot.audio_playback_played_frames, 480);
+        assert_eq!(snapshot.audio_playback_dropped_frames, 0);
+        assert_eq!(
+            snapshot.audio_playback_last_reason,
+            "native-playback-queued"
+        );
     }
 }
